@@ -3,7 +3,6 @@
 #include <Protocol/Protocol.h>
 #include <QDateTime>
 
-
 ServerCore::ServerCore(QObject* parent) : QTcpServer(parent)
 {
 }
@@ -56,7 +55,7 @@ void ServerCore::onNewConnection()
 
     {
         QWriteLocker locker(&rwLock_);
-        clientMap_[clientId] = clientInfo;
+        clientMap_[clientId.toStdString()] = clientInfo;
     }
 }
 
@@ -75,10 +74,65 @@ void ServerCore::onRead()
         if (frame == nullptr) {
             break;
         }
-        useFrame(frame);
+        useFrame(frame, socket);
     }
 }
 
-void ServerCore::useFrame(FramePtr frame)
+void ServerCore::useFrame(FramePtr frame, QTcpSocket* socket)
 {
+    Message msg;
+    deserializeStruct(frame->data, msg);
+
+    switch (msg.msType) {
+    case MessageType::kMessageAskClientList: {
+        Message asg(msg);
+        GetClientList(asg);
+        auto f = OneFrame::Create(frame);
+        asg.msType = MessageType::kMessageAnswerClientList;
+        f->data = serializeStruct(asg);
+        sendData(f, socket);
+        break;
+    }
+    default:
+        forwarData(frame, frame->to);
+        break;
+    }
+}
+
+bool ServerCore::forwarData(FramePtr frame, const std::string& otherId)
+{
+    std::shared_ptr<ClientInfo> o = nullptr;
+    {
+        QReadLocker locker(&rwLock_);
+        o = clientMap_[otherId];
+    }
+    if (!o) {
+        return false;
+    }
+    return sendData(frame, o->socket);
+}
+
+bool ServerCore::sendData(FramePtr frame, QTcpSocket* socket)
+{
+    auto data = Protocol::Pack(frame);
+    return sendData(data.data(), data.size(), socket);
+}
+
+bool ServerCore::sendData(const char* data, int len, QTcpSocket* socket)
+{
+    if (!socket || socket->state() != QAbstractSocket::ConnectedState) {
+        return false;
+    }
+    return socket->write(data, len) == len;
+}
+
+void ServerCore::GetClientList(Message& msg)
+{
+    msg.clientList.clear();
+    {
+        QReadLocker locker(&rwLock_);
+        for (auto& cli : clientMap_) {
+            msg.clientList.push_back({cli->id.toStdString(), cli->name.toStdString()});
+        }
+    }
 }

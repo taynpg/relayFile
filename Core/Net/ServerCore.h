@@ -1,12 +1,14 @@
 #pragma once
 
+#include <Protocol/Message.h>
+#include <Protocol/Protocol.h>
+#include <Protocol/Serialize.hpp>
 #include <QMap>
 #include <QReadWriteLock>
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTimer>
 #include <Utils/miniUtil.h>
-#include <Protocol/Protocol.h>
 
 class ServerCore : public QTcpServer
 {
@@ -32,10 +34,17 @@ private:
 private:
     void onNewConnection();
     void onRead();
-    void useFrame(FramePtr frame);
+    void useFrame(FramePtr frame, QTcpSocket* socket);
+
+    bool forwarData(FramePtr frame, const std::string& otherId);
+    bool sendData(FramePtr frame, QTcpSocket* socket);
+    bool sendData(const char* data, int len, QTcpSocket* socket);
+
+private:
+    void GetClientList(Message& msg);
 
 private:
     QReadWriteLock rwLock_;
     QTimer* monitorTimer_{};
-    QMap<QString, std::shared_ptr<ClientInfo>> clientMap_;
+    QMap<std::string, std::shared_ptr<ClientInfo>> clientMap_;
 };

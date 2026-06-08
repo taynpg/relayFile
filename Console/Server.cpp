@@ -19,10 +19,10 @@ int main(int argc, char* argv[])
     QCoreApplication app(argc, argv);
 
     if (!server->startListen(9008)) {
-        qCritical() << "relayFileServer启动失败，端口：" << 9008;
+        qCritical() << "relayFileServer启动失败，端口:" << 9008;
         return 1;
     }
 
-    qInfo() << "relayFileServer已启动在端口：" << 9008 << "，按Ctrl+C退出。";
+    qInfo() << "relayFileServer已启动在端口:" << 9008 << "，按Ctrl+C退出。";
     return app.exec();
 }
