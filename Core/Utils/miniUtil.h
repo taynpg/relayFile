@@ -11,7 +11,7 @@
  * 最基本的辅助工具，无需额外依赖。
  * 运行环境: UTF-8
  *
- * version: 0.8.3
+ * version: 0.9.0
  *
  * 所有 std::pair 返回值的，统一，第一个值是错误字符串，为空正常。
  */
@@ -40,6 +40,7 @@ public:
     static bool IsU8(const std::string& str);
     static std::string Upper(const std::string& str);
     static std::string Lower(const std::string& str);
+    static std::string GetSizeInfo(std::uint64_t size);
 };
 
 template <typename T> class miniSingleton

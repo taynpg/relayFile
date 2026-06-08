@@ -25,6 +25,12 @@ public:
     relayFile(QWidget* parent = nullptr);
     ~relayFile();
 
+public:
+    void Quit();
+
+protected:
+    void closeEvent(QCloseEvent *event) override;
+
 private:
     void initControls();
     void initLayout();

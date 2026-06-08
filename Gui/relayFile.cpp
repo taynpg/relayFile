@@ -3,6 +3,7 @@
 #include <QScreen>
 #include <QSplitter>
 #include <QVBoxLayout>
+#include <QCloseEvent>
 
 #include "./ui_relayFile.h"
 
@@ -18,11 +19,27 @@ relayFile::~relayFile()
     delete ui;
 }
 
+void relayFile::Quit()
+{
+    localExplorerControl_->Quit();
+    remoteExplorerControl_->Quit();
+}
+
+void relayFile::closeEvent(QCloseEvent* event)
+{
+    Quit();
+    event->accept();
+}
+
 void relayFile::initControls()
 {
     connectorControl_ = new ConnectorControl(this);
     localExplorerControl_ = new ExplorerControl(this);
     remoteExplorerControl_ = new ExplorerControl(this);
+
+    localExplorerControl_->setAskDF(AskType::ASK_TYPE_LOCAL);
+    remoteExplorerControl_->setAskDF(AskType::ASK_TYPE_REMOTE);
+
     comparisonControl_ = new ComparisonControl(this);
     relayTask_ = new RelayTask(this);
     logControl_ = new LogControl(this);
@@ -32,15 +49,15 @@ void relayFile::initControls()
 void relayFile::initLayout()
 {
     auto* splitter = new QSplitter(Qt::Vertical);
-    splitter->setHandleWidth(1);
+    splitter->setHandleWidth(0);
 
     auto* sTop = new QSplitter(Qt::Horizontal);
     auto* sConnect = new QSplitter(Qt::Vertical);
     auto* sFile = new QSplitter(Qt::Horizontal);
 
-    sTop->setHandleWidth(1);
-    sConnect->setHandleWidth(1);
-    sFile->setHandleWidth(1);
+    sTop->setHandleWidth(0);
+    sConnect->setHandleWidth(0);
+    sFile->setHandleWidth(0);
 
     sTop->addWidget(connectorControl_);
     sTop->addWidget(tabWidget_);

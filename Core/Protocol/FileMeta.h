@@ -14,13 +14,18 @@ enum class FileType {
 };
 
 struct FileMeta {
+    FileMeta() = default;
+    FileMeta(const FileMeta& o);
+    FileMeta& operator=(const FileMeta& o);
+    FileMeta(FileMeta&& s) noexcept;
     std::string dir;
     std::string name;
     std::uint64_t size;
     FileType type;
     int64_t lastModified;
+    std::uint16_t permission;
     template <class Archive> void serialize(Archive& ar)
     {
-        ar(dir, name, size, type, lastModified);
+        ar(dir, name, size, type, lastModified, permission);
     }
 };

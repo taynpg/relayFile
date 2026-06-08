@@ -9,8 +9,8 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets Network)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Network)
 
 set(PROJECT_SOURCES
     main.cpp
@@ -27,8 +27,17 @@ set(CONTROL_SOURCES
     Control/LogControl.h Control/LogControl.cpp Control/LogControl.ui
 )
 
-add_executable(relayFile ${PROJECT_SOURCES} ${CONTROL_SOURCES})
-target_link_libraries(relayFile PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
+set(BASE_SOURCES
+    Base/WorkerThread.hpp
+    Base/BaseHelper.h Base/BaseHelper.cpp
+    Base/AskDirFile/BaseAskDF.h Base/AskDirFile/BaseAskDF.cpp
+    Base/AskDirFile/LocalAskDF.h Base/AskDirFile/LocalAskDF.cpp
+    Base/AskDirFile/RemoteAskDF.h Base/AskDirFile/RemoteAskDF.cpp
+)
+
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+add_executable(relayFile ${PROJECT_SOURCES} ${CONTROL_SOURCES} ${BASE_SOURCES})
+target_link_libraries(relayFile PRIVATE relayFileCore Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Network)
 set_target_properties(relayFile PROPERTIES
     MACOSX_BUNDLE TRUE
     WIN32_EXECUTABLE TRUE

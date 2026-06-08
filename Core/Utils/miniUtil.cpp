@@ -103,6 +103,20 @@ miniUtil::~miniUtil()
 {
 }
 
+std::string miniUtil::GetSizeInfo(std::uint64_t size)
+{
+    if (size < 1024) {
+        return std::to_string(size) + " B";
+    }
+    if (size < 1024 * 1024) {
+        return std::to_string(size / 1024) + " KB";
+    }
+    if (size < 1024 * 1024 * 1024) {
+        return std::to_string(size / 1024 / 1024) + " MB";
+    }
+    return std::to_string(size / 1024 / 1024 / 1024) + " GB";
+}
+
 std::string miniUtil::Upper(const std::string& str)
 {
     std::string result = str;
