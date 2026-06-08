@@ -5,6 +5,7 @@
 
 ServerCore::ServerCore(QObject* parent) : QTcpServer(parent)
 {
+    connect(this, &QTcpServer::newConnection, this, &ServerCore::onNewConnection);
 }
 
 ServerCore::~ServerCore()
@@ -45,6 +46,9 @@ void ServerCore::onNewConnection()
         socket->disconnectFromHost();
         return;
     }
+    qInfo() << "客户端连接成功：" << clientId;
+
+    connect(socket, &QTcpSocket::readyRead, this, &ServerCore::onRead);
 
     auto clientInfo = std::make_shared<ClientInfo>();
     clientInfo->socket = socket;

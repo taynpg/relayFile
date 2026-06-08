@@ -30,6 +30,7 @@ public:
     static ClientCore* ceateInstance(QObject* parent = nullptr, ClientType clientType = ClientType::ControlSession);
     void setClientType(ClientType clientType);
     void setClientInfo(const ClientInfo& oInfo);
+    void instance();
 
 public:
     ClientType getClientType() const;

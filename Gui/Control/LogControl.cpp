@@ -20,7 +20,7 @@ void LogControl::Debug(const QString& msg)
     auto cpMsg = msg;
     SPDLOG_DEBUG(cpMsg.toStdString());
     formatMsg(cpMsg);
-    ui->pedLog->appendPlainText(cpMsg + "\n");
+    ui->pedLog->appendPlainText(cpMsg);
 }
 
 void LogControl::Info(const QString& msg)
@@ -28,7 +28,7 @@ void LogControl::Info(const QString& msg)
     auto cpMsg = msg;
     SPDLOG_INFO(cpMsg.toStdString());
     formatMsg(cpMsg);
-    ui->pedLog->appendPlainText(msg + "\n");
+    ui->pedLog->appendPlainText(cpMsg);
 }
 
 void LogControl::Warn(const QString& msg)
@@ -36,7 +36,7 @@ void LogControl::Warn(const QString& msg)
     auto cpMsg = msg;
     SPDLOG_WARN(cpMsg.toStdString());
     formatMsg(cpMsg);
-    ui->pedLog->appendPlainText(cpMsg + "\n");
+    ui->pedLog->appendPlainText(cpMsg);
 }
 
 void LogControl::Error(const QString& msg)
@@ -44,7 +44,7 @@ void LogControl::Error(const QString& msg)
     auto cpMsg = msg;
     SPDLOG_ERROR(cpMsg.toStdString());
     formatMsg(cpMsg);
-    ui->pedLog->appendPlainText(cpMsg + "\n");
+    ui->pedLog->appendPlainText(cpMsg);
 }
 
 void LogControl::formatMsg(QString& msg)

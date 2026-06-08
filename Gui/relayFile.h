@@ -9,6 +9,7 @@
 #include "Control/ExplorerControl.h"
 #include "Control/LogControl.h"
 #include "Control/RelayTask.h"
+#include "Net/ClientCore.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -44,6 +45,8 @@ private:
     ComparisonControl* comparisonControl_{};
     RelayTask* relayTask_{};
     LogControl* logControl_{};
+    ClientCore* clientControl_{};
+    ClientCore* clientFile_{};
     QTabWidget* tabWidget_{};
 
     Ui::relayFile* ui;

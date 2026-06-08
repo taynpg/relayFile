@@ -7,6 +7,7 @@
 #include <Utils/Logger.h>
 
 #include "./ui_relayFile.h"
+#include "Base/BaseHelper.h"
 
 static LogControl* gLogControl{};
 static bool isQuit{false};
@@ -14,15 +15,21 @@ static bool isQuit{false};
 relayFile::relayFile(QWidget* parent) : QWidget(parent), ui(new Ui::relayFile)
 {
     ui->setupUi(this);
+
+    clientControl_ = ClientCore::ceateInstance(nullptr, ClientType::ControlSession);
+    clientFile_ = ClientCore::ceateInstance(nullptr, ClientType::FileSession);
+    GlobalData::getInstance()->setClientControl(clientControl_);
+    GlobalData::getInstance()->setClientFile(clientFile_);
+
+    Logger logger;
+    logger.setInfo("log/relayFileGUI.log", "relayFileGUI");
+    logger.initSimpleLogger(false);
+
     initControls();
     initLayout();
 
     gLogControl = logControl_;
     isQuit = false;
-
-    Logger logger;
-    logger.setInfo("log/relayFileGUI.log", "relayFileGUI");
-    logger.initSimpleLogger(false);
 
     qInstallMessageHandler(ControlMsgHander);
     qInfo() << "启动。";
@@ -30,6 +37,8 @@ relayFile::relayFile(QWidget* parent) : QWidget(parent), ui(new Ui::relayFile)
 
 relayFile::~relayFile()
 {
+    delete clientControl_;
+    delete clientFile_;
     delete ui;
 }
 

@@ -18,12 +18,12 @@ bool Logger::initSimpleLogger(bool enableConsole)
 {
     try {
         auto file_sink = std::make_shared<spdlog::sinks::daily_file_sink_mt>(logPath_, 0, 0, 60);
-        file_sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e][%l]: %v\n");
+        file_sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e][%l]: %v");
 
         std::vector<spdlog::sink_ptr> sinks{file_sink};
         if (enableConsole) {
             auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-            console_sink->set_pattern("%H:%M:%S.%e %^[%l]: %v%$\n");
+            console_sink->set_pattern("%H:%M:%S.%e %^[%l]: %v%$");
             sinks.push_back(console_sink);
         }
 

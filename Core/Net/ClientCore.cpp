@@ -5,12 +5,16 @@
 
 ClientCore::ClientCore(QObject* parent) : QObject(parent)
 {
-    tcp_ = new QTcpSocket(this);
-    initSignals();
 }
 
 ClientCore::~ClientCore()
 {
+}
+
+void ClientCore::instance()
+{
+    tcp_ = new QTcpSocket(this);
+    initSignals();
 }
 
 ClientCore* ClientCore::ceateInstance(QObject* parent, ClientType clientType)
@@ -50,17 +54,20 @@ ClientType ClientCore::getClientType() const
 
 bool ClientCore::connectToServer(const QString& server, int16_t port)
 {
-    if (tcp_ && tcp_->isOpen()) {
-        return true;
-    }
+        if (tcp_->state() == QAbstractSocket::ConnectedState) {
+            return true;
+        }
 
+    qInfo() << "尝试连接服务器：" << server << ":" << port;
     emit signalConnectting();
     tcp_->connectToHost(server, port);
     if (!tcp_->waitForConnected(3000)) {
         emit signalDisconnected();
+        qWarning() << "连接服务器失败:" << tcp_->errorString();
         return false;
     }
     emit signalConnected();
+    qInfo() << "连接服务器成功=>" << server << ":" << port;
     return true;
 }
 
