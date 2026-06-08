@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(relayFile LANGUAGES CXX)
+project(relayFileGui LANGUAGES CXX)
 
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
@@ -36,13 +36,13 @@ set(BASE_SOURCES
 )
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-add_executable(relayFile ${PROJECT_SOURCES} ${CONTROL_SOURCES} ${BASE_SOURCES})
-target_link_libraries(relayFile PRIVATE relayFileCore Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Network)
-set_target_properties(relayFile PROPERTIES
+add_executable(relayFileGui ${PROJECT_SOURCES} ${CONTROL_SOURCES} ${BASE_SOURCES})
+target_link_libraries(relayFileGui PRIVATE relayFileCore Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Network)
+set_target_properties(relayFileGui PROPERTIES
     MACOSX_BUNDLE TRUE
     WIN32_EXECUTABLE TRUE
 )
 
 if(QT_VERSION_MAJOR EQUAL 6)
-    qt_finalize_executable(relayFile)
+    qt_finalize_executable(relayFileGui)
 endif()
