@@ -37,7 +37,7 @@ relayFile::relayFile(QWidget* parent) : QWidget(parent), ui(new Ui::relayFile)
 
 relayFile::~relayFile()
 {
-    delete clientControl_;
+    connectorControl_->Quit();
     delete clientFile_;
     delete ui;
 }

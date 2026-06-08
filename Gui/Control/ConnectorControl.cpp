@@ -11,21 +11,29 @@ ConnectorControl::ConnectorControl(QWidget* parent) : QDialog(parent), ui(new Ui
     clientWorker_ = new ClientWorker(clientControl_, nullptr);
     clientControl_->moveToThread(clientWorker_);
     initSignals();
-
     clientWorker_->start();
+
+    // 临时调试设置
+    ui->edServerIp->setText("127.0.0.1:9008");
 }
 
-ConnectorControl::~ConnectorControl()
+void ConnectorControl::Quit()
 {
     clientWorker_->quit();
     clientWorker_->wait();
     delete clientWorker_;
+}
+
+ConnectorControl::~ConnectorControl()
+{
     delete ui;
 }
 
 void ConnectorControl::initSignals()
 {
     connect(ui->btnConnect, &QPushButton::clicked, this, &ConnectorControl::connectToServer);
+    connect(ui->btnDisconnect, &QPushButton::clicked, this, [this]() { emit signalDoDisConnect(); });
+    connect(ui->btnRefresh, &QPushButton::clicked, this, &ConnectorControl::onRefresh);
 
     connect(clientControl_, &ClientCore::signalConnectting, this, &ConnectorControl::onConnectting);
     connect(clientControl_, &ClientCore::signalConnected, this, &ConnectorControl::onConnectSuccess);
@@ -33,6 +41,11 @@ void ConnectorControl::initSignals()
     connect(clientControl_, &ClientCore::signalErrorOccurred, this, &ConnectorControl::onErrorOccurred);
 
     connect(this, &ConnectorControl::signalDoConnect, clientControl_, &ClientCore::connectToServer);
+    connect(this, &ConnectorControl::signalDoDisConnect, clientControl_, &ClientCore::disconnectFromServer);
+}
+
+void ConnectorControl::onRefresh()
+{
 }
 
 void ConnectorControl::connectToServer()

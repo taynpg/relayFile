@@ -7,7 +7,7 @@ class ControlSession : public ClientCore
     Q_OBJECT
 public:
     ControlSession(QObject* parent = nullptr);
-    ~ControlSession();
+    ~ControlSession() override;
 
 private:
     void handleFrame(FramePtr frame) override;

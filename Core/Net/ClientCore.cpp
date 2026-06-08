@@ -52,11 +52,20 @@ ClientType ClientCore::getClientType() const
     return clientType_;
 }
 
+void ClientCore::disconnectFromServer()
+{
+    if (tcp_->state() == QAbstractSocket::ConnectedState) {
+        tcp_->disconnectFromHost();
+        qWarning() << "断开服务器连接。";
+    }
+    emit signalDisconnected();
+}
+
 bool ClientCore::connectToServer(const QString& server, int16_t port)
 {
-        if (tcp_->state() == QAbstractSocket::ConnectedState) {
-            return true;
-        }
+    if (tcp_->state() == QAbstractSocket::ConnectedState) {
+        return true;
+    }
 
     qInfo() << "尝试连接服务器：" << server << ":" << port;
     emit signalConnectting();

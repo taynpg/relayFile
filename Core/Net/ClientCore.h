@@ -24,7 +24,7 @@ signals:
 
 public:
     ClientCore(QObject* parent = nullptr);
-    ~ClientCore();
+    virtual ~ClientCore();
 
 public:
     static ClientCore* ceateInstance(QObject* parent = nullptr, ClientType clientType = ClientType::ControlSession);
@@ -40,6 +40,7 @@ public:
 
 public slots:
     bool connectToServer(const QString& server, int16_t port);
+    void disconnectFromServer();
 
 protected:
     void initSignals();

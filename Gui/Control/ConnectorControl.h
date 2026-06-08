@@ -22,6 +22,9 @@ public:
     explicit ConnectorControl(QWidget* parent = nullptr);
     ~ConnectorControl();
 
+public:
+    void Quit();
+
 private:
     void initSignals();
 
@@ -30,6 +33,8 @@ public slots:
     void onDisconnectSuccess();
     void onErrorOccurred();
     void onConnectting();
+
+    void onRefresh();
 
 public:
     void connectToServer();
