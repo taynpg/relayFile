@@ -4,12 +4,11 @@
 #include <QTabWidget>
 #include <QWidget>
 
+#include "Control/ComparisonControl.h"
 #include "Control/ConnectorControl.h"
 #include "Control/ExplorerControl.h"
-#include "Control/ComparisonControl.h"
 #include "Control/LogControl.h"
 #include "Control/RelayTask.h"
-
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -28,8 +27,11 @@ public:
 public:
     void Quit();
 
+public:
+    static void ControlMsgHander(QtMsgType type, const QMessageLogContext& context, const QString& msg);
+
 protected:
-    void closeEvent(QCloseEvent *event) override;
+    void closeEvent(QCloseEvent* event) override;
 
 private:
     void initControls();

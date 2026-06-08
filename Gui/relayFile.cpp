@@ -1,17 +1,31 @@
 #include "relayFile.h"
 
+#include <QCloseEvent>
 #include <QScreen>
 #include <QSplitter>
 #include <QVBoxLayout>
-#include <QCloseEvent>
+#include <Utils/Logger.h>
 
 #include "./ui_relayFile.h"
+
+static LogControl* gLogControl{};
+static bool isQuit{false};
 
 relayFile::relayFile(QWidget* parent) : QWidget(parent), ui(new Ui::relayFile)
 {
     ui->setupUi(this);
     initControls();
     initLayout();
+
+    gLogControl = logControl_;
+    isQuit = false;
+
+    Logger logger;
+    logger.setInfo("log/relayFileGUI.log", "relayFileGUI");
+    logger.initSimpleLogger(false);
+
+    qInstallMessageHandler(ControlMsgHander);
+    qInfo() << "启动。";
 }
 
 relayFile::~relayFile()
@@ -23,6 +37,7 @@ void relayFile::Quit()
 {
     localExplorerControl_->Quit();
     remoteExplorerControl_->Quit();
+    isQuit = true;
 }
 
 void relayFile::closeEvent(QCloseEvent* event)
@@ -44,6 +59,29 @@ void relayFile::initControls()
     relayTask_ = new RelayTask(this);
     logControl_ = new LogControl(this);
     tabWidget_ = new QTabWidget(this);
+}
+
+void relayFile::ControlMsgHander(QtMsgType type, const QMessageLogContext& context, const QString& msg)
+{
+    if (isQuit) {
+        return;
+    }
+    switch (type) {
+    case QtDebugMsg:
+        QMetaObject::invokeMethod(gLogControl, [msg]() { gLogControl->Debug(msg); });
+        break;
+    case QtInfoMsg:
+        QMetaObject::invokeMethod(gLogControl, [msg]() { gLogControl->Info(msg); });
+        break;
+    case QtWarningMsg:
+        QMetaObject::invokeMethod(gLogControl, [msg]() { gLogControl->Warn(msg); });
+        break;
+    case QtCriticalMsg:
+        QMetaObject::invokeMethod(gLogControl, [msg]() { gLogControl->Error(msg); });
+        break;
+    default:
+        break;
+    }
 }
 
 void relayFile::initLayout()
