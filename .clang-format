@@ -1,0 +1,20 @@
+﻿BasedOnStyle: LLVM
+IndentWidth: 4
+PointerAlignment: Left
+AccessModifierOffset: -4
+ReflowComments: true
+SpacesBeforeTrailingComments: 3
+AllowShortFunctionsOnASingleLine: None
+AllowShortEnumsOnASingleLine: false
+BreakBeforeBraces: Custom
+BraceWrapping:
+    AfterFunction: true
+    AfterClass: true
+TabWidth: 4
+ColumnLimit: 130
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^<.*>'
+    Priority: 1
+  - Regex: '^".*"'
+    Priority: 2

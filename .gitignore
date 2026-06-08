@@ -1,0 +1,8 @@
+build/
+.cache/
+.qtcreator/
+.vs
+out/
+.encmake/
+/.idea
+vsbuild/
