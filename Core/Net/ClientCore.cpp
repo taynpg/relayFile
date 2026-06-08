@@ -109,10 +109,50 @@ bool ClientCore::Send(FramePtr frame)
     return Send(data.data(), data.size());
 }
 
+bool ClientCore::SendWithCall(FramePtr frame, std::function<void(FramePtr)> callback)
+{
+    auto sid = GetSessionId();
+    frame->sessionId = sid;
+    if (!Send(frame)) {
+        return false;
+    }
+
+    QTimer* timer = new QTimer(this);
+    timer->setSingleShot(true);
+
+    connect(timer, &QTimer::timeout, this, [this, sid]() {
+        {
+            QMutexLocker locker(&waitLock_);
+            auto waiterIter = waitFrame_.find(sid);
+            auto waiter = waiterIter.value();
+            if (waiterIter != waitFrame_.end()) {
+                waitFrame_.erase(waiterIter);
+                waiter->timer->deleteLater();
+            }
+        }
+    });
+
+    std::shared_ptr<WaiteFrame> waiter = std::make_shared<WaiteFrame>();
+    waiter->sessionId = frame->sessionId;
+    waiter->callback = callback;
+    waiter->timer = timer;
+    {
+        QMutexLocker locker(&waitLock_);
+        waitFrame_[sid] = waiter;
+    }
+    waiter->timer->start(5000);
+    return true;
+}
+
 bool ClientCore::Send(const char* data, size_t size)
 {
     if (tcp_->state() != QAbstractSocket::ConnectedState) {
         return false;
     }
     return tcp_->write(data, size) == size;
+}
+
+uint64_t ClientCore::GetSessionId()
+{
+    return ++sessionId_;
 }

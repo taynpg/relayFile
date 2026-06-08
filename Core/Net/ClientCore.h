@@ -1,7 +1,9 @@
 #pragma once
 
-#include <QReadWriteLock>
+#include <QMutex>
 #include <QTcpSocket>
+#include <QTimer>
+#include <atomic>
 
 #include "Protocol/Message.h"
 #include "Protocol/Protocol.h"
@@ -36,6 +38,7 @@ public:
     ClientType getClientType() const;
 
     bool Send(FramePtr frame);
+    bool SendWithCall(FramePtr frame, std::function<void(FramePtr)> callback);
     bool Send(const char* data, size_t size);
 
 public slots:
@@ -50,9 +53,20 @@ protected:
     void baseHandleFrame(FramePtr frame);
     virtual void handleFrame(FramePtr frame) = 0;
 
+    uint64_t GetSessionId();
+
+    struct WaiteFrame {
+        uint64_t sessionId;
+        QTimer* timer{};
+        std::function<void(FramePtr)> callback{};
+    };
+
 protected:
     QTcpSocket* tcp_{};
+    QMutex waitLock_;
     ClientType clientType_{};
+    std::atomic_uint64_t sessionId_{0};
+    QMap<uint64_t, std::shared_ptr<WaiteFrame>> waitFrame_;
 
 protected:
     miniBuffer buffer_;

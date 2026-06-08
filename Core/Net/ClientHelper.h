@@ -3,7 +3,9 @@
 #include <QThread>
 
 #include "ClientCore.h"
+#include <QTimer>
 
+// 客户端工作线程
 class ClientWorker : public QThread
 {
     Q_OBJECT
