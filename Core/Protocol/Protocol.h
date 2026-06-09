@@ -10,7 +10,11 @@
 
 enum class FrameType : int16_t {
     FrameMessage = 0,
-    FrameFileChuck
+    FrameFileChuck,
+    FrameFileAccept,
+    FrameFileAck,
+    FrameFileFinish,
+    FrameFileInterrupt
 };
 
 struct OneFrame {
