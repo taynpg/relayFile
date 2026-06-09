@@ -1,8 +1,10 @@
 #pragma once
 
 #include <fstream>
+#include <QTimer>
 
 #include "ClientCore.h"
+#include "CoreDefine.hpp"
 
 class OneFileTrans : public QObject
 {
@@ -45,11 +47,13 @@ public:
     bool handleInterrupt(FramePtr frame);
     bool handleFinish(FramePtr frame);
 
+    void onSendTimeout();
     FramePtr CreateFrame(FrameType type);
 
 private:
     TransMode tMode_{};
     QMutex qMut_;
+    QTimer* sendTimeoutTimer_{};
     TransStatus state_{};
     ClientCore* fileControl_{};
 
@@ -77,4 +81,9 @@ public:
 private:
     void handleFrame(FramePtr frame) override;
     void AskOwnID() override;
+    bool getFileMeta(const Message& msg, FileMeta& meta);
+
+private:
+    QMutex transMut_;
+    QMap<std::string, std::shared_ptr<OneFileTrans>> transTask_;
 };

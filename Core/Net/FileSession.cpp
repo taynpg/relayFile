@@ -4,10 +4,22 @@
 
 OneFileTrans::OneFileTrans(QObject* parent) : QObject(parent)
 {
+    sendTimeoutTimer_ = new QTimer(this);
+    sendTimeoutTimer_->setSingleShot(true);
+    connect(sendTimeoutTimer_, &QTimer::timeout, this, &OneFileTrans::onSendTimeout);
 }
 
 void OneFileTrans::initSignals()
 {
+}
+
+void OneFileTrans::onSendTimeout()
+{
+    QMutexLocker locker(&qMut_);
+    if (state_ == TransStatus::Sending) {
+        emit signalFailed(ownId_, "发送超时");
+        state_ = TransStatus::Interrupted;
+    }
 }
 
 bool OneFileTrans::initTransfer(TransMode mode, const FileMeta& fileMeta, const std::string& targetId, ClientCore* fileControl)
@@ -74,6 +86,7 @@ bool OneFileTrans::nextSend()
         return false;
     }
     // timer
+    sendTimeoutTimer_->start(defSendTimeout);
     return true;
 }
 
@@ -81,6 +94,7 @@ bool OneFileTrans::handleAck(FramePtr frame)
 {
     if (frame->index == curBlockIndex_) {
         // timer
+        sendTimeoutTimer_->stop();
         transSize_ += blockSize_;
         if (transSize_ > totalSize_) {
             transSize_ = totalSize_;
@@ -204,6 +218,83 @@ FileSession::~FileSession()
 
 void FileSession::handleFrame(FramePtr frame)
 {
+    switch (frame->type) {
+    case FrameType::FrameFileFinish:
+    case FrameType::FrameFileAck:
+    case FrameType::FrameFileChuck:
+    case FrameType::FrameFileAccept:
+    case FrameType::FrameFileInterrupt: {
+        QMutexLocker locker(&transMut_);
+        auto it = transTask_.find(frame->from);
+        if (it != transTask_.end()) {
+            it.value()->onFrameReceive(frame);
+        }
+        break;
+    }
+    case FrameType::FrameRequestDown: {
+        Message msg;
+        deserializeStruct(frame->data, msg);
+        auto task = std::make_shared<OneFileTrans>();
+        FileMeta meta;
+        if (!getFileMeta(msg, meta)) {
+            auto tellFrame = OneFrame::Create(frame);
+            tellFrame->type = FrameType::FrameRequestDownFailed;
+            Send(tellFrame);
+            break;
+        }
+        auto result = task->initTransfer(OneFileTrans::TransMode::Send, meta, curUUID_.toStdString(), this);
+        if (!result) {
+            auto tellFrame = OneFrame::Create(frame);
+            tellFrame->type = FrameType::FrameRequestDownFailed;
+            Send(tellFrame);
+        }
+        {
+            QMutexLocker locker(&transMut_);
+            transTask_[curUUID_.toStdString()] = task;
+        }
+        break;
+    }
+    case FrameType::FrameRequestSend: {
+        Message msg;
+        deserializeStruct(frame->data, msg);
+        auto task = std::make_shared<OneFileTrans>();
+        FileMeta meta;
+        if (!getFileMeta(msg, meta)) {
+            auto tellFrame = OneFrame::Create(frame);
+            tellFrame->type = FrameType::FrameRequestSendFailed;
+            Send(tellFrame);
+            break;
+        }
+        auto result = task->initTransfer(OneFileTrans::TransMode::Receive, meta, curUUID_.toStdString(), this);
+        if (!result) {
+            auto tellFrame = OneFrame::Create(frame);
+            tellFrame->type = FrameType::FrameRequestSendFailed;
+            Send(tellFrame);
+        }
+        {
+            QMutexLocker locker(&transMut_);
+            transTask_[curUUID_.toStdString()] = task;
+        }
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+bool FileSession::getFileMeta(const Message& msg, FileMeta& meta)
+{
+    bool isHave = false;
+    for (const auto& item : msg.mapData) {
+        auto& metaList = item.second;
+        if (metaList.size() != 1) {
+            meta = metaList[0];
+            isHave = true;
+            break;
+        }
+        break;
+    }
+    return isHave;
 }
 
 void FileSession::AskOwnID()

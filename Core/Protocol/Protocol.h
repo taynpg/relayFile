@@ -7,14 +7,17 @@
 
 #include "Utils/miniUtil.h"
 
-
 enum class FrameType : int16_t {
     FrameMessage = 0,
     FrameFileChuck,
     FrameFileAccept,
     FrameFileAck,
     FrameFileFinish,
-    FrameFileInterrupt
+    FrameFileInterrupt,
+    FrameRequestDown,
+    FrameRequestDownFailed,
+    FrameRequestSend,
+    FrameRequestSendFailed
 };
 
 struct OneFrame {
