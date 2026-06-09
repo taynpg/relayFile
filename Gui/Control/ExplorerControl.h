@@ -30,6 +30,8 @@ public:
     void Quit();
     void setAskDF(AskType askType);
     std::shared_ptr<BaseAskDF> getAskDF();
+    QString getCurrentPath();
+    void setCurrentPath(const QString& path);
 
 private:
     void initControl();
@@ -43,9 +45,11 @@ public:
     void onHome(bool autoEnter = true);
     void onRefresh();
     void onUp();
+    void onDoubleClick();
+    void enterPath(const QString& path);
 
 private:
-    void pathSet(const QString& path);
+    void uiPathSet(const QString& path);
 
 private:
     Ui::ExplorerControl* ui;
@@ -55,6 +59,8 @@ private:
     std::shared_ptr<WorkerThread<ExplorerControl>> workerThread_{};
 
 private:
+    QMutex curPathMut_;
+    QString currentPath_;
     std::vector<FileMeta> currentMetaList_;
     std::vector<FileMeta> fileMetaList_;
 };

@@ -9,6 +9,12 @@ QString FileDir::GetErrInfo()
     return errInfo;
 }
 
+QString FileDir::cdUp(const QString& path)
+{
+    QDir qdir(path);
+    return qdir.cdUp() ? qdir.absolutePath() : path;
+}
+
 bool FileDir::GetFileList(const QString& path, QVector<RFileMeta>& fileList)
 {
     fileList.clear();
@@ -64,4 +70,19 @@ void FileDir::TurnMeta(const RFileMeta& rmeta, FileMeta& meta)
     meta.lastModified = rmeta.lastModified;
     meta.permission = rmeta.permission;
     meta.type = rmeta.fileType == RFileType::mTypeDir ? FileType::FILE_TYPE_DIR : FileType::FILE_TYPE_FILE;
+}
+
+QString FileDir::Join(const QString& path, const QString& name)
+{
+    QDir dir(path);
+    QString combined = dir.filePath(name);
+    return QDir::cleanPath(combined);
+}
+
+QString FileDir::Join(const QString& path, const QString& n1, const QString& n2)
+{
+    QDir dir(path);
+    QString combined = dir.filePath(n1);
+    combined = QDir(combined).filePath(n2);
+    return QDir::cleanPath(combined);
 }

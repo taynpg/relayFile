@@ -29,4 +29,7 @@ public:
     static bool GetFileList(const QString& path, QVector<RFileMeta>& fileList);
     static void TurnMeta(const RFileMeta& rmeta, FileMeta& meta);
     static QString GetErrInfo();
+    static QString cdUp(const QString& path);
+    static QString Join(const QString& path, const QString& name);
+    static QString Join(const QString& path, const QString& n1, const QString& n2);
 };

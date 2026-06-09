@@ -1,10 +1,12 @@
 #include "ExplorerControl.h"
 
+#include <File/FileDir.h>
 #include <QDateTime>
 #include <QHeaderView>
 #include <QTableWidgetItem>
 #include <Utils/miniUtil.h>
 
+#include "Base/GuiDefine.hpp"
 #include "ui_ExplorerControl.h"
 
 ExplorerControl::ExplorerControl(QWidget* parent) : QDialog(parent), ui(new Ui::ExplorerControl)
@@ -38,6 +40,7 @@ void ExplorerControl::initSignals()
     connect(ui->btnEnter, &QPushButton::clicked, this, &ExplorerControl::onEnter);
     connect(ui->btnHome, &QPushButton::clicked, this, [this]() { onHome(false); });
     connect(ui->btnUp, &QPushButton::clicked, this, &ExplorerControl::onUp);
+    connect(tabWidget_, &QTableWidget::itemDoubleClicked, this, &ExplorerControl::onDoubleClick);
 }
 
 std::shared_ptr<BaseAskDF> ExplorerControl::getAskDF()
@@ -51,24 +54,62 @@ void ExplorerControl::setAskDF(AskType askType)
     askDf_ = BaseAskDF::Create(askType_);
 }
 
+QString ExplorerControl::getCurrentPath()
+{
+    QMutexLocker locker(&curPathMut_);
+    return currentPath_;
+}
+
+void ExplorerControl::setCurrentPath(const QString& path)
+{
+    QMutexLocker locker(&curPathMut_);
+    currentPath_ = path;
+}
+
 void ExplorerControl::onEnter()
 {
     auto path = ui->cbPath->currentText().trimmed();
     if (path.isEmpty()) {
         return;
     }
-    auto stdStr = path.toStdString();
-    workerThread_->invoke([this, stdStr]() {
+    enterPath(path);
+}
+
+void ExplorerControl::enterPath(const QString& path)
+{
+    workerThread_->invoke([this, path]() {
         std::vector<FileMeta> fileList{};
-        if (!askDf_->AskFileList(stdStr, fileList)) {
+        if (!askDf_->AskFileList(path.toStdString(), fileList)) {
             emit fileListChanged(false, fileList);
             return;
         }
+        QMetaObject::invokeMethod(this, [this, path]() { 
+            setCurrentPath(path);
+            uiPathSet(path);
+         });
         emit fileListChanged(true, fileList);
     });
 }
 
-void ExplorerControl::pathSet(const QString& path)
+void ExplorerControl::onDoubleClick()
+{
+    auto item = tabWidget_->currentItem();
+    if (!item) {
+        return;
+    }
+    auto row = tabWidget_->row(item);
+    auto name = tabWidget_->item(row, 1)->text();
+    auto type = tabWidget_->item(row, 3)->text();
+    if (type != GUI_FILE_TYPE_DIR) {
+        qWarning() << name << "不是目录。";
+        return;
+    }
+    qInfo() << "访问目录:" << name;
+    auto path = FileDir::Join(currentPath_, name);
+    enterPath(path);
+}
+
+void ExplorerControl::uiPathSet(const QString& path)
 {
     ui->cbPath->setCurrentText(path);
 }
@@ -81,7 +122,7 @@ void ExplorerControl::onHome(bool autoEnter)
             qWarning() << "获取家目录失败。";
             return;
         }
-        pathSet(QString::fromStdString(home));
+        uiPathSet(QString::fromStdString(home));
         if (autoEnter) {
             onEnter();
         }
@@ -182,10 +223,10 @@ QString ExplorerControl::typeStr(FileType type)
 {
     switch (type) {
     case FileType::FILE_TYPE_DIR:
-        return "Dir";
+        return GUI_FILE_TYPE_DIR;
     case FileType::FILE_TYPE_FILE:
-        return "File";
+        return GUI_FILE_TYPE_FILE;
     default:
-        return "Unknown";
+        return GUI_FILE_TYPE_UNKNOWN;
     }
 }
