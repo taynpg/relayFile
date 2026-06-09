@@ -56,15 +56,17 @@ void RelayTask::initControl()
     ui->rbDisconnect->setChecked(true);
 
     tableWidget_ = new QTableWidget();
-    tableWidget_->setColumnCount(2);
-    tableWidget_->setHorizontalHeaderLabels({"名称", "大小"});
+    tableWidget_->setColumnCount(3);
+    tableWidget_->setHorizontalHeaderLabels({"名称", "大小", "状态"});
     tableWidget_->setSelectionBehavior(QAbstractItemView::SelectRows);
     tableWidget_->setContextMenuPolicy(Qt::CustomContextMenu);
 
     tableWidget_->setColumnWidth(1, 100);
+    tableWidget_->setColumnWidth(2, 100);
     tableWidget_->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
     tableWidget_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     tableWidget_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
+    tableWidget_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
 
     auto* layout = new QVBoxLayout();
     layout->addWidget(tableWidget_);
@@ -87,6 +89,7 @@ void RelayTask::initSignals()
     connect(clientTrans_, &ClientCore::signalDisconnected, this, &RelayTask::onDoTransDisconnect);
     connect(clientTrans_, &ClientCore::signalConnectting, this, &RelayTask::onDoTransConnecting);
     connect(ui->btnBasicCheck, &QPushButton::clicked, this, &RelayTask::onBaseCheck);
+    connect(this, &RelayTask::signalUpdateTable, this, &RelayTask::updateTable);
 }
 
 void RelayTask::setData(std::shared_ptr<RelayTaskData> data)
@@ -128,7 +131,7 @@ void RelayTask::onCheckControlClient()
 void RelayTask::onAppendLog(const QString& log)
 {
     auto dt = QDateTime::currentDateTime().toString("hh:mm:ss.zzz");
-    auto msg = "[" + dt + "] " + log ;
+    auto msg = "[" + dt + "] " + log;
     ui->pedLog->appendPlainText(msg);
 }
 
@@ -146,6 +149,21 @@ void RelayTask::onCheckTransClient()
 void RelayTask::onCheckLocalRoot()
 {
     emit signalLog("本地根目录存在");
+
+    fileList_.clear();
+    for (const auto& item : data_->fileList) {
+        // 文件夹暂时不处理
+        if (item.type == RFileType::mTypeDir) {
+            continue;
+        }
+        auto path = FileDir::Join(data_->localRoot, item.name);
+        FileMeta meta;
+        meta.sizeStr = item.sizeStr.toStdString();
+        meta.name = path.toStdString();
+        meta.size = item.size;
+        fileList_.push_back(meta);
+    }
+    emit signalUpdateTable();
     emit signalCheckRemoteRoot();
 }
 
@@ -185,4 +203,34 @@ void RelayTask::onDoTransConnecting()
 void RelayTask::onCheckComplete()
 {
     emit signalLog("检查完成");
+}
+
+void RelayTask::updateTable()
+{
+    tableWidget_->clearContents();
+    tableWidget_->setRowCount(0);
+
+    for (int i = 0; i < fileList_.size(); ++i) {
+        auto row = tableWidget_->rowCount();
+        tableWidget_->insertRow(row);
+        setFileItem(fileList_[i], row);
+        if (i != 0 && i % 30 == 0) {
+            QGuiApplication::processEvents();
+        }
+    }
+}
+
+void RelayTask::setFileItem(const FileMeta& meta, int row)
+{
+    auto* nameItem = new QTableWidgetItem(QString::fromStdString(meta.name));
+    nameItem->setFlags(nameItem->flags() & ~Qt::ItemIsEditable);
+    tableWidget_->setItem(row, 0, nameItem);
+
+    auto* sizeItem = new QTableWidgetItem(QString::fromStdString(meta.sizeStr));
+    sizeItem->setFlags(nameItem->flags() & ~Qt::ItemIsEditable);
+    tableWidget_->setItem(row, 1, sizeItem);
+
+    auto* stateItem = new QTableWidgetItem("等待");
+    stateItem->setFlags(nameItem->flags() & ~Qt::ItemIsEditable);
+    tableWidget_->setItem(row, 2, stateItem);
 }

@@ -43,7 +43,6 @@ private:
     ExplorerControl* localExplorerControl_{};
     ExplorerControl* remoteExplorerControl_{};
     ComparisonControl* comparisonControl_{};
-    RelayTask* relayTask_{};
     LogControl* logControl_{};
     ClientCore* clientControl_{};
     ClientCore* clientFile_{};

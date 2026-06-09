@@ -43,7 +43,7 @@ void ExplorerControl::initSignals()
     connect(ui->btnUp, &QPushButton::clicked, this, &ExplorerControl::onUp);
     connect(tabWidget_, &QTableWidget::itemDoubleClicked, this, &ExplorerControl::onDoubleClick);
     connect(tabWidget_, &QTableWidget::customContextMenuRequested, this, &ExplorerControl::onTableContextMenu);
-    connect(this, &ExplorerControl::transTaskRun, this, &ExplorerControl::onTransForm);
+    connect(this, &ExplorerControl::transTaskRun, this, [this](std::shared_ptr<RelayTaskData> data) { onTransForm(data); });
 }
 
 std::shared_ptr<BaseAskDF> ExplorerControl::getAskDF()
@@ -269,8 +269,10 @@ void ExplorerControl::onTableContextMenu(const QPoint& pos)
             auto curRow = datas[i * headers_.size()]->row();
             auto name = tabWidget_->item(curRow, 1)->text();
             auto type = tabWidget_->item(curRow, 3)->text();
+            auto sizeStr = tabWidget_->item(curRow, 4)->text();
             FileItemData itemData;
             itemData.name = name;
+            itemData.sizeStr = sizeStr;
             itemData.type = (type == GUI_FILE_TYPE_DIR ? RFileType::mTypeDir : RFileType::mTypeFile);
             transData->fileList.push_back(itemData);
         }

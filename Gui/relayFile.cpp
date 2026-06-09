@@ -72,7 +72,6 @@ void relayFile::initControls()
     remoteExplorerControl_->setAskDF(AskType::ASK_TYPE_REMOTE);
 
     comparisonControl_ = new ComparisonControl(this);
-    relayTask_ = new RelayTask(this);
     logControl_ = new LogControl(this);
     tabWidget_ = new QTabWidget(this);
 

@@ -7,7 +7,6 @@
 #include <cereal/types/vector.hpp>
 #include <string>
 
-
 enum class FileType {
     FILE_TYPE_FILE = 0,
     FILE_TYPE_DIR,
@@ -21,11 +20,12 @@ struct FileMeta {
     std::string dir;
     std::string name;
     std::uint64_t size;
+    std::string sizeStr;
     FileType type;
     int64_t lastModified;
     std::uint16_t permission;
     template <class Archive> void serialize(Archive& ar)
     {
-        ar(dir, name, size, type, lastModified, permission);
+        ar(dir, name, size, sizeStr, type, lastModified, permission);
     }
 };

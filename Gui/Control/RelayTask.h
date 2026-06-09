@@ -14,6 +14,7 @@ struct FileItemData {
     QString path;
     RFileType type;
     std::uint64_t size{};
+    QString sizeStr{};
 };
 
 struct RelayTaskData {
@@ -44,6 +45,7 @@ signals:
     void signalCheckRemoteRoot();
     void signalCheckSameFile();
     void signalDoTransConnect(const QString& ip, int16_t port);
+    void signalUpdateTable();
 
 public:
     void Quit();
@@ -70,8 +72,11 @@ protected:
     void onCheckComplete();
 
     void onAppendLog(const QString& log);
+    void updateTable();
+    void setFileItem(const FileMeta& meta, int row);
 
 private:
+    std::vector<FileMeta> fileList_;
     QTableWidget* tableWidget_{};
     std::shared_ptr<RelayTaskData> data_;
     Ui::RelayTask* ui;
