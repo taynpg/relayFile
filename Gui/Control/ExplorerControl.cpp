@@ -152,6 +152,8 @@ void ExplorerControl::onRefresh()
 
 void ExplorerControl::onUp()
 {
+    auto path = FileDir::cdUp(currentPath_);
+    enterPath(path);
 }
 
 void ExplorerControl::initControl()
