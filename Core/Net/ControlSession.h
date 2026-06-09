@@ -11,4 +11,5 @@ public:
 
 private:
     void handleFrame(FramePtr frame) override;
+    void AskOwnID() override;
 };

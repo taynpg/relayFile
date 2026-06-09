@@ -3,6 +3,8 @@
 #include <Protocol/Protocol.h>
 #include <QDateTime>
 
+#include "Utils/Common.h"
+
 ServerCore::ServerCore(QObject* parent) : QTcpServer(parent)
 {
     connect(this, &QTcpServer::newConnection, this, &ServerCore::onNewConnection);
@@ -59,16 +61,9 @@ void ServerCore::onNewConnection()
     clientInfo->connectTime = QDateTime::currentMSecsSinceEpoch() / 1000;
 
     {
-        QWriteLocker locker(&rwLock_);
-        clientMap_[clientId.toStdString()] = clientInfo;
+        QWriteLocker locker(&tempLock_);
+        tempMap_[clientId.toStdString()] = clientInfo;
     }
-
-    Message idMsg;
-    idMsg.msType = MessageType::kMessageAnswerId;
-    idMsg.to.clientId = clientId.toStdString();
-    auto f = OneFrame::Create();
-    f->data = serializeStruct(idMsg);
-    sendData(f, socket);
 }
 
 void ServerCore::onRead()
@@ -86,17 +81,75 @@ void ServerCore::onRead()
         if (frame == nullptr) {
             break;
         }
-        useFrame(frame, socket);
+        useFrame(frame, socket, cli);
     }
 }
 
-void ServerCore::useFrame(FramePtr frame, QTcpSocket* socket)
+void ServerCore::useFrame(FramePtr frame, QTcpSocket* socket, ClientInfo* cli)
 {
     Message msg;
     deserializeStruct(frame->data, msg);
     qDebug() << "处理消息：" << static_cast<int>(msg.msType);
 
     switch (msg.msType) {
+    case MessageType::kMessageAskId: {
+        Message sourceMsg;
+        deserializeStruct(frame->data, sourceMsg);
+        Message idMsg;
+        idMsg.msType = MessageType::kMessageAnswerId;
+        idMsg.to.clientId = cli->id.toStdString();
+        idMsg.to.clientName = sourceMsg.msData;
+        idMsg.msData = Common::GetUUID().toStdString();
+        cli->uuid = QString::fromStdString(idMsg.msData);
+        cli->name = QString::fromStdString(idMsg.to.clientName);
+        auto f = OneFrame::Create();
+        f->data = serializeStruct(idMsg);
+        sendData(f, socket);
+        std::shared_ptr<ClientInfo> moveCli = nullptr;
+        {
+            QWriteLocker locker(&tempLock_);
+            if (tempMap_.contains(cli->id.toStdString())) {
+                moveCli = tempMap_[cli->id.toStdString()];
+                tempMap_.remove(cli->id.toStdString());
+            }
+        }
+        if (moveCli) {
+            QWriteLocker locker(&rwLock_);
+            if (!clientMap_.contains(moveCli->id.toStdString())) {
+                clientMap_[moveCli->uuid.toStdString()] = moveCli;
+            }
+        }
+        break;
+    }
+    case MessageType::kMessageAnswerId: {
+        Message sourceMsg;
+        deserializeStruct(frame->data, sourceMsg);
+        auto uuid = sourceMsg.msData;
+        bool haveControl = false;
+        {
+            QWriteLocker locker(&rwLock_);
+            haveControl = clientMap_.contains(uuid);
+        }
+        if (!haveControl) {
+            socket->disconnectFromHost();
+            break;
+        }
+        std::shared_ptr<ClientInfo> moveCli = nullptr;
+        {
+            QWriteLocker locker(&tempLock_);
+            if (tempMap_.contains(cli->id.toStdString())) {
+                moveCli = tempMap_[cli->id.toStdString()];
+                tempMap_.remove(cli->id.toStdString());
+            }
+        }
+        if (moveCli) {
+            QWriteLocker locker(&transLock_);
+            if (!transMap_.contains(moveCli->id.toStdString())) {
+                transMap_[moveCli->uuid.toStdString()] = moveCli;
+            }
+        }
+        break;
+    }
     case MessageType::kMessageAskClientList: {
         Message asg(msg);
         GetClientList(asg);
@@ -163,9 +216,27 @@ void ServerCore::onClearClient()
     qWarning() << "客户端连接关闭：" << cli->id;
     socket->disconnectFromHost();
     socket->close();
+
+    bool isRemove = false;
     {
         QWriteLocker locker(&rwLock_);
-        clientMap_.remove(cli->id.toStdString());
+        if (clientMap_.contains(cli->uuid.toStdString())) {
+            clientMap_.remove(cli->uuid.toStdString());
+            isRemove = true;
+        }
+    }
+    if (!isRemove) {
+        QWriteLocker locker(&tempLock_);
+        if (tempMap_.contains(cli->id.toStdString())) {
+            tempMap_.remove(cli->id.toStdString());
+            isRemove = true;
+        }
+    }
+    if (!isRemove) {
+        QWriteLocker locker(&transLock_);
+        if (transMap_.contains(cli->id.toStdString())) {
+            transMap_.remove(cli->id.toStdString());
+        }
     }
     socket->deleteLater();
 }

@@ -31,6 +31,7 @@ void ControlSession::handleFrame(FramePtr frame)
     case MessageType::kMessageAnswerId: {
         mInfo_.clientId = answerMsg->to.clientId;
         mInfo_.clientName = answerMsg->to.clientName;
+        setCurUUID(QString::fromStdString(answerMsg->msData));
         emit signalOwnInfo(mInfo_);
         break;
     }
@@ -95,4 +96,15 @@ void ControlSession::handleFrame(FramePtr frame)
         break;
     }
     }
+}
+
+void ControlSession::AskOwnID()
+{
+    Message msg;
+    msg.msType = MessageType::kMessageAskId;
+    msg.msData = "倔强的小强";
+    auto frame = OneFrame::Create();
+    frame->data = serializeStruct(msg);
+    frame->sessionId = GetSessionId();
+    Send(frame);
 }

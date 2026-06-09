@@ -73,6 +73,8 @@ public:
     ClientInfo getSelfInfo() const;
     QString getServerIp() const;
     int16_t getServerPort() const;
+    QString getCurUUID() const;
+    void setCurUUID(const QString& uuid);
 
     bool Send(FramePtr frame);
     bool Send(const Message& msg);
@@ -96,6 +98,7 @@ protected:
     virtual void handleFrame(FramePtr frame) = 0;
 
     uint64_t GetSessionId();
+    virtual void AskOwnID() = 0;
 
     struct WaiteFrame {
         uint64_t sessionId;
@@ -119,6 +122,7 @@ protected:
     std::atomic_uint64_t sessionId_{0};
     std::shared_ptr<ThreadPool> workerPool_{};
     QTimer* clearWorkerTimer_{};
+    QString curUUID_{};
     QMap<uint64_t, std::shared_ptr<WaiteFrame>> requestWaitFrame_;
     QMap<uint64_t, std::shared_ptr<TaskWorker>> responseWaitWorker_;
 

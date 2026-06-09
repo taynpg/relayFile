@@ -93,6 +93,11 @@ int16_t ClientCore::getServerPort() const
     return serverPort_;
 }
 
+QString ClientCore::getCurUUID() const
+{
+    return curUUID_;
+}
+
 bool ClientCore::connectToServer(const QString& server, int16_t port)
 {
     if (tcp_->state() == QAbstractSocket::ConnectedState) {
@@ -111,7 +116,13 @@ bool ClientCore::connectToServer(const QString& server, int16_t port)
     serverIp_ = server;
     serverPort_ = port;
     qInfo() << "连接服务器成功=>" << server << ":" << port;
+    AskOwnID();
     return true;
+}
+
+void ClientCore::setCurUUID(const QString& uuid)
+{
+    curUUID_ = uuid;
 }
 
 void ClientCore::onReadyRead()
