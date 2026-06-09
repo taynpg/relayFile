@@ -60,7 +60,7 @@ void ExplorerControl::onEnter()
     auto stdStr = path.toStdString();
     workerThread_->invoke([this, stdStr]() {
         std::vector<FileMeta> fileList{};
-        if (!askDf_->GetFileList(stdStr, fileList)) {
+        if (!askDf_->AskFileList(stdStr, fileList)) {
             emit fileListChanged(false, fileList);
             return;
         }

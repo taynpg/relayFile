@@ -9,6 +9,6 @@ public:
     ~LocalAskDF() = default;
 
 public:
-    bool GetFileList(const std::string& path, std::vector<FileMeta>& fileList) override;
+    bool AskFileList(const std::string& path, std::vector<FileMeta>& fileList) override;
     bool AskHome(std::string& home) override;
 };

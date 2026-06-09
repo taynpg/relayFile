@@ -55,3 +55,13 @@ bool FileDir::GetHome(QString& home)
     home = QDir::homePath();
     return true;
 }
+
+void FileDir::TurnMeta(const RFileMeta& rmeta, FileMeta& meta)
+{
+    meta.dir = rmeta.dir.toStdString();
+    meta.name = rmeta.fileName.toStdString();
+    meta.size = rmeta.fileSize;
+    meta.lastModified = rmeta.lastModified;
+    meta.permission = rmeta.permission;
+    meta.type = rmeta.fileType == RFileType::mTypeDir ? FileType::FILE_TYPE_DIR : FileType::FILE_TYPE_FILE;
+}

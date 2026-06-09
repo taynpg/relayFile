@@ -17,7 +17,7 @@ public:
     ~BaseAskDF() = default;
 
 public:
-    virtual bool GetFileList(const std::string& path, std::vector<FileMeta>& fileList) = 0;
+    virtual bool AskFileList(const std::string& path, std::vector<FileMeta>& fileList) = 0;
     virtual bool AskHome(std::string& home) = 0;
 
 public:

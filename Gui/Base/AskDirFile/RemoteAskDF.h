@@ -11,7 +11,10 @@ public:
     ~RemoteAskDF() = default;
 
 public:
-    bool GetFileList(const std::string& path, std::vector<FileMeta>& fileList) override;
+    template <typename HandleResp> bool request(Message& msg, HandleResp handleResp);
+
+public:
+    bool AskFileList(const std::string& path, std::vector<FileMeta>& fileList) override;
     bool AskHome(std::string& home) override;
 
 private:

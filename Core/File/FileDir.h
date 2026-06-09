@@ -2,6 +2,7 @@
 
 #include <QString>
 #include <QVector>
+#include "Protocol/FileMeta.h"
 
 enum class RFileType {
     mTypeDir,
@@ -26,5 +27,6 @@ public:
 public:
     static bool GetHome(QString& home);
     static bool GetFileList(const QString& path, QVector<RFileMeta>& fileList);
+    static void TurnMeta(const RFileMeta& rmeta, FileMeta& meta);
     static QString GetErrInfo();
 };

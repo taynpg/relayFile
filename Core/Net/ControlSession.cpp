@@ -3,6 +3,17 @@
 #include "File/FileDir.h"
 #include "Protocol/Serialize.hpp"
 
+#define PushOneWork()                                                                                                            \
+    auto worker = ClientCore::TaskWorker::CreateWorker(frame);                                                                   \
+    {                                                                                                                            \
+        QMutexLocker locker(&responseWaitLock_);                                                                                 \
+        if (!responseWaitWorker_.contains(worker->frame->sessionId)) {                                                           \
+            responseWaitWorker_.insert(worker->frame->sessionId, worker);                                                        \
+        } else {                                                                                                                 \
+            return;                                                                                                              \
+        }                                                                                                                        \
+    }
+
 ControlSession::ControlSession(QObject* parent) : ClientCore(parent)
 {
 }
@@ -24,25 +35,42 @@ void ControlSession::handleFrame(FramePtr frame)
         break;
     }
     case MessageType::kMessageAskHome: {
-        auto woker = ClientCore::TaskWorker::CreateWorker(frame);
-        {
-            QMutexLocker locker(&responseWaitLock_);
-            responseWaitWorker_.insert(woker->frame->sessionId, woker);
-        }
-        workerPool_->enqueue([this, woker]() {
+        PushOneWork();
+        workerPool_->enqueue([this, worker]() {
             QString home;
             FileDir::GetHome(home);
-            auto answerFrame = OneFrame::Create(woker->frame);
+            auto answerFrame = OneFrame::Create(worker->frame);
             Message m;
             m.msType = MessageType::kMessageAnswerHome;
             m.msData = home.toStdString();
             answerFrame->data = serializeStruct(m);
             emit signalSendFrame(answerFrame);
-            woker->isDone = true;
+            worker->isDone = true;
         });
         break;
     }
     case MessageType::kMessageAskFileList: {
+        PushOneWork();
+        workerPool_->enqueue([this, worker]() {
+            Message sourceMsg;
+            deserializeStruct(worker->frame->data, sourceMsg);
+            QVector<RFileMeta> result;
+            FileDir::GetFileList(QString::fromStdString(sourceMsg.msData), result);
+            auto answerFrame = OneFrame::Create(worker->frame);
+            Message m(sourceMsg);
+            m.msType = MessageType::kMessageAnswerFileList;
+            std::vector<FileMeta> stdMeta;
+            stdMeta.reserve(result.size());
+            for (const auto& item : result) {
+                FileMeta meta;
+                FileDir::TurnMeta(item, meta);
+                stdMeta.push_back(meta);
+            }
+            m.mapData[""] = stdMeta;
+            answerFrame->data = serializeStruct(m);
+            emit signalSendFrame(answerFrame);
+            worker->isDone = true;
+        });
         break;
     }
     default: {

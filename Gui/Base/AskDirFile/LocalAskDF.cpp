@@ -2,7 +2,7 @@
 
 #include <File/FileDir.h>
 
-bool LocalAskDF::GetFileList(const std::string& path, std::vector<FileMeta>& fileList)
+bool LocalAskDF::AskFileList(const std::string& path, std::vector<FileMeta>& fileList)
 {
     QVector<RFileMeta> result;
     if (!FileDir::GetFileList(QString::fromStdString(path), result)) {
