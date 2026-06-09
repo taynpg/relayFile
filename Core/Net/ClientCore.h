@@ -42,6 +42,7 @@ signals:
     void signalConnected();
     void signalDisconnected();
     void signalErrorOccurred();
+    void signalOwnInfo(const ClientInfo& info);
 
 public:
     ClientCore(QObject* parent = nullptr);
@@ -55,15 +56,17 @@ public:
 
 public:
     ClientType getClientType() const;
+    ClientInfo getClientInfo() const;
+    ClientInfo getSelfInfo() const;
 
-    bool Send(const Message& msg);
     bool Send(FramePtr frame);
-    template <typename Callback> bool SendCall(FramePtr frame, Callback callback);
-    bool SendWithCall(FramePtr frame, std::function<void(FramePtr)> callback);
-    bool SendWithCall(const Message& msg, std::function<void(FramePtr)> callback);
-    bool SendWithCall(FramePtr frame, std::function<void(Message)> callback);
-    bool SendWithCall(const Message& msg, std::function<void(Message)> callback);
+    bool Send(const Message& msg);
     bool Send(const char* data, size_t size);
+    bool SendWithCall(FramePtr frame, std::function<void(Message)> callback);
+    bool SendWithCall(FramePtr frame, std::function<void(FramePtr)> callback);
+    bool SendWithCall(const Message& msg, std::function<void(Message)> callback);
+    bool SendWithCall(const Message& msg, std::function<void(FramePtr)> callback);
+    template <typename Callback> bool SendCall(FramePtr frame, Callback callback);
 
 public slots:
     bool connectToServer(const QString& server, int16_t port);
@@ -74,7 +77,6 @@ protected:
 
 protected:
     void onReadyRead();
-    void baseHandleFrame(FramePtr frame);
     virtual void handleFrame(FramePtr frame) = 0;
 
     uint64_t GetSessionId();
@@ -95,4 +97,5 @@ protected:
 protected:
     miniBuffer buffer_;
     ClientInfo oInfo_;
+    ClientInfo mInfo_;
 };

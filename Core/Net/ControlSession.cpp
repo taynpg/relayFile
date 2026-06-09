@@ -16,6 +16,12 @@ void ControlSession::handleFrame(FramePtr frame)
     deserializeStruct(frame->data, answerMsg);
 
     switch (answerMsg.msType) {
+    case MessageType::kMessageAnswerId: {
+        mInfo_.clientId = answerMsg.to.clientId;
+        mInfo_.clientName = answerMsg.to.clientName;
+        emit signalOwnInfo(mInfo_);
+        break;
+    }
     case MessageType::kMessageAskHome: {
         break;
     }

@@ -95,13 +95,19 @@ void ClientCore::onReadyRead()
     }
 }
 
-void ClientCore::baseHandleFrame(FramePtr frame)
-{
-}
-
 void ClientCore::setClientInfo(const ClientInfo& oInfo)
 {
     oInfo_ = oInfo;
+}
+
+ClientInfo ClientCore::getClientInfo() const
+{
+    return oInfo_;
+}
+
+ClientInfo ClientCore::getSelfInfo() const
+{
+    return mInfo_;
 }
 
 bool ClientCore::Send(const Message& msg)

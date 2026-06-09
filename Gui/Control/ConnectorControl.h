@@ -28,6 +28,7 @@ public:
 private:
     void initTable();
     void initSignals();
+    void initUI();
 
 public slots:
     void onConnectSuccess();
@@ -36,12 +37,16 @@ public slots:
     void onConnectting();
 
     void onRefresh();
+    void onOwnInfo(const ClientInfo& info);
+    void onTableContextMenu(const QPoint& pos);
+    void onUseClient(const QString& id, const QString& name);
 
 public:
     void connectToServer();
 
 private:
     bool parseIpPort(const QString& ipPort, QString& outIp, QString& outPort);
+    void updateClientList(const Message& msg);
 
 private:
     ClientWorker* clientWorker_{};

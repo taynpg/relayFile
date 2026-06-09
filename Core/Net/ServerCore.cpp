@@ -61,6 +61,13 @@ void ServerCore::onNewConnection()
         QWriteLocker locker(&rwLock_);
         clientMap_[clientId.toStdString()] = clientInfo;
     }
+
+    Message idMsg;
+    idMsg.msType = MessageType::kMessageAnswerId;
+    idMsg.to.clientId = clientId.toStdString();
+    auto f = OneFrame::Create();
+    f->data = serializeStruct(idMsg);
+    sendData(f, socket);
 }
 
 void ServerCore::onRead()
