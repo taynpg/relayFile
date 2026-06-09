@@ -30,7 +30,8 @@ bool RemoteAskDF::AskHome(std::string& home)
 
     MessagePtr ret = future.get();
     if (ret) {
-        home = ret->msData;
+        qInfo() << "获取远端" << clientControl_->getClientFullName() << "目录:" << ret->msData;
+               home = ret->msData;
         return true;
     }
     qWarning() << "获取远端" << clientControl_->getClientFullName() << "目录失败";

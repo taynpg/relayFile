@@ -10,6 +10,7 @@
 #include "Protocol/Message.h"
 #include "Protocol/Protocol.h"
 #include "Utils/miniUtil.h"
+#include "Utils/ThreadPoolSTD.hpp"
 
 // 我定义了一个叫 function_traits的模板，但我暂时不说它长什么样。
 // 它现在是一个 不完整类型（incomplete type）。
@@ -34,6 +35,7 @@ enum class ClientType {
 };
 
 enum class CallType {
+    CT_Unknown,
     CT_Message,
     CT_Frame
 };
@@ -48,6 +50,7 @@ signals:
     void signalDisconnected();
     void signalErrorOccurred();
     void signalOwnInfo(const ClientInfo& info);
+    void signalSendFrame(FramePtr frame);
 
 public:
     ClientCore(QObject* parent = nullptr);
@@ -58,6 +61,7 @@ public:
     void setClientType(ClientType clientType);
     void setClientInfo(const ClientInfo& oInfo);
     void instance();
+    void Quit();
 
 public:
     ClientType getClientType() const;
@@ -80,6 +84,7 @@ public slots:
 
 protected:
     void initSignals();
+    void clearWorker();
 
 protected:
     void onReadyRead();
@@ -94,12 +99,23 @@ protected:
         std::function<void(std::any)> call;
     };
 
+    struct TaskWorker {
+        uint64_t sessionId;
+        FramePtr frame{};
+        bool isDone{false};
+        static std::shared_ptr<TaskWorker> CreateWorker(FramePtr frame);
+    };
+
 protected:
     QTcpSocket* tcp_{};
-    QMutex waitLock_;
+    QMutex requestWaitLock_;
+    QMutex responseWaitLock_;
     ClientType clientType_{};
     std::atomic_uint64_t sessionId_{0};
-    QMap<uint64_t, std::shared_ptr<WaiteFrame>> waitFrame_;
+    std::shared_ptr<ThreadPool> workerPool_{};
+    QTimer* clearWorkerTimer_{};
+    QMap<uint64_t, std::shared_ptr<WaiteFrame>> requestWaitFrame_;
+    QMap<uint64_t, std::shared_ptr<TaskWorker>> responseWaitWorker_;
 
 protected:
     miniBuffer buffer_;

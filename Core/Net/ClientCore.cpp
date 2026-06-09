@@ -1,15 +1,27 @@
 #include "ClientCore.h"
 
 #include "ControlSession.h"
+#include "CoreDefine.hpp"
 #include "FileSession.h"
 #include "Protocol/Serialize.hpp"
 
-ClientCore::ClientCore(QObject* parent) : QObject(parent)
+
+ClientCore::ClientCore(QObject* parent) : QObject(parent), workerPool_(std::make_shared<ThreadPool>(8))
 {
+    clearWorkerTimer_ = new QTimer(this);
 }
 
 ClientCore::~ClientCore()
 {
+}
+
+void ClientCore::Quit()
+{
+    qDebug() << "等待线程池完成...";
+    workerPool_->Quit();
+    qDebug() << "线程池完成";
+
+    clearWorkerTimer_->stop();
 }
 
 void ClientCore::instance()
@@ -41,6 +53,10 @@ ClientCore* ClientCore::ceateInstance(QObject* parent, ClientType clientType)
 void ClientCore::initSignals()
 {
     connect(tcp_, &QTcpSocket::readyRead, this, &ClientCore::onReadyRead);
+    connect(clearWorkerTimer_, &QTimer::timeout, this, &ClientCore::clearWorker);
+    clearWorkerTimer_->start(defClearWorkerTimeout);
+
+    connect(this, &ClientCore::signalSendFrame, this, [this](FramePtr frame) { Send(frame); });
 }
 
 void ClientCore::setClientType(ClientType clientType)
@@ -149,9 +165,9 @@ template <typename Callback> bool ClientCore::SendCall(FramePtr frame, Callback 
     timer->setSingleShot(true);
 
     connect(timer, &QTimer::timeout, this, [this, sid]() {
-        QMutexLocker locker(&waitLock_);
-        auto it = waitFrame_.find(sid);
-        if (it != waitFrame_.end()) {
+        QMutexLocker locker(&requestWaitLock_);
+        auto it = requestWaitFrame_.find(sid);
+        if (it != requestWaitFrame_.end()) {
             auto& waiter = *it.value();
             switch (waiter.callType) {
             case CallType::CT_Message: {
@@ -164,9 +180,11 @@ template <typename Callback> bool ClientCore::SendCall(FramePtr frame, Callback 
                 waiter.call(f);
                 break;
             }
+            default:
+                break;
             }
             waiter.timer->deleteLater();
-            waitFrame_.erase(it);
+            requestWaitFrame_.erase(it);
         }
     });
 
@@ -185,11 +203,11 @@ template <typename Callback> bool ClientCore::SendCall(FramePtr frame, Callback 
     }
 
     {
-        QMutexLocker locker(&waitLock_);
-        waitFrame_[sid] = waiter;
+        QMutexLocker locker(&requestWaitLock_);
+        requestWaitFrame_[sid] = waiter;
     }
 
-    timer->start(5000);
+    timer->start(defWaitCmdTimeout);
     return true;
 }
 
@@ -230,4 +248,25 @@ bool ClientCore::Send(const char* data, size_t size)
 uint64_t ClientCore::GetSessionId()
 {
     return ++sessionId_;
+}
+
+std::shared_ptr<ClientCore::TaskWorker> ClientCore::TaskWorker::CreateWorker(FramePtr frame)
+{
+    auto r = std::make_shared<ClientCore::TaskWorker>();
+    r->frame = frame;
+    r->isDone = false;
+    r->sessionId = frame->sessionId;
+    return r;
+}
+
+void ClientCore::clearWorker()
+{
+    QMutexLocker locker(&responseWaitLock_);
+    for (auto iter = responseWaitWorker_.begin(); iter != responseWaitWorker_.end();) {
+        if (iter.value()->isDone) {
+            iter = responseWaitWorker_.erase(iter);
+        } else {
+            ++iter;
+        }
+    }
 }
