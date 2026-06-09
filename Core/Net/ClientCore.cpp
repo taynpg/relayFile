@@ -57,6 +57,7 @@ void ClientCore::disconnectFromServer()
 {
     if (tcp_->state() == QAbstractSocket::ConnectedState) {
         tcp_->disconnectFromHost();
+        tcp_->close();
         qWarning() << "断开服务器连接。";
     }
     emit signalDisconnected();

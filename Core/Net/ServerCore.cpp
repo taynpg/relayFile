@@ -49,6 +49,7 @@ void ServerCore::onNewConnection()
     qInfo() << "客户端连接成功：" << clientId;
 
     connect(socket, &QTcpSocket::readyRead, this, &ServerCore::onRead);
+    connect(socket, &QTcpSocket::disconnected, this, &ServerCore::onClearClient);
 
     auto clientInfo = std::make_shared<ClientInfo>();
     clientInfo->socket = socket;
@@ -147,4 +148,24 @@ void ServerCore::GetClientList(Message& msg)
             msg.clientList.push_back({cli->id.toStdString(), cli->name.toStdString()});
         }
     }
+}
+
+void ServerCore::onClearClient()
+{
+    QTcpSocket* socket = qobject_cast<QTcpSocket*>(sender());
+    if (!socket) {
+        return;
+    }
+    auto* cli = socket->property("INFO").value<ClientInfo*>();
+    if (!cli) {
+        return;
+    }
+    qWarning() << "客户端连接关闭：" << cli->id;
+    socket->disconnectFromHost();
+    socket->close();
+    {
+        QWriteLocker locker(&rwLock_);
+        clientMap_.remove(cli->id.toStdString());
+    }
+    socket->deleteLater();
 }

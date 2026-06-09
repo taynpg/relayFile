@@ -31,17 +31,18 @@ private:
         miniBuffer buffer;
     };
 
-private:
+private slots:
     void onNewConnection();
     void onRead();
-    void useFrame(FramePtr frame, QTcpSocket* socket);
-
-    bool forwarData(FramePtr frame, const std::string& otherId);
-    bool sendData(FramePtr frame, QTcpSocket* socket);
-    bool sendData(const char* data, int len, QTcpSocket* socket);
+    void onClearClient();
 
 private:
     void GetClientList(Message& msg);
+
+    void useFrame(FramePtr frame, QTcpSocket* socket);
+    bool forwarData(FramePtr frame, const std::string& otherId);
+    bool sendData(FramePtr frame, QTcpSocket* socket);
+    bool sendData(const char* data, int len, QTcpSocket* socket);
 
 private:
     QReadWriteLock rwLock_;

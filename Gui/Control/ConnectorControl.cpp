@@ -7,7 +7,6 @@
 #include "Protocol/Serialize.hpp"
 #include "ui_ConnectorControl.h"
 
-
 ConnectorControl::ConnectorControl(QWidget* parent) : QDialog(parent), ui(new Ui::ConnectorControl)
 {
     ui->setupUi(this);
@@ -99,6 +98,7 @@ void ConnectorControl::onRefresh()
 void ConnectorControl::updateClientList(const Message& msg)
 {
     ui->tableClients->clearContents();
+    ui->tableClients->setRowCount(0);
     auto selfInfo = clientControl_->getSelfInfo();
     for (auto& client : msg.clientList) {
         auto row = ui->tableClients->rowCount();
@@ -171,9 +171,7 @@ void ConnectorControl::onConnectSuccess()
 
 void ConnectorControl::onDisconnectSuccess()
 {
-    ui->btnConnect->setEnabled(true);
-    ui->btnDisconnect->setEnabled(false);
-    ui->btnRefresh->setEnabled(false);
+    onErrorOccurred();
 }
 
 void ConnectorControl::onErrorOccurred()
@@ -181,6 +179,8 @@ void ConnectorControl::onErrorOccurred()
     ui->btnConnect->setEnabled(true);
     ui->btnDisconnect->setEnabled(false);
     ui->btnRefresh->setEnabled(false);
+    ui->tableClients->clearContents();
+    ui->tableClients->setRowCount(0);
 }
 
 void ConnectorControl::onOwnInfo(const ClientInfo& info)
