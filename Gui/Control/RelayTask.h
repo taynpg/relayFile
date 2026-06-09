@@ -51,6 +51,7 @@ public:
     void Quit();
     void setData(std::shared_ptr<RelayTaskData> data);
     void closeEvent(QCloseEvent* event) override;
+    template <typename HandleResp> bool Request(ClientCore* cli, FramePtr frame, HandleResp handleResp);
 
 protected:
     void initControl();
@@ -74,6 +75,7 @@ protected:
     void onAppendLog(const QString& log);
     void updateTable();
     void setFileItem(const FileMeta& meta, int row);
+    void onStartRun();
 
 private:
     std::vector<FileMeta> fileList_;

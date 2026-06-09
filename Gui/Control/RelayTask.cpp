@@ -20,6 +20,23 @@ RelayTask::~RelayTask()
     delete ui;
 }
 
+template <typename HandleResp> bool RelayTask::Request(ClientCore* cli, FramePtr frame, HandleResp handleResp)
+{
+    auto promise = std::make_shared<std::promise<FramePtr>>();
+    auto future = promise->get_future();
+
+    QMetaObject::invokeMethod(
+        cli, [this, cli, promise, frame]() { cli->SendWithCall(frame, [promise](FramePtr f) { promise->set_value(f); }); });
+
+    FramePtr f = future.get();
+    if (!f) {
+        qWarning() << "请求远端" << clientControl_->getClientFullName() << "失败";
+        return false;
+    }
+
+    return handleResp(f);
+}
+
 void RelayTask::Quit()
 {
     workerThread_->stop();
@@ -89,7 +106,16 @@ void RelayTask::initSignals()
     connect(clientTrans_, &ClientCore::signalDisconnected, this, &RelayTask::onDoTransDisconnect);
     connect(clientTrans_, &ClientCore::signalConnectting, this, &RelayTask::onDoTransConnecting);
     connect(ui->btnBasicCheck, &QPushButton::clicked, this, &RelayTask::onBaseCheck);
+    connect(ui->btnStart, &QPushButton::clicked, this, &RelayTask::onStartRun);
     connect(this, &RelayTask::signalUpdateTable, this, &RelayTask::updateTable);
+}
+
+void RelayTask::onStartRun()
+{
+    // 先请求到Server
+    // 等待Server控制对方建立文件传输通道
+    // 等待Server通知结果
+    // 根据结果进行放弃或者传输
 }
 
 void RelayTask::setData(std::shared_ptr<RelayTaskData> data)
