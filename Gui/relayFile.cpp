@@ -68,6 +68,11 @@ void relayFile::initControls()
     relayTask_ = new RelayTask(this);
     logControl_ = new LogControl(this);
     tabWidget_ = new QTabWidget(this);
+
+    localExplorerControl_->onHome();
+
+    // connect(connectorControl_, &ConnectorControl::signalConnectDone, remoteExplorerControl_,
+    //         [this]() { remoteExplorerControl_->onHome(true); });
 }
 
 void relayFile::ControlMsgHander(QtMsgType type, const QMessageLogContext& context, const QString& msg)

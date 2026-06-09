@@ -33,6 +33,11 @@ enum class ClientType {
     FileSession,
 };
 
+enum class CallType {
+    CT_Message,
+    CT_Frame
+};
+
 class ClientCore : public QObject
 {
     Q_OBJECT
@@ -57,14 +62,15 @@ public:
 public:
     ClientType getClientType() const;
     ClientInfo getClientInfo() const;
+    QString getClientFullName() const;
     ClientInfo getSelfInfo() const;
 
     bool Send(FramePtr frame);
     bool Send(const Message& msg);
     bool Send(const char* data, size_t size);
-    bool SendWithCall(FramePtr frame, std::function<void(Message)> callback);
+    bool SendWithCall(FramePtr frame, std::function<void(MessagePtr)> callback);
     bool SendWithCall(FramePtr frame, std::function<void(FramePtr)> callback);
-    bool SendWithCall(const Message& msg, std::function<void(Message)> callback);
+    bool SendWithCall(const Message& msg, std::function<void(MessagePtr)> callback);
     bool SendWithCall(const Message& msg, std::function<void(FramePtr)> callback);
     template <typename Callback> bool SendCall(FramePtr frame, Callback callback);
 
@@ -84,6 +90,7 @@ protected:
     struct WaiteFrame {
         uint64_t sessionId;
         QTimer* timer{};
+        CallType callType{};
         std::function<void(std::any)> call;
     };
 

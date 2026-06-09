@@ -36,7 +36,7 @@ void ExplorerControl::initSignals()
 {
     connect(this, &ExplorerControl::fileListChanged, this, &ExplorerControl::onFileListChanged);
     connect(ui->btnEnter, &QPushButton::clicked, this, &ExplorerControl::onEnter);
-    connect(ui->btnHome, &QPushButton::clicked, this, &ExplorerControl::onHome);
+    connect(ui->btnHome, &QPushButton::clicked, this, [this]() { onHome(false); });
     connect(ui->btnUp, &QPushButton::clicked, this, &ExplorerControl::onUp);
 }
 
@@ -68,8 +68,24 @@ void ExplorerControl::onEnter()
     });
 }
 
-void ExplorerControl::onHome()
+void ExplorerControl::pathSet(const QString& path)
 {
+    ui->cbPath->setCurrentText(path);
+}
+
+void ExplorerControl::onHome(bool autoEnter)
+{
+    workerThread_->invoke([this, autoEnter]() {
+        std::string home{};
+        if (!askDf_->AskHome(home)) {
+            qWarning() << "获取家目录失败。";
+            return;
+        }
+        pathSet(QString::fromStdString(home));
+        if (autoEnter) {
+            onEnter();
+        }
+    });
 }
 
 void ExplorerControl::onFileListChanged(bool isSuccess, const std::vector<FileMeta>& fileList)
@@ -166,10 +182,10 @@ QString ExplorerControl::typeStr(FileType type)
 {
     switch (type) {
     case FileType::FILE_TYPE_DIR:
-        return "DIR";
+        return "Dir";
     case FileType::FILE_TYPE_FILE:
-        return "FILE";
+        return "File";
     default:
-        return "UNKNOWN";
+        return "Unknown";
     }
 }

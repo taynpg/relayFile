@@ -98,12 +98,19 @@ void ClientCore::onReadyRead()
 
 void ClientCore::setClientInfo(const ClientInfo& oInfo)
 {
+    qInfo() << "设置客户端信息：" << oInfo.clientId << oInfo.clientName;
     oInfo_ = oInfo;
 }
 
 ClientInfo ClientCore::getClientInfo() const
 {
     return oInfo_;
+}
+
+QString ClientCore::getClientFullName() const
+{
+    QString name = QString("%1,%2").arg(oInfo_.clientId).arg(oInfo_.clientName);
+    return name;
 }
 
 ClientInfo ClientCore::getSelfInfo() const
@@ -114,14 +121,17 @@ ClientInfo ClientCore::getSelfInfo() const
 bool ClientCore::Send(const Message& msg)
 {
     auto frame = OneFrame::Create();
+    frame->from = mInfo_.clientId;
+    frame->to = oInfo_.clientId;
     frame->data = serializeStruct(msg);
     frame->sessionId = GetSessionId();
-    frame->to = oInfo_.clientId;
     return Send(frame);
 }
 
 bool ClientCore::Send(FramePtr frame)
 {
+    frame->from = mInfo_.clientId;
+    frame->to = oInfo_.clientId;
     auto data = Protocol::Pack(frame);
     return Send(data.data(), data.size());
 }
@@ -142,7 +152,20 @@ template <typename Callback> bool ClientCore::SendCall(FramePtr frame, Callback 
         QMutexLocker locker(&waitLock_);
         auto it = waitFrame_.find(sid);
         if (it != waitFrame_.end()) {
-            it.value()->timer->deleteLater();
+            auto& waiter = *it.value();
+            switch (waiter.callType) {
+            case CallType::CT_Message: {
+                MessagePtr msg = nullptr;
+                waiter.call(msg);
+                break;
+            }
+            case CallType::CT_Frame: {
+                FramePtr f = nullptr;
+                waiter.call(f);
+                break;
+            }
+            }
+            waiter.timer->deleteLater();
             waitFrame_.erase(it);
         }
     });
@@ -152,6 +175,14 @@ template <typename Callback> bool ClientCore::SendCall(FramePtr frame, Callback 
     using ArgType = typename function_traits<Callback>::argument_type;
     waiter->call = [cb = std::move(callback)](std::any arg) { cb(std::any_cast<ArgType>(arg)); };
     waiter->timer = timer;
+
+    if constexpr (std::is_same_v<ArgType, MessagePtr>) {
+        waiter->callType = CallType::CT_Message;
+    } else if constexpr (std::is_same_v<ArgType, FramePtr>) {
+        waiter->callType = CallType::CT_Frame;
+    } else {
+        static_assert(!sizeof(ArgType), "Unsupported callback argument type");
+    }
 
     {
         QMutexLocker locker(&waitLock_);
@@ -170,12 +201,12 @@ bool ClientCore::SendWithCall(const Message& msg, std::function<void(FramePtr)> 
     return SendCall(frame, callback);
 }
 
-bool ClientCore::SendWithCall(FramePtr frame, std::function<void(Message)> callback)
+bool ClientCore::SendWithCall(FramePtr frame, std::function<void(MessagePtr)> callback)
 {
     return SendCall(frame, std::move(callback));
 }
 
-bool ClientCore::SendWithCall(const Message& msg, std::function<void(Message)> callback)
+bool ClientCore::SendWithCall(const Message& msg, std::function<void(MessagePtr)> callback)
 {
     auto frame = OneFrame::Create();
     frame->data = serializeStruct(msg);

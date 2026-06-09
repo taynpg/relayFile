@@ -38,11 +38,14 @@ private:
     void baseTask();
     void initSignals();
 
-private:
+public:
     void onEnter();
-    void onHome();
+    void onHome(bool autoEnter = true);
     void onRefresh();
     void onUp();
+
+private:
+    void pathSet(const QString& path);
 
 private:
     Ui::ExplorerControl* ui;

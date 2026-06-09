@@ -85,9 +85,9 @@ void ConnectorControl::onRefresh()
             if (!frame) {
                 return;
             }
-            Message answerMsg;
-            deserializeStruct(frame->data, answerMsg);
-            if (answerMsg.msType != MessageType::kMessageAnswerClientList) {
+            MessagePtr answerMsg = std::make_shared<Message>();
+            deserializeStruct(frame->data, *answerMsg);
+            if (answerMsg->msType != MessageType::kMessageAnswerClientList) {
                 return;
             }
             QMetaObject::invokeMethod(this, [this, answerMsg]() { updateClientList(answerMsg); });
@@ -95,12 +95,15 @@ void ConnectorControl::onRefresh()
     });
 }
 
-void ConnectorControl::updateClientList(const Message& msg)
+void ConnectorControl::updateClientList(const MessagePtr& msg)
 {
+    if (!msg) {
+        return;
+    }
     ui->tableClients->clearContents();
     ui->tableClients->setRowCount(0);
     auto selfInfo = clientControl_->getSelfInfo();
-    for (auto& client : msg.clientList) {
+    for (auto& client : msg->clientList) {
         auto row = ui->tableClients->rowCount();
         ui->tableClients->insertRow(row);
 
@@ -167,6 +170,7 @@ void ConnectorControl::onConnectSuccess()
     ui->btnRefresh->setEnabled(true);
 
     onRefresh();
+    emit signalConnectDone();
 }
 
 void ConnectorControl::onDisconnectSuccess()
@@ -181,6 +185,9 @@ void ConnectorControl::onErrorOccurred()
     ui->btnRefresh->setEnabled(false);
     ui->tableClients->clearContents();
     ui->tableClients->setRowCount(0);
+
+    ui->edCurrentClient->setText("");
+    ui->lineEdit->setText("");
 }
 
 void ConnectorControl::onOwnInfo(const ClientInfo& info)
@@ -218,5 +225,9 @@ void ConnectorControl::onTableContextMenu(const QPoint& pos)
 void ConnectorControl::onUseClient(const QString& id, const QString& name)
 {
     QString infoMsg = QString("%1,%2").arg(id).arg(name);
+    ClientInfo o;
+    o.clientId = id.toStdString();
+    o.clientName = name.toStdString();
+    clientControl_->setClientInfo(o);
     ui->edCurrentClient->setText(infoMsg);
 }

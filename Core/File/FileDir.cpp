@@ -49,3 +49,9 @@ bool FileDir::GetFileList(const QString& path, QVector<RFileMeta>& fileList)
 
     return true;
 }
+
+bool FileDir::GetHome(QString& home)
+{
+    home = QDir::homePath();
+    return true;
+}

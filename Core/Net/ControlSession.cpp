@@ -12,13 +12,13 @@ ControlSession::~ControlSession()
 
 void ControlSession::handleFrame(FramePtr frame)
 {
-    Message answerMsg;
-    deserializeStruct(frame->data, answerMsg);
+    MessagePtr answerMsg = Message::Create();
+    deserializeStruct(frame->data, *answerMsg);
 
-    switch (answerMsg.msType) {
+    switch (answerMsg->msType) {
     case MessageType::kMessageAnswerId: {
-        mInfo_.clientId = answerMsg.to.clientId;
-        mInfo_.clientName = answerMsg.to.clientName;
+        mInfo_.clientId = answerMsg->to.clientId;
+        mInfo_.clientName = answerMsg->to.clientName;
         emit signalOwnInfo(mInfo_);
         break;
     }
@@ -29,10 +29,18 @@ void ControlSession::handleFrame(FramePtr frame)
         break;
     }
     default: {
-        {
-            QMutexLocker locker(&waitLock_);
-            if (auto it = waitFrame_.find(frame->sessionId); it != waitFrame_.end()) {
+        QMutexLocker locker(&waitLock_);
+        if (auto it = waitFrame_.find(frame->sessionId); it != waitFrame_.end()) {
+            auto callType = it.value()->callType;
+            switch (callType) {
+            case CallType::CT_Message: {
+                it.value()->call(answerMsg);
+                break;
+            }
+            case CallType::CT_Frame: {
                 it.value()->call(frame);
+                break;
+            }
             }
         }
         break;

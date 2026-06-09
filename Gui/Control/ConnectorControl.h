@@ -17,6 +17,7 @@ class ConnectorControl : public QDialog
 signals:
     void signalDoConnect(const QString& ip, int16_t port);
     void signalDoDisConnect();
+    void signalConnectDone();
 
 public:
     explicit ConnectorControl(QWidget* parent = nullptr);
@@ -46,7 +47,7 @@ public:
 
 private:
     bool parseIpPort(const QString& ipPort, QString& outIp, QString& outPort);
-    void updateClientList(const Message& msg);
+    void updateClientList(const MessagePtr& msg);
 
 private:
     ClientWorker* clientWorker_{};

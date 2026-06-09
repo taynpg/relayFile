@@ -24,6 +24,7 @@ public:
     ~FileDir() = default;
 
 public:
+    static bool GetHome(QString& home);
     static bool GetFileList(const QString& path, QVector<RFileMeta>& fileList);
     static QString GetErrInfo();
 };

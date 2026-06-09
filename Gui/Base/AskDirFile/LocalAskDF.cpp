@@ -22,5 +22,10 @@ bool LocalAskDF::GetFileList(const std::string& path, std::vector<FileMeta>& fil
 }
 bool LocalAskDF::AskHome(std::string& home)
 {
-    return false;
+    QString homeStr;
+    if (!FileDir::GetHome(homeStr)) {
+        return false;
+    }
+    home = homeStr.toStdString();
+    return true;
 }

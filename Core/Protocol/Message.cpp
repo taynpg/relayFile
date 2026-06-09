@@ -24,3 +24,8 @@ Message& Message::operator=(const Message& o)
     mapData = o.mapData;
     return *this;
 }
+
+std::shared_ptr<Message> Message::Create()
+{
+    return std::make_shared<Message>();
+}

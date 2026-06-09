@@ -8,9 +8,9 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <memory>
 
 #include "FileMeta.h"
-
 
 struct ClientInfo {
     std::string clientId;
@@ -51,4 +51,7 @@ struct Message {
     {
         ar(msType, msData, errData, from, to, clientList, mapData);
     }
+
+    static std::shared_ptr<Message> Create();
 };
+using MessagePtr = std::shared_ptr<Message>;
