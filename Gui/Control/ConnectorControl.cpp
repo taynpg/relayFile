@@ -1,12 +1,14 @@
 #include "ConnectorControl.h"
 
 #include "Base/BaseHelper.h"
+#include "Protocol/Serialize.hpp"
 #include "ui_ConnectorControl.h"
 
 ConnectorControl::ConnectorControl(QWidget* parent) : QDialog(parent), ui(new Ui::ConnectorControl)
 {
     ui->setupUi(this);
     setMaximumWidth(350);
+    initTable();
     clientControl_ = GlobalData::getInstance()->getClientControl();
     clientWorker_ = new ClientWorker(clientControl_, nullptr);
     clientControl_->moveToThread(clientWorker_);
@@ -29,6 +31,20 @@ ConnectorControl::~ConnectorControl()
     delete ui;
 }
 
+void ConnectorControl::initTable()
+{
+    QTableWidget* tableWidget = ui->tableClients;
+    tableWidget->setColumnCount(2);
+    tableWidget->setHorizontalHeaderLabels({"ID", "名称"});
+
+    tableWidget->setColumnWidth(0, 150);
+    tableWidget->setColumnWidth(1, 150);
+
+    tableWidget->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    tableWidget->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Fixed);
+    tableWidget->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+}
+
 void ConnectorControl::initSignals()
 {
     connect(ui->btnConnect, &QPushButton::clicked, this, &ConnectorControl::connectToServer);
@@ -46,6 +62,29 @@ void ConnectorControl::initSignals()
 
 void ConnectorControl::onRefresh()
 {
+    Message msg;
+    msg.msType = MessageType::kMessageAskClientList;
+    QMetaObject::invokeMethod(clientControl_, [this, msg]() {
+        clientControl_->SendWithCall(msg, [this](FramePtr frame) {
+            if (!frame) {
+                return;
+            }
+            Message answerMsg;
+            deserializeStruct(frame->data, answerMsg);
+            if (answerMsg.msType != MessageType::kMessageAnswerClientList) {
+                return;
+            }
+            QMetaObject::invokeMethod(this, [this, answerMsg]() {
+                ui->tableClients->clearContents();
+                for (auto& client : answerMsg.clientList) {
+                    auto row = ui->tableClients->rowCount();
+                    ui->tableClients->insertRow(row);
+                    ui->tableClients->setItem(row, 0, new QTableWidgetItem(QString::fromStdString(client.clientId)));
+                    ui->tableClients->setItem(row, 1, new QTableWidgetItem(QString::fromStdString(client.clientName)));
+                }
+            });
+        });
+    });
 }
 
 void ConnectorControl::connectToServer()

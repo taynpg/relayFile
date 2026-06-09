@@ -26,6 +26,7 @@ public:
     void Quit();
 
 private:
+    void initTable();
     void initSignals();
 
 public slots:

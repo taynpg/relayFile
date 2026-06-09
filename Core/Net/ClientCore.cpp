@@ -2,6 +2,7 @@
 
 #include "ControlSession.h"
 #include "FileSession.h"
+#include "Protocol/Serialize.hpp"
 
 ClientCore::ClientCore(QObject* parent) : QObject(parent)
 {
@@ -103,16 +104,26 @@ void ClientCore::setClientInfo(const ClientInfo& oInfo)
     oInfo_ = oInfo;
 }
 
+bool ClientCore::Send(const Message& msg)
+{
+    auto frame = OneFrame::Create();
+    frame->data = serializeStruct(msg);
+    frame->sessionId = GetSessionId();
+    frame->to = oInfo_.clientId;
+    return Send(frame);
+}
+
 bool ClientCore::Send(FramePtr frame)
 {
     auto data = Protocol::Pack(frame);
     return Send(data.data(), data.size());
 }
 
-bool ClientCore::SendWithCall(FramePtr frame, std::function<void(FramePtr)> callback)
+template <typename Callback> bool ClientCore::SendCall(FramePtr frame, Callback callback)
 {
     auto sid = GetSessionId();
     frame->sessionId = sid;
+
     if (!Send(frame)) {
         return false;
     }
@@ -121,27 +132,53 @@ bool ClientCore::SendWithCall(FramePtr frame, std::function<void(FramePtr)> call
     timer->setSingleShot(true);
 
     connect(timer, &QTimer::timeout, this, [this, sid]() {
-        {
-            QMutexLocker locker(&waitLock_);
-            auto waiterIter = waitFrame_.find(sid);
-            auto waiter = waiterIter.value();
-            if (waiterIter != waitFrame_.end()) {
-                waitFrame_.erase(waiterIter);
-                waiter->timer->deleteLater();
-            }
+        QMutexLocker locker(&waitLock_);
+        auto it = waitFrame_.find(sid);
+        if (it != waitFrame_.end()) {
+            it.value()->timer->deleteLater();
+            waitFrame_.erase(it);
         }
     });
 
-    std::shared_ptr<WaiteFrame> waiter = std::make_shared<WaiteFrame>();
-    waiter->sessionId = frame->sessionId;
-    waiter->callback = callback;
+    auto waiter = std::make_shared<WaiteFrame>();
+    waiter->sessionId = sid;
+    using ArgType = typename function_traits<Callback>::argument_type;
+    waiter->call = [cb = std::move(callback)](std::any arg) { cb(std::any_cast<ArgType>(arg)); };
     waiter->timer = timer;
+
     {
         QMutexLocker locker(&waitLock_);
         waitFrame_[sid] = waiter;
     }
-    waiter->timer->start(5000);
+
+    timer->start(5000);
     return true;
+}
+
+bool ClientCore::SendWithCall(const Message& msg, std::function<void(FramePtr)> callback)
+{
+    auto frame = OneFrame::Create();
+    frame->data = serializeStruct(msg);
+    frame->to = oInfo_.clientId;
+    return SendCall(frame, callback);
+}
+
+bool ClientCore::SendWithCall(FramePtr frame, std::function<void(Message)> callback)
+{
+    return SendCall(frame, std::move(callback));
+}
+
+bool ClientCore::SendWithCall(const Message& msg, std::function<void(Message)> callback)
+{
+    auto frame = OneFrame::Create();
+    frame->data = serializeStruct(msg);
+    frame->to = oInfo_.clientId;
+    return SendCall(frame, std::move(callback));
+}
+
+bool ClientCore::SendWithCall(FramePtr frame, std::function<void(FramePtr)> callback)
+{
+    return SendCall(frame, std::move(callback));
 }
 
 bool ClientCore::Send(const char* data, size_t size)

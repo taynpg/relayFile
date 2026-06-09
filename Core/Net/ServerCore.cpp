@@ -86,6 +86,7 @@ void ServerCore::useFrame(FramePtr frame, QTcpSocket* socket)
 {
     Message msg;
     deserializeStruct(frame->data, msg);
+    qDebug() << "处理消息：" << static_cast<int>(msg.msType);
 
     switch (msg.msType) {
     case MessageType::kMessageAskClientList: {
