@@ -9,8 +9,9 @@
 
 #include "Protocol/Message.h"
 #include "Protocol/Protocol.h"
-#include "Utils/miniUtil.h"
 #include "Utils/ThreadPoolSTD.hpp"
+#include "Utils/miniUtil.h"
+
 
 // 我定义了一个叫 function_traits的模板，但我暂时不说它长什么样。
 // 它现在是一个 不完整类型（incomplete type）。
@@ -18,7 +19,7 @@
 template <typename T> struct function_traits;
 
 /*  模板特化（Template Specialization）。
-    当 T是 std::function<R(Arg)>这种形式时, 我才给它一个“定义”
+    当 T 是 std::function<R(Arg)>这种形式时, 我才给它一个“定义”
                    写法                               含义
            std::function<R(Arg)>         一个只接受一个参数的 std::function
                     R                                返回值
@@ -63,11 +64,15 @@ public:
     void instance();
     void Quit();
 
+    bool isConnected() const;
+
 public:
     ClientType getClientType() const;
     ClientInfo getClientInfo() const;
     QString getClientFullName() const;
     ClientInfo getSelfInfo() const;
+    QString getServerIp() const;
+    int16_t getServerPort() const;
 
     bool Send(FramePtr frame);
     bool Send(const Message& msg);
@@ -121,4 +126,7 @@ protected:
     miniBuffer buffer_;
     ClientInfo oInfo_;
     ClientInfo mInfo_;
+
+    QString serverIp_;
+    int16_t serverPort_;
 };

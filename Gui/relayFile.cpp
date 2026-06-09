@@ -21,6 +21,10 @@ relayFile::relayFile(QWidget* parent) : QWidget(parent), ui(new Ui::relayFile)
     GlobalData::getInstance()->setClientControl(clientControl_);
     GlobalData::getInstance()->setClientFile(clientFile_);
 
+    transWorker_ = new ClientWorker(clientFile_, nullptr);
+    clientFile_->moveToThread(transWorker_);
+    transWorker_->start();
+
     Logger logger;
     logger.setInfo("log/relayFileGUI.log", "relayFileGUI");
     logger.initSimpleLogger(false);
@@ -44,6 +48,9 @@ relayFile::~relayFile()
 
 void relayFile::Quit()
 {
+    transWorker_->quit();
+    transWorker_->wait();
+    delete transWorker_;
     localExplorerControl_->Quit();
     remoteExplorerControl_->Quit();
     isQuit = true;

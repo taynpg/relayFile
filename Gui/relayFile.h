@@ -48,6 +48,7 @@ private:
     ClientCore* clientControl_{};
     ClientCore* clientFile_{};
     QTabWidget* tabWidget_{};
+    ClientWorker* transWorker_{};
 
     Ui::relayFile* ui;
 };

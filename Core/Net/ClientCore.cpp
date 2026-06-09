@@ -5,7 +5,6 @@
 #include "FileSession.h"
 #include "Protocol/Serialize.hpp"
 
-
 ClientCore::ClientCore(QObject* parent) : QObject(parent), workerPool_(std::make_shared<ThreadPool>(8))
 {
     clearWorkerTimer_ = new QTimer(this);
@@ -79,6 +78,21 @@ void ClientCore::disconnectFromServer()
     emit signalDisconnected();
 }
 
+bool ClientCore::isConnected() const
+{
+    return tcp_->state() == QAbstractSocket::ConnectedState;
+}
+
+QString ClientCore::getServerIp() const
+{
+    return serverIp_;
+}
+
+int16_t ClientCore::getServerPort() const
+{
+    return serverPort_;
+}
+
 bool ClientCore::connectToServer(const QString& server, int16_t port)
 {
     if (tcp_->state() == QAbstractSocket::ConnectedState) {
@@ -94,6 +108,8 @@ bool ClientCore::connectToServer(const QString& server, int16_t port)
         return false;
     }
     emit signalConnected();
+    serverIp_ = server;
+    serverPort_ = port;
     qInfo() << "连接服务器成功=>" << server << ":" << port;
     return true;
 }

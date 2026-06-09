@@ -3,6 +3,7 @@
 #include <File/FileDir.h>
 #include <QDateTime>
 #include <QHeaderView>
+#include <QMenu>
 #include <QTableWidgetItem>
 #include <Utils/miniUtil.h>
 
@@ -41,6 +42,8 @@ void ExplorerControl::initSignals()
     connect(ui->btnHome, &QPushButton::clicked, this, [this]() { onHome(false); });
     connect(ui->btnUp, &QPushButton::clicked, this, &ExplorerControl::onUp);
     connect(tabWidget_, &QTableWidget::itemDoubleClicked, this, &ExplorerControl::onDoubleClick);
+    connect(tabWidget_, &QTableWidget::customContextMenuRequested, this, &ExplorerControl::onTableContextMenu);
+    connect(this, &ExplorerControl::transTaskRun, this, &ExplorerControl::onTransForm);
 }
 
 std::shared_ptr<BaseAskDF> ExplorerControl::getAskDF()
@@ -83,10 +86,10 @@ void ExplorerControl::enterPath(const QString& path)
             emit fileListChanged(false, fileList);
             return;
         }
-        QMetaObject::invokeMethod(this, [this, path]() { 
+        QMetaObject::invokeMethod(this, [this, path]() {
             setCurrentPath(path);
             uiPathSet(path);
-         });
+        });
         emit fileListChanged(true, fileList);
     });
 }
@@ -161,12 +164,12 @@ void ExplorerControl::initControl()
     ui->cbPath->setEditable(true);
 
     tabWidget_ = new QTableWidget(this);
-    QStringList headers;
-    headers << "" << "文件名称" << "最后修改时间" << "类型" << "大小";
+    headers_ << "" << "文件名称" << "最后修改时间" << "类型" << "大小";
 
-    tabWidget_->setColumnCount(headers.size());
-    tabWidget_->setHorizontalHeaderLabels(headers);
+    tabWidget_->setColumnCount(headers_.size());
+    tabWidget_->setHorizontalHeaderLabels(headers_);
     tabWidget_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    tabWidget_->setContextMenuPolicy(Qt::CustomContextMenu);
 
     tabWidget_->setColumnWidth(0, 30);
     tabWidget_->setColumnWidth(1, 300);
@@ -231,4 +234,54 @@ QString ExplorerControl::typeStr(FileType type)
     default:
         return GUI_FILE_TYPE_UNKNOWN;
     }
+}
+
+void ExplorerControl::onTableContextMenu(const QPoint& pos)
+{
+    auto datas = tabWidget_->selectedItems();
+    if (datas.isEmpty()) {
+        return;
+    }
+
+    QMenu menu(this);
+    QAction* transAction = menu.addAction("传输");
+
+    QAction* explorerAction{};
+    QAction* delAction{};
+    // 超过1组选中，不显示单项菜单。
+    if (datas.size() <= headers_.size()) {
+        if (auto type = tabWidget_->item(datas[0]->row(), 3); type->text() == GUI_FILE_TYPE_DIR) {
+            explorerAction = menu.addAction("在资源管理器中打开");
+            menu.addAction(explorerAction);
+        }
+        delAction = menu.addAction("删除");
+        menu.addAction(delAction);
+    } else {
+    }
+
+    auto* selectAction = menu.exec(tabWidget_->viewport()->mapToGlobal(pos));
+    if (selectAction == transAction) {
+        auto transData = std::make_shared<RelayTaskData>();
+        transData->localRoot = currentPath_;
+        transData->remoteRoot = currentPath_;
+        transData->isUpload = (askType_ == AskType::ASK_TYPE_LOCAL);
+        for (int i = 0; i < datas.size() / headers_.size(); i++) {
+            auto curRow = datas[i * headers_.size()]->row();
+            auto name = tabWidget_->item(curRow, 1)->text();
+            auto type = tabWidget_->item(curRow, 3)->text();
+            FileItemData itemData;
+            itemData.name = name;
+            itemData.type = (type == GUI_FILE_TYPE_DIR ? RFileType::mTypeDir : RFileType::mTypeFile);
+            transData->fileList.push_back(itemData);
+        }
+        emit transTaskRun(transData);
+    } else if (selectAction == explorerAction) {
+    }
+}
+
+void ExplorerControl::onTransForm(std::shared_ptr<RelayTaskData> data)
+{
+    auto* transForm = new RelayTask(this);
+    transForm->setData(data);
+    transForm->exec();
 }

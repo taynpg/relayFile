@@ -7,6 +7,7 @@
 
 #include "Base/AskDirFile/BaseAskDF.h"
 #include "Base/WorkerThread.hpp"
+#include "RelayTask.h"
 
 namespace Ui {
 class ExplorerControl;
@@ -21,6 +22,7 @@ public:
     ~ExplorerControl();
 
 signals:
+    void transTaskRun(std::shared_ptr<RelayTaskData> data);
     void fileListChanged(bool isSuccess, const std::vector<FileMeta>& fileList);
 
 public slots:
@@ -47,6 +49,8 @@ public:
     void onUp();
     void onDoubleClick();
     void enterPath(const QString& path);
+    void onTableContextMenu(const QPoint& pos);
+    void onTransForm(std::shared_ptr<RelayTaskData> data);
 
 private:
     void uiPathSet(const QString& path);
@@ -55,6 +59,7 @@ private:
     Ui::ExplorerControl* ui;
     QTableWidget* tabWidget_;
     AskType askType_{};
+    QStringList headers_{};
     std::shared_ptr<BaseAskDF> askDf_{};
     std::shared_ptr<WorkerThread<ExplorerControl>> workerThread_{};
 
