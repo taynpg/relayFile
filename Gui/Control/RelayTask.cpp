@@ -4,6 +4,7 @@
 #include <QHeaderView>
 
 #include "Base/BaseHelper.h"
+#include "Protocol/Serialize.hpp"
 #include "ui_RelayTask.h"
 
 RelayTask::RelayTask(QWidget* parent) : QDialog(parent), ui(new Ui::RelayTask)
@@ -73,17 +74,19 @@ void RelayTask::initControl()
     ui->rbDisconnect->setChecked(true);
 
     tableWidget_ = new QTableWidget();
-    tableWidget_->setColumnCount(3);
-    tableWidget_->setHorizontalHeaderLabels({"名称", "大小", "状态"});
+    tableWidget_->setColumnCount(4);
+    tableWidget_->setHorizontalHeaderLabels({"序号", "名称", "大小", "状态"});
     tableWidget_->setSelectionBehavior(QAbstractItemView::SelectRows);
     tableWidget_->setContextMenuPolicy(Qt::CustomContextMenu);
 
-    tableWidget_->setColumnWidth(1, 100);
+    tableWidget_->setColumnWidth(0, 50);
     tableWidget_->setColumnWidth(2, 100);
+    tableWidget_->setColumnWidth(3, 100);
     tableWidget_->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
-    tableWidget_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    tableWidget_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
+    tableWidget_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Fixed);
+    tableWidget_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
     tableWidget_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
+    tableWidget_->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Fixed);
 
     auto* layout = new QVBoxLayout();
     layout->addWidget(tableWidget_);
@@ -112,10 +115,28 @@ void RelayTask::initSignals()
 
 void RelayTask::onStartRun()
 {
+}
+
+void RelayTask::handleOneLine(int row)
+{
+    int id = tableWidget_->item(row, 0)->text().toInt();
+    if (id >= fileList_.size()) {
+        return;
+    }
+
+    const auto& fileMeta = fileList_[id];
     // 先请求到Server
-    // 等待Server控制对方建立文件传输通道
-    // 等待Server通知结果
-    // 根据结果进行放弃或者传输
+    Message reqMsg;
+    reqMsg.msData = data_->remoteRoot.toStdString();
+    reqMsg.mapData[""] = std::vector<FileMeta>{fileMeta};
+
+    auto requestFrame = OneFrame::Create();
+    requestFrame->type = FrameType::FrameRequestSend;
+    requestFrame->data = serializeStruct(reqMsg);
+    //  Request(clientControl_, )
+    //  等待Server控制对方建立文件传输通道
+    //  等待Server通知结果
+    //  根据结果进行放弃或者传输
 }
 
 void RelayTask::setData(std::shared_ptr<RelayTaskData> data)
@@ -239,24 +260,28 @@ void RelayTask::updateTable()
     for (int i = 0; i < fileList_.size(); ++i) {
         auto row = tableWidget_->rowCount();
         tableWidget_->insertRow(row);
-        setFileItem(fileList_[i], row);
+        setFileItem(fileList_[i], row, i);
         if (i != 0 && i % 30 == 0) {
             QGuiApplication::processEvents();
         }
     }
 }
 
-void RelayTask::setFileItem(const FileMeta& meta, int row)
+void RelayTask::setFileItem(const FileMeta& meta, int row, int index)
 {
+    auto* indexItem = new QTableWidgetItem(QString::number(index));
+    indexItem->setFlags(indexItem->flags() & ~Qt::ItemIsEditable);
+    tableWidget_->setItem(row, 0, indexItem);
+
     auto* nameItem = new QTableWidgetItem(QString::fromStdString(meta.name));
-    nameItem->setFlags(nameItem->flags() & ~Qt::ItemIsEditable);
-    tableWidget_->setItem(row, 0, nameItem);
+    nameItem->setFlags(indexItem->flags() & ~Qt::ItemIsEditable);
+    tableWidget_->setItem(row, 1, nameItem);
 
     auto* sizeItem = new QTableWidgetItem(QString::fromStdString(meta.sizeStr));
-    sizeItem->setFlags(nameItem->flags() & ~Qt::ItemIsEditable);
-    tableWidget_->setItem(row, 1, sizeItem);
+    sizeItem->setFlags(indexItem->flags() & ~Qt::ItemIsEditable);
+    tableWidget_->setItem(row, 2, sizeItem);
 
     auto* stateItem = new QTableWidgetItem("等待");
-    stateItem->setFlags(nameItem->flags() & ~Qt::ItemIsEditable);
-    tableWidget_->setItem(row, 2, stateItem);
+    stateItem->setFlags(indexItem->flags() & ~Qt::ItemIsEditable);
+    tableWidget_->setItem(row, 3, stateItem);
 }

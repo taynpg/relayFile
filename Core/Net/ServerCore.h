@@ -33,8 +33,8 @@ private:
     };
 
 private slots:
-    void onNewConnection();
     void onRead();
+    void onNewConnection();
     void onClearClient();
 
 private:

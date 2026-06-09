@@ -268,12 +268,18 @@ void ExplorerControl::onTableContextMenu(const QPoint& pos)
         for (int i = 0; i < datas.size() / headers_.size(); i++) {
             auto curRow = datas[i * headers_.size()]->row();
             auto name = tabWidget_->item(curRow, 1)->text();
+            auto stdName = name.toStdString();
             auto type = tabWidget_->item(curRow, 3)->text();
             auto sizeStr = tabWidget_->item(curRow, 4)->text();
             FileItemData itemData;
             itemData.name = name;
             itemData.sizeStr = sizeStr;
             itemData.type = (type == GUI_FILE_TYPE_DIR ? RFileType::mTypeDir : RFileType::mTypeFile);
+            auto it = std::find_if(currentMetaList_.begin(), currentMetaList_.end(),
+                                   [stdName](const FileMeta& meta) { return meta.name == stdName; });
+            if (it != currentMetaList_.end()) {
+                itemData.size = it->size;
+            }
             transData->fileList.push_back(itemData);
         }
         emit transTaskRun(transData);

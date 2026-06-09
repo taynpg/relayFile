@@ -74,8 +74,9 @@ protected:
 
     void onAppendLog(const QString& log);
     void updateTable();
-    void setFileItem(const FileMeta& meta, int row);
+    void setFileItem(const FileMeta& meta, int row, int index);
     void onStartRun();
+    void handleOneLine(int row);
 
 private:
     std::vector<FileMeta> fileList_;

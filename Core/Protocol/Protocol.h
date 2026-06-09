@@ -34,7 +34,6 @@ struct OneFrame {
 };
 
 using FramePtr = std::shared_ptr<OneFrame>;
-
 class Protocol
 {
 public:
