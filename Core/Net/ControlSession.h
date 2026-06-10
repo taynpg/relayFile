@@ -80,9 +80,11 @@ public:
     ClientInfo getOwnInfo();
     ClientCore* getClientCore();
 
+public slots:
+    void AskOwnID();
+
 private:
     void initSignals();
-    void AskOwnID();
     void clearWorker();
 
 private:

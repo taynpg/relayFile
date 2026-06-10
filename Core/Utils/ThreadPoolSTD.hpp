@@ -87,8 +87,11 @@ inline void ThreadPool::Quit()
     }
     condition.notify_all();
     for (std::thread& worker : workers) {
-        worker.join();
+        if (worker.joinable()) {
+            worker.join();
+        }
     }
+    workers.clear();
 }
 
 // the destructor joins all threads

@@ -116,7 +116,7 @@ void ServerCore::useFrame(FramePtr frame, QTcpSocket* socket, ClientInfo* cli)
         if (moveCli) {
             QWriteLocker locker(&rwLock_);
             if (!clientMap_.contains(moveCli->id.toStdString())) {
-                clientMap_[moveCli->uuid.toStdString()] = moveCli;
+                clientMap_[moveCli->id.toStdString()] = moveCli;
             }
         }
         break;
@@ -145,7 +145,7 @@ void ServerCore::useFrame(FramePtr frame, QTcpSocket* socket, ClientInfo* cli)
         if (moveCli) {
             QWriteLocker locker(&transLock_);
             if (!transMap_.contains(moveCli->id.toStdString())) {
-                transMap_[moveCli->uuid.toStdString()] = moveCli;
+                transMap_[moveCli->id.toStdString()] = moveCli;
             }
         }
         break;

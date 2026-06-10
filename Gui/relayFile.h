@@ -45,9 +45,8 @@ private:
     ComparisonControl* comparisonControl_{};
     LogControl* logControl_{};
     QTabWidget* tabWidget_{};
-
-    std::shared_ptr<ControlSession> controlSession_{};
-    std::shared_ptr<FileSession> fileSession_{};
+    
+    std::shared_ptr<DoubleLinker> doubleLinker_{};
     Ui::relayFile* ui;
 };
 #endif   // RELAYFILE_H

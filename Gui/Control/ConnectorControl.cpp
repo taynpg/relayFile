@@ -1,5 +1,6 @@
 #include "ConnectorControl.h"
 
+#include <Net/ClientHelper.h>
 #include <QAbstractItemView>
 #include <QMenu>
 
@@ -14,6 +15,7 @@ ConnectorControl::ConnectorControl(QWidget* parent) : QDialog(parent), ui(new Ui
     initTable();
     initUI();
 
+    doubleLinker_ = GlobalData::getInstance()->getDoubleLinker();
     initSignals();
 
     // 临时调试设置
@@ -58,7 +60,7 @@ void ConnectorControl::initSignals()
     connect(ui->btnDisconnect, &QPushButton::clicked, this, [this]() { emit signalDoDisConnect(); });
     connect(ui->btnRefresh, &QPushButton::clicked, this, &ConnectorControl::onRefresh);
 
-    auto* cliCore = controlSession_->getClientCore();
+    auto* cliCore = doubleLinker_->GetControlSession()->getClientCore();
     connect(cliCore, &ClientCore::signalConnectting, this, &ConnectorControl::onConnectting);
     connect(cliCore, &ClientCore::signalConnected, this, &ConnectorControl::onConnectSuccess);
     connect(cliCore, &ClientCore::signalDisconnected, this, &ConnectorControl::onErrorOccurred);
@@ -66,7 +68,10 @@ void ConnectorControl::initSignals()
 
     connect(this, &ConnectorControl::signalDoConnect, cliCore, &ClientCore::connectToServer);
     connect(this, &ConnectorControl::signalDoDisConnect, cliCore, &ClientCore::disconnectFromServer);
-    // connect(clientControl_, &ClientCore::signalOwnInfo, this, &ConnectorControl::onOwnInfo);
+
+    auto controlSession = doubleLinker_->GetControlSession();
+    connect(controlSession.get(), &ControlSession::signalOwnInfo, this, &ConnectorControl::onOwnInfo);
+    connect(this, &ConnectorControl::signalAskID, controlSession.get(), &ControlSession::AskOwnID);
     connect(ui->tableClients, &QTableWidget::customContextMenuRequested, this, &ConnectorControl::onTableContextMenu);
 }
 
@@ -74,7 +79,7 @@ void ConnectorControl::onRefresh()
 {
     Message msg;
     msg.msType = MessageType::kMessageAskClientList;
-    controlSession_->SendWithCall(msg, [this](FramePtr frame) {
+    doubleLinker_->GetControlSession()->SendWithCall(msg, [this](FramePtr frame) {
         if (!frame) {
             return;
         }
@@ -94,7 +99,7 @@ void ConnectorControl::updateClientList(const MessagePtr& msg)
     }
     ui->tableClients->clearContents();
     ui->tableClients->setRowCount(0);
-    auto selfInfo = controlSession_->getOwnInfo();
+    auto selfInfo = doubleLinker_->GetControlSession()->getOwnInfo();
     for (auto& client : msg->clientList) {
         auto row = ui->tableClients->rowCount();
         ui->tableClients->insertRow(row);
@@ -160,9 +165,8 @@ void ConnectorControl::onConnectSuccess()
     ui->btnConnect->setEnabled(false);
     ui->btnDisconnect->setEnabled(true);
     ui->btnRefresh->setEnabled(true);
-
-    onRefresh();
     emit signalConnectDone();
+    emit signalAskID();
 }
 
 void ConnectorControl::onDisconnectSuccess()
@@ -186,6 +190,7 @@ void ConnectorControl::onOwnInfo(const ClientInfo& info)
 {
     QString infoMsg = QString("%1,%2").arg(info.clientId).arg(info.clientName);
     ui->lineEdit->setText(infoMsg);
+    onRefresh();
 }
 
 void ConnectorControl::onConnectting()
@@ -220,6 +225,6 @@ void ConnectorControl::onUseClient(const QString& id, const QString& name)
     ClientInfo o;
     o.clientId = id.toStdString();
     o.clientName = name.toStdString();
-    controlSession_->getClientCore()->setOtherClientInfo(o);
+    doubleLinker_->GetControlSession()->getClientCore()->setOtherClientInfo(o);
     ui->edCurrentClient->setText(infoMsg);
 }

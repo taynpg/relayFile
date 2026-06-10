@@ -94,11 +94,10 @@ public:
     void Quit();
     ClientCore* getClientCore();
     bool getFileMeta(const Message& msg, FileMeta& meta);
+    void handleFrame(FramePtr frame);
 
 private:
-    void handleFrame(FramePtr frame);
     void AskOwnID();
-    void handleTransferFrame(FramePtr frame);
 
 private:
     ClientCore* clientCore_{};

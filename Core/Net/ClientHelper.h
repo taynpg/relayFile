@@ -10,6 +10,7 @@
 class DoubleLinker : public QObject
 {
     Q_OBJECT
+
 public:
     DoubleLinker(QObject* parent = nullptr);
     ~DoubleLinker();
@@ -18,14 +19,16 @@ public:
     template <typename HandleResp> bool Request(FramePtr frame, HandleResp handleResp);
 
 public:
+    void Quit();
     void SetControlSession(std::shared_ptr<ControlSession> session);
     void SetFileSession(std::shared_ptr<FileSession> session);
 
     std::shared_ptr<ControlSession> GetControlSession() const;
     std::shared_ptr<FileSession> GetFileSession() const;
 
-public:
-    void Deliver(FramePtr frame);
+public slots:
+    void onDeliverControl(FramePtr frame);
+    void onDeliverFile(FramePtr frame);
 
 private:
     std::shared_ptr<ControlSession> controlSession_{};

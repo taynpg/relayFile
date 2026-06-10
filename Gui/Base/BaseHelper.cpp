@@ -18,6 +18,18 @@ void GlobalData::setFileSession(std::shared_ptr<FileSession> fileSession)
     fileSession_ = fileSession;
 }
 
+void GlobalData::setDoubleLinker(std::shared_ptr<DoubleLinker> doubleLinker)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    doubleLinker_ = doubleLinker;
+}
+
+std::shared_ptr<DoubleLinker> GlobalData::getDoubleLinker()
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return doubleLinker_;
+}
+
 std::shared_ptr<ControlSession> GlobalData::getControlSession()
 {
     std::lock_guard<std::mutex> lock(mutex_);

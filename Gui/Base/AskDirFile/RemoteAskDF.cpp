@@ -10,7 +10,7 @@ RemoteAskDF::RemoteAskDF()
     controlSession_ = GlobalData::getInstance()->getControlSession();
 }
 
-template <typename HandleResp> bool RemoteAskDF::request(Message& msg, HandleResp handleResp)
+template <typename HandleResp> bool RemoteAskDF::Request(Message& msg, HandleResp handleResp)
 {
     auto frame = OneFrame::Create();
     frame->data = serializeStruct(msg);
@@ -37,7 +37,7 @@ bool RemoteAskDF::AskFileList(const std::string& path, std::vector<FileMeta>& fi
 
     fileList.clear();
 
-    return request(msg, [&](MessagePtr ret) {
+    return Request(msg, [&](MessagePtr ret) {
         if (ret == nullptr) {
             return false;
         }
@@ -55,7 +55,7 @@ bool RemoteAskDF::AskHome(std::string& home)
     Message msg;
     msg.msType = MessageType::kMessageAskHome;
 
-    return request(msg, [&](MessagePtr ret) {
+    return Request(msg, [&](MessagePtr ret) {
         if (ret == nullptr) {
             return false;
         }

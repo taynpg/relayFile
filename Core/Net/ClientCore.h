@@ -50,15 +50,14 @@ public:
 
 public:
     ClientInfo getClientInfo() const;
-    QString getClientFullName() const;
-
-    void setOtherClientInfo(const ClientInfo& oInfo);
 
     QString getServerIp() const;
     int16_t getServerPort() const;
+    QString getClientFullName() const;
 
     uint64_t GetSessionId();
 
+public slots:
     bool Send(FramePtr frame);
     bool Send(const Message& msg);
     bool Send(const char* data, size_t size);
@@ -67,6 +66,7 @@ public slots:
     bool connectToServer(const QString& server, int16_t port);
     void disconnectFromServer();
     void onRecordOwnInfo(const ClientInfo& info);
+    void setOtherClientInfo(const ClientInfo& oInfo);
 
 private:
     void initSignals();

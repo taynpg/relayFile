@@ -16,10 +16,15 @@ relayFile::relayFile(QWidget* parent) : QWidget(parent), ui(new Ui::relayFile)
 {
     ui->setupUi(this);
 
-    controlSession_ = std::make_shared<ControlSession>();
-    fileSession_ = std::make_shared<FileSession>();
-    GlobalData::getInstance()->setControlSession(controlSession_);
-    GlobalData::getInstance()->setFileSession(fileSession_);
+    auto controlSession = std::make_shared<ControlSession>();
+    auto fileSession = std::make_shared<FileSession>();
+    GlobalData::getInstance()->setControlSession(controlSession);
+    GlobalData::getInstance()->setFileSession(fileSession);
+
+    doubleLinker_ = std::make_shared<DoubleLinker>();
+    doubleLinker_->SetControlSession(controlSession);
+    doubleLinker_->SetFileSession(fileSession);
+    GlobalData::getInstance()->setDoubleLinker(doubleLinker_);
 
     Logger logger;
     logger.setInfo("log/relayFileGUI.log", "relayFileGUI");
@@ -43,8 +48,7 @@ relayFile::~relayFile()
 
 void relayFile::Quit()
 {
-    controlSession_->Quit();
-    fileSession_->Quit();
+    doubleLinker_->Quit();
     localExplorerControl_->Quit();
     remoteExplorerControl_->Quit();
     isQuit = true;

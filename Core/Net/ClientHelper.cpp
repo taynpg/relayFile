@@ -11,6 +11,8 @@ DoubleLinker::~DoubleLinker()
 void DoubleLinker::SetControlSession(std::shared_ptr<ControlSession> session)
 {
     controlSession_ = session;
+    auto* cliCore = controlSession_->getClientCore();
+    connect(cliCore, &ClientCore::signalDeliverFrame, this, &DoubleLinker::onDeliverControl);
 }
 
 std::shared_ptr<ControlSession> DoubleLinker::GetControlSession() const
@@ -23,9 +25,17 @@ std::shared_ptr<FileSession> DoubleLinker::GetFileSession() const
     return fileSession_;
 }
 
+void DoubleLinker::Quit()
+{
+    controlSession_->Quit();
+    fileSession_->Quit();
+}
+
 void DoubleLinker::SetFileSession(std::shared_ptr<FileSession> session)
 {
     fileSession_ = session;
+    auto* cliCore = fileSession_->getClientCore();
+    connect(cliCore, &ClientCore::signalDeliverFrame, this, &DoubleLinker::onDeliverFile);
 }
 
 template <typename HandleResp> bool DoubleLinker::Request(FramePtr frame, HandleResp handleResp)
@@ -44,6 +54,12 @@ template <typename HandleResp> bool DoubleLinker::Request(FramePtr frame, Handle
     return handleResp(f);
 }
 
-void DoubleLinker::Deliver(FramePtr frame)
+void DoubleLinker::onDeliverControl(FramePtr frame)
 {
+    controlSession_->handleFrame(frame);
+}
+
+void DoubleLinker::onDeliverFile(FramePtr frame)
+{
+    fileSession_->handleFrame(frame);
 }

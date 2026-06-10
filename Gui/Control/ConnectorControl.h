@@ -18,6 +18,7 @@ signals:
     void signalDoConnect(const QString& ip, int16_t port);
     void signalDoDisConnect();
     void signalConnectDone();
+    void signalAskID();
 
 public:
     explicit ConnectorControl(QWidget* parent = nullptr);
@@ -50,7 +51,7 @@ private:
     void updateClientList(const MessagePtr& msg);
 
 private:
-    std::shared_ptr<ControlSession> controlSession_{};
+    std::shared_ptr<DoubleLinker> doubleLinker_{};
     Ui::ConnectorControl* ui;
 };
 
