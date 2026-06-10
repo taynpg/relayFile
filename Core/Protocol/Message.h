@@ -62,6 +62,7 @@ struct Message {
     std::string msData;
     std::string errData;
     std::string transId;
+    std::string uuid;
     ClientInfo from;
     ClientInfo to;
     MessageStateCode msgStateCode{};
@@ -73,7 +74,7 @@ struct Message {
 
     template <class Archive> void serialize(Archive& ar)
     {
-        ar(msType, msData, errData, transId, from, to, msgStateCode, ff, ft, mapData);
+        ar(msType, msData, errData, transId, uuid, from, to, msgStateCode, ff, ft, mapData);
     }
 
     static std::shared_ptr<Message> Create();

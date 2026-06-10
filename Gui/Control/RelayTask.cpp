@@ -6,6 +6,7 @@
 #include "Base/BaseHelper.h"
 #include "Protocol/Serialize.hpp"
 #include "ui_RelayTask.h"
+#include <Utils/Common.h>
 
 RelayTask::RelayTask(QWidget* parent) : QDialog(parent), ui(new Ui::RelayTask)
 {
@@ -115,6 +116,7 @@ void RelayTask::handleOneLine(int row)
     const auto& fileMeta = fileList_[id];
     // 先请求到Server
     Message reqMsg;
+    reqMsg.uuid = Common::GetUUID().toStdString();
     reqMsg.msType = MessageType::kMessageFileRequestSend;
     reqMsg.msData = data_->remoteRoot.toStdString();
     reqMsg.mapData[""] = std::vector<FileMeta>{fileMeta};

@@ -22,6 +22,7 @@ ControlSession::ControlSession(QObject* parent) : QObject(parent), workerPool_(s
 {
     clearWorkerTimer_ = new QTimer(this);
     clientCore_ = new ClientCore();
+    clientCore_->setIsControl(true);
     clientWorker_ = new ClientWorker(clientCore_, nullptr);
     clientCore_->moveToThread(clientWorker_);
     initSignals();

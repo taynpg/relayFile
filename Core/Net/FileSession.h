@@ -25,7 +25,6 @@ signals:
 public:
     enum class TransStatus {
         Idle = 0,
-        WaitingAccept,
         Sending,
         Receving,
         Finished,
@@ -43,7 +42,7 @@ public slots:
 public:
     OneFileTrans(QObject* parent = nullptr);
 
-    bool initTransfer(TransMode mode, const FileMeta& fileMeta, const std::string& targetId, const std::string& ownId);
+    bool initTransfer(TransMode mode, const FileMeta& fileMeta, const std::string& targetId, const std::string& ownId, const std::string& uuid);
     void initSignals();
 
     bool nextSend();
@@ -65,6 +64,7 @@ private:
     TransStatus state_{};
 
     FileMeta meta_;
+    std::string uuid_;
 
     std::ofstream recvFile_;
     std::ifstream sendFile_;
@@ -108,5 +108,5 @@ private:
     ClientCore* clientCore_{};
     ClientWorker* clientWorker_{};
     QMutex transferMapLock_;
-    QMap<QString, std::shared_ptr<OneFileTrans>> transferMap_;
+    QMap<std::string, std::shared_ptr<OneFileTrans>> transferMap_;
 };

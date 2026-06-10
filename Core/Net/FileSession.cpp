@@ -23,7 +23,8 @@ void OneFileTrans::onSendTimeout()
     }
 }
 
-bool OneFileTrans::initTransfer(TransMode mode, const FileMeta& fileMeta, const std::string& targetId, const std::string& ownId)
+bool OneFileTrans::initTransfer(TransMode mode, const FileMeta& fileMeta, const std::string& targetId, const std::string& ownId,
+                                const std::string& uuid)
 {
     QMutexLocker locker(&qMut_);
 
@@ -32,6 +33,7 @@ bool OneFileTrans::initTransfer(TransMode mode, const FileMeta& fileMeta, const 
     totalSize_ = fileMeta.size;
     meta_ = fileMeta;
     transSize_ = 0;
+    uuid_ = uuid;
     curBlockIndex_ = 0;
     ownId_ = ownId;
     filePath_ = miniPath::Join(meta_.dir, meta_.name);
@@ -45,13 +47,13 @@ bool OneFileTrans::initTransfer(TransMode mode, const FileMeta& fileMeta, const 
         if (!sendFile_.is_open()) {
             return false;
         }
-        state_ = TransStatus::WaitingAccept;
+        state_ = TransStatus::Sending;
     } else {
         recvFile_.open(filePath_, std::ios::binary | std::ios::in);
         if (!recvFile_.is_open()) {
             return false;
         }
-        state_ = TransStatus::WaitingAccept;
+        state_ = TransStatus::Receving;
     }
 
     return true;
@@ -129,6 +131,7 @@ FramePtr OneFileTrans::CreateControlFrame(MessageType type)
     Message msg;
     msg.msType = type;
     msg.to.clientId = targetId_;
+    msg.uuid = uuid_;
     auto frame = OneFrame::Create();
     frame->to = targetId_;
     frame->from = ownId_;
@@ -230,6 +233,7 @@ bool OneFileTrans::handleStart(FramePtr frame)
 FileSession::FileSession(QObject* parent) : ClientCore(parent)
 {
     clientCore_ = new ClientCore();
+    clientCore_->setIsControl(false);
     clientWorker_ = new ClientWorker(clientCore_, nullptr);
     clientCore_->moveToThread(clientWorker_);
     clientWorker_->start();
@@ -263,12 +267,15 @@ void FileSession::msgFrame(FramePtr frame)
     switch (msg.msType) {
     case MessageType::kMessageFileRequestSend: {
         auto fileTrans = std::make_shared<OneFileTrans>();
-        auto ret =
-            fileTrans->initTransfer(OneFileTrans::TransMode::Send, msg.ff, msg.transId, clientCore_->getOwnClientInfo().clientId);
+        auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Send, msg.ff, msg.transId,
+                                           clientCore_->getOwnClientInfo().clientId, msg.uuid);
         if (ret) {
-
+            QMutexLocker locker(&transferMapLock_);
+            transferMap_[msg.uuid] = fileTrans;
+            fileTrans->nextSend();
         } else {
             Message resp;
+            resp.uuid = msg.uuid;
             resp.msType = MessageType::kMessageFileAnswerRequestSend;
             resp.msgStateCode = MessageStateCode::kMessageStateCodeFailed;
             resp.errData = "文件任务初始化失败。";

@@ -112,11 +112,23 @@ QString ClientCore::getClientFullName() const
     return name;
 }
 
+void ClientCore::setIsControl(bool isControl)
+{
+    isControl_ = isControl;
+}
+
+bool ClientCore::isControl() const
+{
+    return isControl_;
+}
+
 bool ClientCore::Send(const Message& msg)
 {
     auto frame = OneFrame::Create();
-    frame->from = mInfo_.clientId;
-    frame->to = oInfo_.clientId;
+    if (isControl_) {
+        frame->from = mInfo_.clientId;
+        frame->to = oInfo_.clientId;
+    }
     frame->data = serializeStruct(msg);
     frame->sessionId = GetSessionId();
     return Send(frame);
@@ -124,8 +136,10 @@ bool ClientCore::Send(const Message& msg)
 
 bool ClientCore::Send(FramePtr frame)
 {
-    frame->from = mInfo_.clientId;
-    frame->to = oInfo_.clientId;
+    if (isControl_) {
+        frame->from = mInfo_.clientId;
+        frame->to = oInfo_.clientId;
+    }
     auto data = Protocol::Pack(frame);
     return Send(data.data(), data.size());
 }

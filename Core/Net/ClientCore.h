@@ -56,6 +56,8 @@ public:
     int16_t getServerPort() const;
     QString getClientFullName() const;
 
+    void setIsControl(bool isControl);
+    bool isControl() const;
     uint64_t GetSessionId();
 
 public slots:
@@ -79,6 +81,7 @@ public:
 
 private:
     QTcpSocket* tcp_{};
+    bool isControl_{true};
     std::atomic_uint64_t sessionId_{0};
 
 private:
