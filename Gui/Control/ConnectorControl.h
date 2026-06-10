@@ -50,8 +50,7 @@ private:
     void updateClientList(const MessagePtr& msg);
 
 private:
-    ClientWorker* clientWorker_{};
-    ClientCore* clientControl_{};
+    std::shared_ptr<ControlSession> controlSession_{};
     Ui::ConnectorControl* ui;
 };
 

@@ -1,6 +1,7 @@
 #pragma once
 
-#include <Net/ClientCore.h>
+#include <Net/ControlSession.h>
+#include <Net/FileSession.h>
 #include <QString>
 
 class GlobalData
@@ -9,19 +10,20 @@ public:
     static GlobalData* getInstance();
 
 public:
-    void setClientControl(ClientCore* clientControl);
-    void setClientFile(ClientCore* clientFile);
+    void setControlSession(std::shared_ptr<ControlSession> controlSession);
+    void setFileSession(std::shared_ptr<FileSession> fileSession);
 
-    ClientCore* getClientControl();
-    ClientCore* getClientFile();
+    std::shared_ptr<ControlSession> getControlSession();
+    std::shared_ptr<FileSession> getFileSession();
 
     QString getGlobalConfigPath();
     void setGlobalConfigPath(const QString& globalConfigPath);
 
 private:
     std::mutex mutex_;
-    ClientCore* clientControl_{};
-    ClientCore* clientFile_{};
+
+    std::shared_ptr<ControlSession> controlSession_{};
+    std::shared_ptr<FileSession> fileSession_{};
     QString globalConfigPath_;
 
 private:

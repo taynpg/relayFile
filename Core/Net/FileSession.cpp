@@ -1,6 +1,8 @@
 #include "FileSession.h"
 
+#include "CoreDefine.hpp"
 #include "Protocol/Serialize.hpp"
+
 
 OneFileTrans::OneFileTrans(QObject* parent) : QObject(parent)
 {
@@ -17,7 +19,7 @@ void OneFileTrans::onSendTimeout()
 {
     QMutexLocker locker(&qMut_);
     if (state_ == TransStatus::Sending) {
-        emit signalFailed(ownId_, "发送超时");
+        emit signalFailed(fileControl_->mInfo_.clientId, "超时");
         state_ = TransStatus::Interrupted;
     }
 }
@@ -62,29 +64,27 @@ bool OneFileTrans::nextSend()
         return false;
     }
     if (curBlockIndex_ * blockSize_ >= totalSize_) {
-        auto frame = CreateFrame(FrameType::FrameFileFinish);
-        fileControl_->Send(frame);
+        auto frame = CreateControlFrame(MessageType::kMessageFileRequestComplete);
+        emit signalRequestSend(frame);
         state_ = TransStatus::Finished;
-        emit signalFinished(ownId_);
+        emit signalFinished(fileControl_->mInfo_.clientId);
         return true;
     }
     std::vector<char> buffer(blockSize_);
     sendFile_.read(buffer.data(), blockSize_);
     auto bytesRead = sendFile_.gcount();
     if (bytesRead <= 0) {
-        auto frame = CreateFrame(FrameType::FrameFileFinish);
-        fileControl_->Send(frame);
+        auto frame = CreateControlFrame(MessageType::kMessageFileRequestComplete);
+        emit signalRequestSend(frame);
         state_ = TransStatus::Finished;
-        emit signalFinished(ownId_);
+        emit signalFinished(fileControl_->mInfo_.clientId);
         return true;
     }
     buffer.resize(bytesRead);
-    auto frame = CreateFrame(FrameType::FrameFileChuck);
+    auto frame = CreateFileFrame(FrameType::FrameFileChuck);
     frame->data = std::move(buffer);
+    emit signalRequestSend(frame);
 
-    if (!fileControl_->Send(frame)) {
-        return false;
-    }
     // timer
     sendTimeoutTimer_->start(defSendTimeout);
     return true;
@@ -120,16 +120,29 @@ bool OneFileTrans::handleChuck(FramePtr frame)
     curBlockIndex_++;
 
     emit signalProcess(transSize_, totalSize_);
-    auto f = CreateFrame(FrameType::FrameFileAck);
+    auto f = CreateFileFrame(FrameType::FrameFileAck);
     return fileControl_->Send(f);
 }
 
-FramePtr OneFileTrans::CreateFrame(FrameType type)
+FramePtr OneFileTrans::CreateControlFrame(MessageType type)
+{
+    Message msg;
+    msg.msType = type;
+    msg.to = fileControl_->oInfo_;
+    auto frame = OneFrame::Create();
+    frame->to = targetId_;
+    frame->from = fileControl_->mInfo_.clientId;
+    frame->index = curBlockIndex_;
+    frame->data = serializeStruct(msg);
+    return frame;
+}
+
+FramePtr OneFileTrans::CreateFileFrame(FrameType type)
 {
     auto frame = OneFrame::Create();
     frame->type = type;
     frame->to = targetId_;
-    frame->from = ownId_;
+    frame->from = fileControl_->mInfo_.clientId;
     frame->index = curBlockIndex_;
     return frame;
 }
@@ -140,7 +153,7 @@ bool OneFileTrans::handleFinish(FramePtr frame)
         if (recvFile_.is_open()) {
             recvFile_.close();
         }
-        emit signalFinished(ownId_);
+        emit signalFinished(fileControl_->mInfo_.clientId);
         state_ = TransStatus::Finished;
     }
     return true;
@@ -153,28 +166,34 @@ void OneFileTrans::onFrameReceive(FramePtr frame)
         return;
     }
     switch (frame->type) {
-    case FrameType::FrameFileFinish: {
-        handleFinish(frame);
-        break;
-    }
-    case FrameType::FrameFileAccept: {
-        handleStart(frame);
+    case FrameType::FrameFileChuck: {
+        handleChuck(frame);
         break;
     }
     case FrameType::FrameFileAck: {
         handleAck(frame);
         break;
     }
-    case FrameType::FrameFileChuck: {
-        handleChuck(frame);
-        break;
-    }
-    case FrameType::FrameFileInterrupt: {
-        handleInterrupt(frame);
-        break;
-    }
     default: {
-        break;
+        Message msg;
+        deserializeStruct(frame->data, msg);
+        switch (msg.msType) {
+        case MessageType::kMessageFileRequestComplete: {
+            handleFinish(frame);
+            break;
+        }
+        case MessageType::kMessageFileRequestStart: {
+            handleStart(frame);
+            break;
+        }
+        case MessageType::kMessageFileRequestCancel: {
+            handleInterrupt(frame);
+            break;
+        }
+        default: {
+            break;
+        } break;
+        }
     }
     }
 }
@@ -203,83 +222,33 @@ bool OneFileTrans::handleStart(FramePtr frame)
         if (!recvFile_.is_open()) {
             return false;
         }
-        state_ = TransStatus::Sending;
+        state_ = TransStatus::Receving;
     }
     return true;
 }
 
 FileSession::FileSession(QObject* parent) : ClientCore(parent)
 {
+    clientCore_ = new ClientCore();
+    clientWorker_ = new ClientWorker(clientCore_, nullptr);
+    clientCore_->moveToThread(clientWorker_);
+    clientWorker_->start();
 }
 
 FileSession::~FileSession()
 {
+    delete clientCore_;
+    delete clientWorker_;
+}
+
+void FileSession::Quit()
+{
+    clientWorker_->quit();
+    clientWorker_->wait();
 }
 
 void FileSession::handleFrame(FramePtr frame)
 {
-    switch (frame->type) {
-    case FrameType::FrameFileFinish:
-    case FrameType::FrameFileAck:
-    case FrameType::FrameFileChuck:
-    case FrameType::FrameFileAccept:
-    case FrameType::FrameFileInterrupt: {
-        QMutexLocker locker(&transMut_);
-        auto it = transTask_.find(frame->from);
-        if (it != transTask_.end()) {
-            it.value()->onFrameReceive(frame);
-        }
-        break;
-    }
-    case FrameType::FrameRequestDown: {
-        Message msg;
-        deserializeStruct(frame->data, msg);
-        auto task = std::make_shared<OneFileTrans>();
-        FileMeta meta;
-        if (!getFileMeta(msg, meta)) {
-            auto tellFrame = OneFrame::Create(frame);
-            tellFrame->type = FrameType::FrameRequestDownFailed;
-            Send(tellFrame);
-            break;
-        }
-        auto result = task->initTransfer(OneFileTrans::TransMode::Send, meta, curUUID_.toStdString(), this);
-        if (!result) {
-            auto tellFrame = OneFrame::Create(frame);
-            tellFrame->type = FrameType::FrameRequestDownFailed;
-            Send(tellFrame);
-        }
-        {
-            QMutexLocker locker(&transMut_);
-            transTask_[curUUID_.toStdString()] = task;
-        }
-        break;
-    }
-    case FrameType::FrameRequestSend: {
-        Message msg;
-        deserializeStruct(frame->data, msg);
-        auto task = std::make_shared<OneFileTrans>();
-        FileMeta meta;
-        if (!getFileMeta(msg, meta)) {
-            auto tellFrame = OneFrame::Create(frame);
-            tellFrame->type = FrameType::FrameRequestSendFailed;
-            Send(tellFrame);
-            break;
-        }
-        auto result = task->initTransfer(OneFileTrans::TransMode::Receive, meta, curUUID_.toStdString(), this);
-        if (!result) {
-            auto tellFrame = OneFrame::Create(frame);
-            tellFrame->type = FrameType::FrameRequestSendFailed;
-            Send(tellFrame);
-        }
-        {
-            QMutexLocker locker(&transMut_);
-            transTask_[curUUID_.toStdString()] = task;
-        }
-        break;
-    }
-    default:
-        break;
-    }
 }
 
 bool FileSession::getFileMeta(const Message& msg, FileMeta& meta)
@@ -295,6 +264,11 @@ bool FileSession::getFileMeta(const Message& msg, FileMeta& meta)
         break;
     }
     return isHave;
+}
+
+ClientCore* FileSession::getClientCore()
+{
+    return clientCore_;
 }
 
 void FileSession::AskOwnID()

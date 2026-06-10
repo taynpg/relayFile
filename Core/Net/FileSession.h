@@ -1,10 +1,15 @@
 #pragma once
 
-#include <fstream>
+#include <QMutex>
+#include <QObject>
 #include <QTimer>
+#include <fstream>
+#include <memory>
+#include <string>
 
 #include "ClientCore.h"
-#include "CoreDefine.hpp"
+#include "Protocol/FileMeta.h"
+#include "Protocol/Protocol.h"
 
 class OneFileTrans : public QObject
 {
@@ -15,6 +20,7 @@ signals:
     void signalFinished(const std::string& transId);
     void signalFailed(const std::string& transId, const std::string& errMsg);
     void signalInterrupt(const std::string& transId);
+    void signalRequestSend(FramePtr frame);
 
 public:
     enum class TransStatus {
@@ -48,7 +54,9 @@ public:
     bool handleFinish(FramePtr frame);
 
     void onSendTimeout();
-    FramePtr CreateFrame(FrameType type);
+
+    FramePtr CreateControlFrame(MessageType type);
+    FramePtr CreateFileFrame(FrameType type);
 
 private:
     TransMode tMode_{};
@@ -78,12 +86,23 @@ public:
     FileSession(QObject* parent = nullptr);
     ~FileSession() override;
 
-private:
-    void handleFrame(FramePtr frame) override;
-    void AskOwnID() override;
+    bool startFileTransfer(const FileMeta& fileMeta, const std::string& targetId);
+    bool acceptFileTransfer(const std::string& transferId, const std::string& savePath);
+    bool rejectFileTransfer(const std::string& transferId);
+
+public:
+    void Quit();
+    ClientCore* getClientCore();
     bool getFileMeta(const Message& msg, FileMeta& meta);
 
 private:
-    QMutex transMut_;
-    QMap<std::string, std::shared_ptr<OneFileTrans>> transTask_;
+    void handleFrame(FramePtr frame);
+    void AskOwnID();
+    void handleTransferFrame(FramePtr frame);
+
+private:
+    ClientCore* clientCore_{};
+    ClientWorker* clientWorker_{};
+    QMutex transferMapLock_;
+    QMap<QString, std::shared_ptr<OneFileTrans>> transferMap_;
 };

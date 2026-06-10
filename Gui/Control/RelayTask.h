@@ -3,11 +3,13 @@
 
 #include <File/FileDir.h>
 #include <Net/ClientCore.h>
+#include <Net/ClientHelper.h>
 #include <QDialog>
 #include <QTableWidget>
 
 #include "Base/AskDirFile/BaseAskDF.h"
 #include "Base/WorkerThread.hpp"
+
 
 struct FileItemData {
     QString name;
@@ -85,10 +87,9 @@ private:
     Ui::RelayTask* ui;
 
 private:
-    ClientCore* clientTrans_{};
-    ClientCore* clientControl_{};
     std::shared_ptr<BaseAskDF> askLocalDf_{};
     std::shared_ptr<BaseAskDF> askRemoteDf_{};
+    std::shared_ptr<DoubleLinker> doubleLinker_{};
     std::shared_ptr<WorkerThread<RelayTask>> workerThread_{};
 };
 

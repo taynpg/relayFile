@@ -14,11 +14,7 @@ ConnectorControl::ConnectorControl(QWidget* parent) : QDialog(parent), ui(new Ui
     initTable();
     initUI();
 
-    clientControl_ = GlobalData::getInstance()->getClientControl();
-    clientWorker_ = new ClientWorker(clientControl_, nullptr);
-    clientControl_->moveToThread(clientWorker_);
     initSignals();
-    clientWorker_->start();
 
     // 临时调试设置
     ui->edServerIp->setText("127.0.0.1:9008");
@@ -26,9 +22,6 @@ ConnectorControl::ConnectorControl(QWidget* parent) : QDialog(parent), ui(new Ui
 
 void ConnectorControl::Quit()
 {
-    clientWorker_->quit();
-    clientWorker_->wait();
-    delete clientWorker_;
 }
 
 void ConnectorControl::initUI()
@@ -65,14 +58,15 @@ void ConnectorControl::initSignals()
     connect(ui->btnDisconnect, &QPushButton::clicked, this, [this]() { emit signalDoDisConnect(); });
     connect(ui->btnRefresh, &QPushButton::clicked, this, &ConnectorControl::onRefresh);
 
-    connect(clientControl_, &ClientCore::signalConnectting, this, &ConnectorControl::onConnectting);
-    connect(clientControl_, &ClientCore::signalConnected, this, &ConnectorControl::onConnectSuccess);
-    connect(clientControl_, &ClientCore::signalDisconnected, this, &ConnectorControl::onErrorOccurred);
-    connect(clientControl_, &ClientCore::signalErrorOccurred, this, &ConnectorControl::onErrorOccurred);
+    auto* cliCore = controlSession_->getClientCore();
+    connect(cliCore, &ClientCore::signalConnectting, this, &ConnectorControl::onConnectting);
+    connect(cliCore, &ClientCore::signalConnected, this, &ConnectorControl::onConnectSuccess);
+    connect(cliCore, &ClientCore::signalDisconnected, this, &ConnectorControl::onErrorOccurred);
+    connect(cliCore, &ClientCore::signalErrorOccurred, this, &ConnectorControl::onErrorOccurred);
 
-    connect(this, &ConnectorControl::signalDoConnect, clientControl_, &ClientCore::connectToServer);
-    connect(this, &ConnectorControl::signalDoDisConnect, clientControl_, &ClientCore::disconnectFromServer);
-    connect(clientControl_, &ClientCore::signalOwnInfo, this, &ConnectorControl::onOwnInfo);
+    connect(this, &ConnectorControl::signalDoConnect, cliCore, &ClientCore::connectToServer);
+    connect(this, &ConnectorControl::signalDoDisConnect, cliCore, &ClientCore::disconnectFromServer);
+    // connect(clientControl_, &ClientCore::signalOwnInfo, this, &ConnectorControl::onOwnInfo);
     connect(ui->tableClients, &QTableWidget::customContextMenuRequested, this, &ConnectorControl::onTableContextMenu);
 }
 
@@ -80,18 +74,16 @@ void ConnectorControl::onRefresh()
 {
     Message msg;
     msg.msType = MessageType::kMessageAskClientList;
-    QMetaObject::invokeMethod(clientControl_, [this, msg]() {
-        clientControl_->SendWithCall(msg, [this](FramePtr frame) {
-            if (!frame) {
-                return;
-            }
-            MessagePtr answerMsg = std::make_shared<Message>();
-            deserializeStruct(frame->data, *answerMsg);
-            if (answerMsg->msType != MessageType::kMessageAnswerClientList) {
-                return;
-            }
-            QMetaObject::invokeMethod(this, [this, answerMsg]() { updateClientList(answerMsg); });
-        });
+    controlSession_->SendWithCall(msg, [this](FramePtr frame) {
+        if (!frame) {
+            return;
+        }
+        MessagePtr answerMsg = std::make_shared<Message>();
+        deserializeStruct(frame->data, *answerMsg);
+        if (answerMsg->msType != MessageType::kMessageAnswerClientList) {
+            return;
+        }
+        QMetaObject::invokeMethod(this, [this, answerMsg]() { updateClientList(answerMsg); });
     });
 }
 
@@ -102,7 +94,7 @@ void ConnectorControl::updateClientList(const MessagePtr& msg)
     }
     ui->tableClients->clearContents();
     ui->tableClients->setRowCount(0);
-    auto selfInfo = clientControl_->getSelfInfo();
+    auto selfInfo = controlSession_->getOwnInfo();
     for (auto& client : msg->clientList) {
         auto row = ui->tableClients->rowCount();
         ui->tableClients->insertRow(row);
@@ -228,6 +220,6 @@ void ConnectorControl::onUseClient(const QString& id, const QString& name)
     ClientInfo o;
     o.clientId = id.toStdString();
     o.clientName = name.toStdString();
-    clientControl_->setClientInfo(o);
+    controlSession_->getClientCore()->setOtherClientInfo(o);
     ui->edCurrentClient->setText(infoMsg);
 }

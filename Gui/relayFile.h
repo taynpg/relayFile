@@ -44,11 +44,10 @@ private:
     ExplorerControl* remoteExplorerControl_{};
     ComparisonControl* comparisonControl_{};
     LogControl* logControl_{};
-    ClientCore* clientControl_{};
-    ClientCore* clientFile_{};
     QTabWidget* tabWidget_{};
-    ClientWorker* transWorker_{};
 
+    std::shared_ptr<ControlSession> controlSession_{};
+    std::shared_ptr<FileSession> fileSession_{};
     Ui::relayFile* ui;
 };
 #endif   // RELAYFILE_H

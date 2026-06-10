@@ -21,23 +21,6 @@ RelayTask::~RelayTask()
     delete ui;
 }
 
-template <typename HandleResp> bool RelayTask::Request(ClientCore* cli, FramePtr frame, HandleResp handleResp)
-{
-    auto promise = std::make_shared<std::promise<FramePtr>>();
-    auto future = promise->get_future();
-
-    QMetaObject::invokeMethod(
-        cli, [this, cli, promise, frame]() { cli->SendWithCall(frame, [promise](FramePtr f) { promise->set_value(f); }); });
-
-    FramePtr f = future.get();
-    if (!f) {
-        qWarning() << "请求远端" << clientControl_->getClientFullName() << "失败";
-        return false;
-    }
-
-    return handleResp(f);
-}
-
 void RelayTask::Quit()
 {
     workerThread_->stop();
@@ -52,8 +35,9 @@ void RelayTask::closeEvent(QCloseEvent* event)
 
 void RelayTask::baseTask()
 {
-    clientTrans_ = GlobalData::getInstance()->getClientFile();
-    clientControl_ = GlobalData::getInstance()->getClientControl();
+    doubleLinker_ = std::make_shared<DoubleLinker>();
+    doubleLinker_->SetControlSession(GlobalData::getInstance()->getControlSession());
+    doubleLinker_->SetFileSession(GlobalData::getInstance()->getFileSession());
 
     askLocalDf_ = BaseAskDF::Create(AskType::ASK_TYPE_LOCAL);
     askRemoteDf_ = BaseAskDF::Create(AskType::ASK_TYPE_REMOTE);
@@ -103,11 +87,12 @@ void RelayTask::initSignals()
     connect(this, &RelayTask::signalCheckLocalRoot, this, &RelayTask::onCheckLocalRoot);
     connect(this, &RelayTask::signalCheckRemoteRoot, this, &RelayTask::onCheckRemoteRoot);
     connect(this, &RelayTask::signalCheckSameFile, this, &RelayTask::onCheckSameFile);
-    connect(this, &RelayTask::signalDoTransConnect, clientTrans_, &ClientCore::connectToServer);
-    connect(clientTrans_, &ClientCore::signalConnected, this, &RelayTask::onDoTransConnectDone);
-    connect(clientTrans_, &ClientCore::signalDisconnected, this, &RelayTask::onDoTransConnectFailed);
-    connect(clientTrans_, &ClientCore::signalDisconnected, this, &RelayTask::onDoTransDisconnect);
-    connect(clientTrans_, &ClientCore::signalConnectting, this, &RelayTask::onDoTransConnecting);
+    auto* cliCore = doubleLinker_->GetFileSession()->getClientCore();
+    connect(this, &RelayTask::signalDoTransConnect, cliCore, &ClientCore::connectToServer);
+    connect(cliCore, &ClientCore::signalConnected, this, &RelayTask::onDoTransConnectDone);
+    connect(cliCore, &ClientCore::signalDisconnected, this, &RelayTask::onDoTransConnectFailed);
+    connect(cliCore, &ClientCore::signalDisconnected, this, &RelayTask::onDoTransDisconnect);
+    connect(cliCore, &ClientCore::signalConnectting, this, &RelayTask::onDoTransConnecting);
     connect(ui->btnBasicCheck, &QPushButton::clicked, this, &RelayTask::onBaseCheck);
     connect(ui->btnStart, &QPushButton::clicked, this, &RelayTask::onStartRun);
     connect(this, &RelayTask::signalUpdateTable, this, &RelayTask::updateTable);
@@ -127,12 +112,22 @@ void RelayTask::handleOneLine(int row)
     const auto& fileMeta = fileList_[id];
     // 先请求到Server
     Message reqMsg;
+    reqMsg.msType = MessageType::kMessageFileRequestSend;
     reqMsg.msData = data_->remoteRoot.toStdString();
     reqMsg.mapData[""] = std::vector<FileMeta>{fileMeta};
 
-    auto requestFrame = OneFrame::Create();
-    requestFrame->type = FrameType::FrameRequestSend;
-    requestFrame->data = serializeStruct(reqMsg);
+    // auto requestFrame = OneFrame::Create();
+    // requestFrame->type = FrameType::FrameRequestSend;
+    // requestFrame->data = serializeStruct(reqMsg);
+
+    // if (!doubleLinker_->Request(true, requestFrame, [this](FramePtr resp) {
+    //             if (!resp) {
+    //                 emit signalLog("请求失败");
+    //                 return;
+    //             }
+
+    //     })) {
+    // }
     //  Request(clientControl_, )
     //  等待Server控制对方建立文件传输通道
     //  等待Server通知结果
@@ -167,7 +162,8 @@ void RelayTask::onBaseCheck()
 
 void RelayTask::onCheckControlClient()
 {
-    if (!clientControl_->isConnected()) {
+    auto* cliCore = doubleLinker_->GetControlSession()->getClientCore();
+    if (!cliCore->isConnected()) {
         emit signalLog("控制端未连接");
         return;
     }
@@ -184,9 +180,10 @@ void RelayTask::onAppendLog(const QString& log)
 
 void RelayTask::onCheckTransClient()
 {
-    if (!clientTrans_->isConnected()) {
+    auto* cliCore = doubleLinker_->GetFileSession()->getClientCore();
+    if (!cliCore->isConnected()) {
         emit signalLog("传输端未连接，尝试自动连接。");
-        emit signalDoTransConnect(clientControl_->getServerIp(), clientControl_->getServerPort());
+        emit signalDoTransConnect(cliCore->getServerIp(), cliCore->getServerPort());
         return;
     }
     emit signalLog("传输端已连接");

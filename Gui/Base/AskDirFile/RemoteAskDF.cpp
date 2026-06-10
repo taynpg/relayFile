@@ -7,7 +7,7 @@
 
 RemoteAskDF::RemoteAskDF()
 {
-    clientControl_ = GlobalData::getInstance()->getClientControl();
+    controlSession_ = GlobalData::getInstance()->getControlSession();
 }
 
 template <typename HandleResp> bool RemoteAskDF::request(Message& msg, HandleResp handleResp)
@@ -18,13 +18,11 @@ template <typename HandleResp> bool RemoteAskDF::request(Message& msg, HandleRes
     auto promise = std::make_shared<std::promise<MessagePtr>>();
     auto future = promise->get_future();
 
-    QMetaObject::invokeMethod(clientControl_, [this, promise, frame]() {
-        clientControl_->SendWithCall(frame, [promise](MessagePtr m) { promise->set_value(m); });
-    });
+    controlSession_->SendWithCall(frame, [promise](MessagePtr m) { promise->set_value(m); });
 
     MessagePtr ret = future.get();
     if (!ret) {
-        qWarning() << "请求远端" << clientControl_->getClientFullName() << "失败";
+        qWarning() << "请求远端" << controlSession_->getOtherInfo().clientId << "失败";
         return false;
     }
 
@@ -48,7 +46,7 @@ bool RemoteAskDF::AskFileList(const std::string& path, std::vector<FileMeta>& fi
             fileList = item.second;
             break;
         }
-        qInfo() << "获取远端" << clientControl_->getClientFullName() << "文件列表个数:" << fileList.size();
+        qInfo() << "获取远端" << controlSession_->getOtherInfo().clientId << "文件列表个数:" << fileList.size();
         return true;
     });
 }
@@ -62,7 +60,7 @@ bool RemoteAskDF::AskHome(std::string& home)
             return false;
         }
         home = ret->msData;
-        qInfo() << "获取远端" << clientControl_->getClientFullName() << "目录:" << QString::fromStdString(home);
+        qInfo() << "获取远端" << controlSession_->getOtherInfo().clientId << "目录:" << QString::fromStdString(home);
         return true;
     });
 }

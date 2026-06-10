@@ -5,19 +5,20 @@
 #include <cereal/types/string.hpp>
 #include <cereal/types/unordered_map.hpp>
 #include <cereal/types/vector.hpp>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include <memory>
 
 #include "FileMeta.h"
 
 struct ClientInfo {
     std::string clientId;
     std::string clientName;
+    std::string uuid;
     template <class Archive> void serialize(Archive& ar)
     {
-        ar(clientId, clientName);
+        ar(clientId, clientName, uuid);
     }
 };
 
@@ -30,6 +31,20 @@ enum class MessageType {
     kMessageAnswerClientList,
     kMessageAskFileList,
     kMessageAnswerFileList,
+    kMessageFileRequestDown,
+    kMessageFileAnswerRequestDown,
+    kMessageFileRequestSend,
+    kMessageFileAnswerRequestSend,
+    kMessageFileRequestConnect,
+    kMessageFileAnswerRequestConnect,
+    kMessageFileRequestDisconnect,
+    kMessageFileAnswerRequestDisconnect,
+    kMessageFileRequestComplete,
+    kMessageFileAnswerRequestComplete,
+    kMessageFileRequestCancel,
+    kMessageFileAnswerRequestCancel,
+    kMessageFileRequestStart,
+    kMessageFileAnswerRequestStart,
 };
 
 struct Message {

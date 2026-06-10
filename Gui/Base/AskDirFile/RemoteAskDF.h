@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Net/ClientCore.h>
+#include <Net/ControlSession.h>
 
 #include "BaseAskDF.h"
 
@@ -18,5 +19,5 @@ public:
     bool AskHome(std::string& home) override;
 
 private:
-    ClientCore* clientControl_{};
+    std::shared_ptr<ControlSession> controlSession_{};
 };

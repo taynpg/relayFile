@@ -1,44 +1,29 @@
 #pragma once
 
-#include <QMutex>
 #include <QTcpSocket>
+#include <QThread>
 #include <QTimer>
-#include <any>
 #include <atomic>
 #include <functional>
 
 #include "Protocol/Message.h"
 #include "Protocol/Protocol.h"
-#include "Utils/ThreadPoolSTD.hpp"
 #include "Utils/miniUtil.h"
 
+class ClientCore;
+// 客户端工作线程
+class ClientWorker : public QThread
+{
+    Q_OBJECT
+public:
+    ClientWorker(ClientCore* core, QObject* parent = nullptr);
+    ~ClientWorker();
 
-// 我定义了一个叫 function_traits的模板，但我暂时不说它长什么样。
-// 它现在是一个 不完整类型（incomplete type）。
-// 强制使用者只能用“特化版本”
-template <typename T> struct function_traits;
+protected:
+    void run() override;
 
-/*  模板特化（Template Specialization）。
-    当 T 是 std::function<R(Arg)>这种形式时, 我才给它一个“定义”
-                   写法                               含义
-           std::function<R(Arg)>         一个只接受一个参数的 std::function
-                    R                                返回值
-                   Arg                              参数类型
-        using argument_type = Arg;              对外暴露参数类型
-*/
-template <typename R, typename Arg> struct function_traits<std::function<R(Arg)>> {
-    using argument_type = Arg;
-};
-
-enum class ClientType {
-    ControlSession,
-    FileSession,
-};
-
-enum class CallType {
-    CT_Unknown,
-    CT_Message,
-    CT_Frame
+private:
+    ClientCore* core_{};
 };
 
 class ClientCore : public QObject
@@ -50,87 +35,53 @@ signals:
     void signalConnected();
     void signalDisconnected();
     void signalErrorOccurred();
-    void signalOwnInfo(const ClientInfo& info);
-    void signalSendFrame(FramePtr frame);
+    void signalRequestAskOwnID();
+    void signalDeliverFrame(FramePtr frame);
 
 public:
     ClientCore(QObject* parent = nullptr);
     virtual ~ClientCore();
 
 public:
-    static ClientCore* ceateInstance(QObject* parent = nullptr, ClientType clientType = ClientType::ControlSession);
-    void setClientType(ClientType clientType);
-    void setClientInfo(const ClientInfo& oInfo);
     void instance();
     void Quit();
 
     bool isConnected() const;
 
 public:
-    ClientType getClientType() const;
     ClientInfo getClientInfo() const;
     QString getClientFullName() const;
-    ClientInfo getSelfInfo() const;
+
+    void setOtherClientInfo(const ClientInfo& oInfo);
+
     QString getServerIp() const;
     int16_t getServerPort() const;
-    QString getCurUUID() const;
-    void setCurUUID(const QString& uuid);
+
+    uint64_t GetSessionId();
 
     bool Send(FramePtr frame);
     bool Send(const Message& msg);
     bool Send(const char* data, size_t size);
-    bool SendWithCall(FramePtr frame, std::function<void(MessagePtr)> callback);
-    bool SendWithCall(FramePtr frame, std::function<void(FramePtr)> callback);
-    bool SendWithCall(const Message& msg, std::function<void(MessagePtr)> callback);
-    bool SendWithCall(const Message& msg, std::function<void(FramePtr)> callback);
-    template <typename Callback> bool SendCall(FramePtr frame, Callback callback);
 
 public slots:
     bool connectToServer(const QString& server, int16_t port);
     void disconnectFromServer();
+    void onRecordOwnInfo(const ClientInfo& info);
 
-protected:
+private:
     void initSignals();
-    void clearWorker();
-
-protected:
     void onReadyRead();
-    virtual void handleFrame(FramePtr frame) = 0;
 
-    uint64_t GetSessionId();
-    virtual void AskOwnID() = 0;
-
-    struct WaiteFrame {
-        uint64_t sessionId;
-        QTimer* timer{};
-        CallType callType{};
-        std::function<void(std::any)> call;
-    };
-
-    struct TaskWorker {
-        uint64_t sessionId;
-        FramePtr frame{};
-        bool isDone{false};
-        static std::shared_ptr<TaskWorker> CreateWorker(FramePtr frame);
-    };
-
-protected:
-    QTcpSocket* tcp_{};
-    QMutex requestWaitLock_;
-    QMutex responseWaitLock_;
-    ClientType clientType_{};
-    std::atomic_uint64_t sessionId_{0};
-    std::shared_ptr<ThreadPool> workerPool_{};
-    QTimer* clearWorkerTimer_{};
-    QString curUUID_{};
-    QMap<uint64_t, std::shared_ptr<WaiteFrame>> requestWaitFrame_;
-    QMap<uint64_t, std::shared_ptr<TaskWorker>> responseWaitWorker_;
-
-protected:
-    miniBuffer buffer_;
-    ClientInfo oInfo_;
+public:
     ClientInfo mInfo_;
+    ClientInfo oInfo_;
 
+private:
+    QTcpSocket* tcp_{};
+    std::atomic_uint64_t sessionId_{0};
+
+private:
+    miniBuffer buffer_;
     QString serverIp_;
     int16_t serverPort_;
 };

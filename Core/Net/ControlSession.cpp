@@ -1,10 +1,14 @@
 #include "ControlSession.h"
 
+#include <QDebug>
+
+#include "CoreDefine.hpp"
 #include "File/FileDir.h"
+#include "Protocol/Message.h"
 #include "Protocol/Serialize.hpp"
 
 #define PushOneWork()                                                                                                            \
-    auto worker = ClientCore::TaskWorker::CreateWorker(frame);                                                                   \
+    auto worker = ControlSession::TaskWorker::CreateWorker(frame);                                                               \
     {                                                                                                                            \
         QMutexLocker locker(&responseWaitLock_);                                                                                 \
         if (!responseWaitWorker_.contains(worker->frame->sessionId)) {                                                           \
@@ -14,12 +18,109 @@
         }                                                                                                                        \
     }
 
-ControlSession::ControlSession(QObject* parent) : ClientCore(parent)
+ControlSession::ControlSession(QObject* parent) : QObject(parent), workerPool_(std::make_shared<ThreadPool>(8))
 {
+    clearWorkerTimer_ = new QTimer(this);
+    clientCore_ = new ClientCore();
+    clientWorker_ = new ClientWorker(clientCore_, nullptr);
+    clientCore_->moveToThread(clientWorker_);
+    initSignals();
+    clientWorker_->start();
+}
+
+ClientCore* ControlSession::getClientCore()
+{
+    return clientCore_;
 }
 
 ControlSession::~ControlSession()
 {
+    delete clientCore_;
+    delete clientWorker_;
+}
+
+void ControlSession::Quit()
+{
+    qDebug() << "等待线程池完成...";
+    workerPool_->Quit();
+    qDebug() << "线程池完成";
+
+    clearWorkerTimer_->stop();
+    clientWorker_->quit();
+    clientWorker_->wait();
+}
+
+void ControlSession::initSignals()
+{
+    connect(clearWorkerTimer_, &QTimer::timeout, this, &ControlSession::clearWorker);
+    clearWorkerTimer_->start(defClearWorkerTimeout);
+}
+
+template <typename Callback> bool ControlSession::SendCall(FramePtr frame, Callback callback)
+{
+    auto sid = clientCore_->GetSessionId();
+    frame->sessionId = sid;
+
+    emit signalRequestSend(frame);
+
+    QTimer* timer = new QTimer(this);
+    timer->setSingleShot(true);
+
+    connect(timer, &QTimer::timeout, this, [this, sid]() {
+        QMutexLocker locker(&requestWaitLock_);
+        auto it = requestWaitFrame_.find(sid);
+        if (it != requestWaitFrame_.end()) {
+            auto& waiter = *it.value();
+            switch (waiter.callType) {
+            case CallType::CT_Message: {
+                MessagePtr msg = nullptr;
+                waiter.call(msg);
+                break;
+            }
+            case CallType::CT_Frame: {
+                FramePtr f = nullptr;
+                waiter.call(f);
+                break;
+            }
+            default:
+                break;
+            }
+            waiter.timer->deleteLater();
+            requestWaitFrame_.erase(it);
+        }
+    });
+
+    auto waiter = std::make_shared<WaiteFrame>();
+    waiter->sessionId = sid;
+    using ArgType = typename function_traits<Callback>::argument_type;
+    waiter->call = [cb = std::move(callback)](std::any arg) { cb(std::any_cast<ArgType>(arg)); };
+    waiter->timer = timer;
+
+    if constexpr (std::is_same_v<ArgType, MessagePtr>) {
+        waiter->callType = CallType::CT_Message;
+    } else if constexpr (std::is_same_v<ArgType, FramePtr>) {
+        waiter->callType = CallType::CT_Frame;
+    } else {
+        static_assert(!sizeof(ArgType), "Unsupported callback argument type");
+    }
+
+    {
+        QMutexLocker locker(&requestWaitLock_);
+        requestWaitFrame_[sid] = waiter;
+    }
+
+    timer->start(defWaitCmdTimeout);
+    return true;
+}
+
+ClientInfo ControlSession::getOtherInfo()
+{
+    return clientCore_->oInfo_;
+}
+
+ClientInfo ControlSession::getOwnInfo()
+{
+    return clientCore_->mInfo_;
 }
 
 void ControlSession::handleFrame(FramePtr frame)
@@ -29,10 +130,11 @@ void ControlSession::handleFrame(FramePtr frame)
 
     switch (answerMsg->msType) {
     case MessageType::kMessageAnswerId: {
-        mInfo_.clientId = answerMsg->to.clientId;
-        mInfo_.clientName = answerMsg->to.clientName;
-        setCurUUID(QString::fromStdString(answerMsg->msData));
-        emit signalOwnInfo(mInfo_);
+        ClientInfo info;
+        info.clientId = answerMsg->to.clientId;
+        info.clientName = answerMsg->to.clientName;
+        info.uuid = answerMsg->msData;
+        emit signalOwnInfo(info);
         break;
     }
     case MessageType::kMessageAskHome: {
@@ -45,7 +147,7 @@ void ControlSession::handleFrame(FramePtr frame)
             m.msType = MessageType::kMessageAnswerHome;
             m.msData = home.toStdString();
             answerFrame->data = serializeStruct(m);
-            emit signalSendFrame(answerFrame);
+            emit signalRequestSend(answerFrame);
             worker->isDone = true;
         });
         break;
@@ -69,7 +171,7 @@ void ControlSession::handleFrame(FramePtr frame)
             }
             m.mapData[""] = stdMeta;
             answerFrame->data = serializeStruct(m);
-            emit signalSendFrame(answerFrame);
+            emit signalRequestSend(answerFrame);
             worker->isDone = true;
         });
         break;
@@ -98,6 +200,32 @@ void ControlSession::handleFrame(FramePtr frame)
     }
 }
 
+bool ControlSession::SendWithCall(const Message& msg, std::function<void(FramePtr)> callback)
+{
+    auto frame = OneFrame::Create();
+    frame->data = serializeStruct(msg);
+    frame->to = clientCore_->oInfo_.clientId;
+    return SendCall(frame, callback);
+}
+
+bool ControlSession::SendWithCall(FramePtr frame, std::function<void(MessagePtr)> callback)
+{
+    return SendCall(frame, std::move(callback));
+}
+
+bool ControlSession::SendWithCall(const Message& msg, std::function<void(MessagePtr)> callback)
+{
+    auto frame = OneFrame::Create();
+    frame->data = serializeStruct(msg);
+    frame->to = clientCore_->oInfo_.clientId;
+    return SendCall(frame, std::move(callback));
+}
+
+bool ControlSession::SendWithCall(FramePtr frame, std::function<void(FramePtr)> callback)
+{
+    return SendCall(frame, std::move(callback));
+}
+
 void ControlSession::AskOwnID()
 {
     Message msg;
@@ -105,6 +233,27 @@ void ControlSession::AskOwnID()
     msg.msData = "倔强的小强";
     auto frame = OneFrame::Create();
     frame->data = serializeStruct(msg);
-    frame->sessionId = GetSessionId();
-    Send(frame);
+    frame->sessionId = clientCore_->GetSessionId();
+    emit signalRequestSend(frame);
+}
+
+std::shared_ptr<ControlSession::TaskWorker> ControlSession::TaskWorker::CreateWorker(FramePtr frame)
+{
+    auto r = std::make_shared<ControlSession::TaskWorker>();
+    r->frame = frame;
+    r->isDone = false;
+    r->sessionId = frame->sessionId;
+    return r;
+}
+
+void ControlSession::clearWorker()
+{
+    QMutexLocker locker(&responseWaitLock_);
+    for (auto iter = responseWaitWorker_.begin(); iter != responseWaitWorker_.end();) {
+        if (iter.value()->isDone) {
+            iter = responseWaitWorker_.erase(iter);
+        } else {
+            ++iter;
+        }
+    }
 }

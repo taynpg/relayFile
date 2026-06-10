@@ -16,14 +16,10 @@ relayFile::relayFile(QWidget* parent) : QWidget(parent), ui(new Ui::relayFile)
 {
     ui->setupUi(this);
 
-    clientControl_ = ClientCore::ceateInstance(nullptr, ClientType::ControlSession);
-    clientFile_ = ClientCore::ceateInstance(nullptr, ClientType::FileSession);
-    GlobalData::getInstance()->setClientControl(clientControl_);
-    GlobalData::getInstance()->setClientFile(clientFile_);
-
-    transWorker_ = new ClientWorker(clientFile_, nullptr);
-    clientFile_->moveToThread(transWorker_);
-    transWorker_->start();
+    controlSession_ = std::make_shared<ControlSession>();
+    fileSession_ = std::make_shared<FileSession>();
+    GlobalData::getInstance()->setControlSession(controlSession_);
+    GlobalData::getInstance()->setFileSession(fileSession_);
 
     Logger logger;
     logger.setInfo("log/relayFileGUI.log", "relayFileGUI");
@@ -42,15 +38,13 @@ relayFile::relayFile(QWidget* parent) : QWidget(parent), ui(new Ui::relayFile)
 relayFile::~relayFile()
 {
     connectorControl_->Quit();
-    delete clientFile_;
     delete ui;
 }
 
 void relayFile::Quit()
 {
-    transWorker_->quit();
-    transWorker_->wait();
-    delete transWorker_;
+    controlSession_->Quit();
+    fileSession_->Quit();
     localExplorerControl_->Quit();
     remoteExplorerControl_->Quit();
     isQuit = true;

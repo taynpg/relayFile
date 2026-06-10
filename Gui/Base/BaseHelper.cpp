@@ -6,28 +6,28 @@ GlobalData* GlobalData::getInstance()
     return &instance;
 }
 
-void GlobalData::setClientControl(ClientCore* clientControl)
+void GlobalData::setControlSession(std::shared_ptr<ControlSession> controlSession)
 {
     std::lock_guard<std::mutex> lock(mutex_);
-    clientControl_ = clientControl;
+    controlSession_ = controlSession;
 }
 
-void GlobalData::setClientFile(ClientCore* clientFile)
+void GlobalData::setFileSession(std::shared_ptr<FileSession> fileSession)
 {
     std::lock_guard<std::mutex> lock(mutex_);
-    clientFile_ = clientFile;
+    fileSession_ = fileSession;
 }
 
-ClientCore* GlobalData::getClientControl()
+std::shared_ptr<ControlSession> GlobalData::getControlSession()
 {
     std::lock_guard<std::mutex> lock(mutex_);
-    return clientControl_;
+    return controlSession_;
 }
 
-ClientCore* GlobalData::getClientFile()
+std::shared_ptr<FileSession> GlobalData::getFileSession()
 {
     std::lock_guard<std::mutex> lock(mutex_);
-    return clientFile_;
+    return fileSession_;
 }
 
 QString GlobalData::getGlobalConfigPath()
