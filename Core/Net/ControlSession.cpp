@@ -64,56 +64,53 @@ template <typename Callback> bool ControlSession::SendCall(FramePtr frame, Callb
 
     emit signalRequestSend(frame);
 
-    QMetaObject::invokeMethod(this, [this, sid, callback]() {
-        QTimer* timer = new QTimer(this);
-        timer->setSingleShot(true);
+    QTimer* timer = new QTimer();
+    timer->setSingleShot(true);
 
-        connect(timer, &QTimer::timeout, this, [this, sid]() {
-            QMutexLocker locker(&requestWaitLock_);
-            auto it = requestWaitFrame_.find(sid);
-            if (it != requestWaitFrame_.end()) {
-                auto& waiter = *it.value();
-                switch (waiter.callType) {
-                case CallType::CT_Message: {
-                    MessagePtr msg = nullptr;
-                    waiter.call(msg);
-                    break;
-                }
-                case CallType::CT_Frame: {
-                    FramePtr f = nullptr;
-                    waiter.call(f);
-                    break;
-                }
-                default:
-                    break;
-                }
-                waiter.timer->deleteLater();
-                requestWaitFrame_.erase(it);
+    connect(timer, &QTimer::timeout, this, [this, sid]() {
+        QMutexLocker locker(&requestWaitLock_);
+        auto it = requestWaitFrame_.find(sid);
+        if (it != requestWaitFrame_.end()) {
+            auto& waiter = *it.value();
+            switch (waiter.callType) {
+            case CallType::CT_Message: {
+                MessagePtr msg = nullptr;
+                waiter.call(msg);
+                break;
             }
-        });
-
-        auto waiter = std::make_shared<WaiteFrame>();
-        waiter->sessionId = sid;
-        using ArgType = typename function_traits<Callback>::argument_type;
-        waiter->call = [cb = std::move(callback)](std::any arg) { cb(std::any_cast<ArgType>(arg)); };
-        waiter->timer = timer;
-
-        if constexpr (std::is_same_v<ArgType, MessagePtr>) {
-            waiter->callType = CallType::CT_Message;
-        } else if constexpr (std::is_same_v<ArgType, FramePtr>) {
-            waiter->callType = CallType::CT_Frame;
-        } else {
-            static_assert(!sizeof(ArgType), "Unsupported callback argument type");
+            case CallType::CT_Frame: {
+                FramePtr f = nullptr;
+                waiter.call(f);
+                break;
+            }
+            default:
+                break;
+            }
+            waiter.timer->deleteLater();
+            requestWaitFrame_.erase(it);
         }
-
-        {
-            QMutexLocker locker(&requestWaitLock_);
-            requestWaitFrame_[sid] = waiter;
-        }
-
-        timer->start(defWaitCmdTimeout);
     });
 
+    auto waiter = std::make_shared<WaiteFrame>();
+    waiter->sessionId = sid;
+    using ArgType = typename function_traits<Callback>::argument_type;
+    waiter->call = [cb = std::move(callback)](std::any arg) { cb(std::any_cast<ArgType>(arg)); };
+    waiter->timer = timer;
+
+    if constexpr (std::is_same_v<ArgType, MessagePtr>) {
+        waiter->callType = CallType::CT_Message;
+    } else if constexpr (std::is_same_v<ArgType, FramePtr>) {
+        waiter->callType = CallType::CT_Frame;
+    } else {
+        static_assert(!sizeof(ArgType), "Unsupported callback argument type");
+    }
+
+    {
+        QMutexLocker locker(&requestWaitLock_);
+        requestWaitFrame_[sid] = waiter;
+    }
+
+    timer->start(defWaitCmdTimeout);
     return true;
 }
 
