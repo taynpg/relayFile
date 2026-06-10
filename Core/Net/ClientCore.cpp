@@ -97,9 +97,13 @@ void ClientCore::setOtherClientInfo(const ClientInfo& oInfo)
     oInfo_ = oInfo;
 }
 
-ClientInfo ClientCore::getClientInfo() const
+ClientInfo ClientCore::getOtherClientInfo() const
 {
     return oInfo_;
+}
+ClientInfo ClientCore::getOwnClientInfo() const
+{
+    return mInfo_;
 }
 
 QString ClientCore::getClientFullName() const

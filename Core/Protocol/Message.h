@@ -12,6 +12,11 @@
 
 #include "FileMeta.h"
 
+enum class MessageStateCode : std::uint16_t {
+    kMessageStateCodeSuccess = 0,
+    kMessageStateCodeFailed = 1,
+};
+
 struct ClientInfo {
     std::string clientId;
     std::string clientName;
@@ -56,15 +61,19 @@ struct Message {
     MessageType msType{};
     std::string msData;
     std::string errData;
+    std::string transId;
     ClientInfo from;
     ClientInfo to;
+    MessageStateCode msgStateCode{};
 
+    FileMeta ff;
+    FileMeta ft;
     std::vector<ClientInfo> clientList;
     std::unordered_map<std::string, std::vector<FileMeta>> mapData;
 
     template <class Archive> void serialize(Archive& ar)
     {
-        ar(msType, msData, errData, from, to, clientList, mapData);
+        ar(msType, msData, errData, transId, from, to, msgStateCode, ff, ft, mapData);
     }
 
     static std::shared_ptr<Message> Create();

@@ -49,7 +49,8 @@ public:
     bool isConnected() const;
 
 public:
-    ClientInfo getClientInfo() const;
+    ClientInfo getOtherClientInfo() const;
+    ClientInfo getOwnClientInfo() const;
 
     QString getServerIp() const;
     int16_t getServerPort() const;

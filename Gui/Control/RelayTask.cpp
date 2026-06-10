@@ -109,6 +109,9 @@ void RelayTask::handleOneLine(int row)
         return;
     }
 
+    CmdExecutor executor(doubleLinker_);
+    executor.Reset();
+
     const auto& fileMeta = fileList_[id];
     // 先请求到Server
     Message reqMsg;
@@ -116,20 +119,21 @@ void RelayTask::handleOneLine(int row)
     reqMsg.msData = data_->remoteRoot.toStdString();
     reqMsg.mapData[""] = std::vector<FileMeta>{fileMeta};
 
-    // auto requestFrame = OneFrame::Create();
-    // requestFrame->type = FrameType::FrameRequestSend;
-    // requestFrame->data = serializeStruct(reqMsg);
+    auto requestFrame = OneFrame::Create();
+    requestFrame->data = serializeStruct(reqMsg);
 
-    // if (!doubleLinker_->Request(true, requestFrame, [this](FramePtr resp) {
-    //             if (!resp) {
-    //                 emit signalLog("请求失败");
-    //                 return;
-    //             }
-
-    //     })) {
-    // }
-    //  Request(clientControl_, )
     //  等待Server控制对方建立文件传输通道
+    executor.AddStep([this](FramePtr frame) -> FramePtr {
+        Message respMsg;
+        deserializeStruct(frame->data, respMsg);
+        if (respMsg.msgStateCode != MessageStateCode::kMessageStateCodeSuccess) {
+            emit signalLog(
+                QString("Server返回错误[%1]：%2").arg(int(respMsg.msgStateCode)).arg(QString::fromStdString(respMsg.errData)));
+            return nullptr;
+        }
+        // 如果成功，对方必须告知文件传输通道的ID号。
+        return frame;
+    });
     //  等待Server通知结果
     //  根据结果进行放弃或者传输
 }

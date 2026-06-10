@@ -43,7 +43,7 @@ public slots:
 public:
     OneFileTrans(QObject* parent = nullptr);
 
-    bool initTransfer(TransMode mode, const FileMeta& fileMeta, const std::string& targetId, ClientCore* fileControl);
+    bool initTransfer(TransMode mode, const FileMeta& fileMeta, const std::string& targetId, const std::string& ownId);
     void initSignals();
 
     bool nextSend();
@@ -63,7 +63,6 @@ private:
     QMutex qMut_;
     QTimer* sendTimeoutTimer_{};
     TransStatus state_{};
-    ClientCore* fileControl_{};
 
     FileMeta meta_;
 
@@ -82,6 +81,10 @@ private:
 class FileSession : public ClientCore
 {
     Q_OBJECT
+
+signals:
+    void signalRequestSend(FramePtr frame);
+
 public:
     FileSession(QObject* parent = nullptr);
     ~FileSession() override;
@@ -98,6 +101,8 @@ public:
 
 private:
     void AskOwnID();
+    void msgFrame(FramePtr frame);
+    void fileFrame(FramePtr frame);
 
 private:
     ClientCore* clientCore_{};
