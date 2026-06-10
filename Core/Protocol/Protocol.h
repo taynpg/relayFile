@@ -20,6 +20,7 @@ struct OneFrame {
     int64_t index{};
     std::string from;
     std::string to;
+    std::string fuuid;
     std::vector<char> data;
     static std::shared_ptr<OneFrame> Create();
     static void ExChangeIp(std::shared_ptr<OneFrame> frame);

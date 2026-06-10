@@ -36,7 +36,8 @@ enum class MessageType {
     kMessageAnswerClientList,
     kMessageAskFileList,
     kMessageAnswerFileList,
-    kMessageFileRequestDown,
+
+    kMessageFileRequestDown = 500,
     kMessageFileAnswerRequestDown,
     kMessageFileRequestSend,
     kMessageFileAnswerRequestSend,

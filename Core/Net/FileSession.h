@@ -42,13 +42,14 @@ public slots:
 public:
     OneFileTrans(QObject* parent = nullptr);
 
-    bool initTransfer(TransMode mode, const FileMeta& fileMeta, const std::string& targetId, const std::string& ownId, const std::string& uuid);
+    bool initTransfer(TransMode mode, const FileMeta& fileMeta, const std::string& targetId, const std::string& ownId,
+                      const std::string& uuid);
     void initSignals();
 
     bool nextSend();
     bool handleStart(FramePtr frame);
     bool handleAck(FramePtr frame);
-    bool handleChuck(FramePtr frame);
+    bool handleRecvChuck(FramePtr frame);
     bool handleInterrupt(FramePtr frame);
     bool handleFinish(FramePtr frame);
 
@@ -101,8 +102,6 @@ public:
 
 private:
     void AskOwnID();
-    void msgFrame(FramePtr frame);
-    void fileFrame(FramePtr frame);
 
 private:
     ClientCore* clientCore_{};

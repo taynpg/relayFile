@@ -6,10 +6,19 @@
 #include "ControlSession.h"
 #include "FileSession.h"
 
+enum class FileControlState {
+    FCS_Unconnected,
+    FCS_Connected,
+    FCS_Connecting
+};
+
 // 客户端双链接助手
 class DoubleLinker : public QObject
 {
     Q_OBJECT
+
+signals:
+    void signalDoConnect(const QString& server, int16_t port);
 
 public:
     DoubleLinker(QObject* parent = nullptr);
@@ -27,6 +36,13 @@ public:
     std::shared_ptr<ControlSession> GetControlSession() const;
     std::shared_ptr<FileSession> GetFileSession() const;
 
+    bool waitFileConnect();
+
+public slots:
+    void onDoConnectSuccess();
+    void onDoConnectFailed();
+    void onDoConnectError();
+
 public slots:
     void onDeliverControl(FramePtr frame);
     void onDeliverFile(FramePtr frame);
@@ -34,6 +50,10 @@ public slots:
 private:
     std::shared_ptr<ControlSession> controlSession_{};
     std::shared_ptr<FileSession> fileSession_{};
+
+private:
+    QMutex fcStateLock_;
+    FileControlState fcState_{};
 };
 
 class CmdExecutor

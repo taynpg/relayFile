@@ -25,6 +25,7 @@ std::shared_ptr<OneFrame> OneFrame::Create(std::shared_ptr<OneFrame> frame, bool
     f->index = frame->index;
     f->from = frame->from;
     f->to = frame->to;
+    f->fuuid = frame->fuuid;
 
     if (isChangeIp) {
         OneFrame::ExChangeIp(f);
@@ -41,7 +42,7 @@ std::shared_ptr<OneFrame> Protocol::UnPack(miniBuffer& buffer)
 {
     constexpr char HEADER[] = {'\xFF', '\xFE'};
     constexpr char TAIL[] = {'\xFF', '\xFF'};
-    constexpr size_t HEADER_SIZE = 2 + 2 + 2 + 8 + 8 + 32 + 32 + 4;
+    constexpr size_t HEADER_SIZE = 2 + 2 + 2 + 8 + 8 + 32 + 32 + 36 + 4;
 
     const auto& data = buffer.GetBuffer();
     if (data.size() < HEADER_SIZE) {
@@ -69,7 +70,7 @@ std::shared_ptr<OneFrame> Protocol::UnPack(miniBuffer& buffer)
     std::memcpy(&mark, data.data() + offset + 4, sizeof(mark));
     std::memcpy(&sessionId, data.data() + offset + 6, sizeof(sessionId));
     std::memcpy(&index, data.data() + offset + 6 + 8, sizeof(index));
-    std::memcpy(&len, data.data() + offset + 6 + 8 + 8 + 32 + 32, sizeof(len));
+    std::memcpy(&len, data.data() + offset + 6 + 8 + 8 + 32 + 32 + 36, sizeof(len));
 
     if (len < 0 || offset + HEADER_SIZE + static_cast<size_t>(len) > data.size()) {
         return nullptr;
@@ -87,8 +88,10 @@ std::shared_ptr<OneFrame> Protocol::UnPack(miniBuffer& buffer)
     frame->index = index;
     frame->from.assign(data.data() + offset + 6 + 8 + 8, 32);
     frame->to.assign(data.data() + offset + 6 + 8 + 8 + 32, 32);
+    frame->fuuid.assign(data.data() + offset + 6 + 8 + 8 + 32 + 32, 36);
     frame->from.erase(frame->from.find_last_not_of('\0') + 1);
     frame->to.erase(frame->to.find_last_not_of('\0') + 1);
+    frame->fuuid.erase(frame->fuuid.find_last_not_of('\0') + 1);
 
     if (len > 0) {
         frame->data.resize(len);
@@ -108,7 +111,7 @@ std::vector<char> Protocol::Pack(const std::shared_ptr<OneFrame>& frame)
 
     constexpr char HEADER[] = {'\xFF', '\xFE'};
     constexpr char TAIL[] = {'\xFF', '\xFF'};
-    constexpr size_t HEADER_SIZE = 2 + 2 + 2 + 8 + 8 + 32 + 32 + 4;   // 90
+    constexpr size_t HEADER_SIZE = 2 + 2 + 2 + 8 + 8 + 32 + 32 + 36 + 4;   // 90
 
     int32_t len = static_cast<int32_t>(frame->data.size());
 
@@ -132,6 +135,9 @@ std::vector<char> Protocol::Pack(const std::shared_ptr<OneFrame>& frame)
     }
     for (int i = 0; i < 32; ++i) {
         buffer.push_back(i < static_cast<int>(frame->to.size()) ? frame->to[i] : '\0');
+    }
+    for (int i = 0; i < 36; ++i) {
+        buffer.push_back(i < static_cast<int>(frame->fuuid.size()) ? frame->fuuid[i] : '\0');
     }
 
     buffer.insert(buffer.end(), reinterpret_cast<const char*>(&len), reinterpret_cast<const char*>(&len) + sizeof(len));
