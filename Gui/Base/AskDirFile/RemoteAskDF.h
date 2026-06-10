@@ -12,7 +12,7 @@ public:
     ~RemoteAskDF() = default;
 
 public:
-    template <typename HandleResp> bool Request(Message& msg, HandleResp handleResp);
+    template <typename HandleResp> bool Request(Message& msg, HandleResp handleResp, FrameType type);
 
 public:
     bool AskFileList(const std::string& path, std::vector<FileMeta>& fileList) override;

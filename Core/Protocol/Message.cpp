@@ -1,9 +1,9 @@
 #include "Message.h"
 
-Message::Message(const Message& o) : msType(o.msType)
+Message::Message(const Message& o)
 {
-    msData = o.msData;
-    errData = o.errData;
+    comStr = o.comStr;
+    errMsg = o.errMsg;
     from = o.from;
     to = o.to;
     clientList = o.clientList;
@@ -15,9 +15,10 @@ Message& Message::operator=(const Message& o)
     if (this == &o) {
         return *this;
     }
-    msType = o.msType;
-    msData = o.msData;
-    errData = o.errData;
+    comStr = o.comStr;
+    errMsg = o.errMsg;
+    transId = o.transId;
+    uuid = o.uuid;
     from = o.from;
     to = o.to;
     clientList = o.clientList;

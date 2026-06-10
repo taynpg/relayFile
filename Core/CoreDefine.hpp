@@ -3,3 +3,5 @@
 constexpr int defWaitCmdTimeout = 5000;
 constexpr int defClearWorkerTimeout = 5000;
 constexpr int defSendTimeout = 5000;
+
+constexpr int defFileStartNum = 500;

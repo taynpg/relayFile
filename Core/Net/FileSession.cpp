@@ -65,7 +65,7 @@ bool OneFileTrans::nextSend()
         return false;
     }
     if (curBlockIndex_ * blockSize_ >= totalSize_) {
-        auto frame = CreateControlFrame(MessageType::kMessageFileRequestComplete);
+        auto frame = CreateFrame(FrameType::kFileType_Request_Complete);
         emit signalRequestSend(frame);
         state_ = TransStatus::Finished;
         emit signalFinished(ownId_);
@@ -75,14 +75,14 @@ bool OneFileTrans::nextSend()
     sendFile_.read(buffer.data(), blockSize_);
     auto bytesRead = sendFile_.gcount();
     if (bytesRead <= 0) {
-        auto frame = CreateControlFrame(MessageType::kMessageFileRequestComplete);
+        auto frame = CreateFrame(FrameType::kFileType_Request_Complete);
         emit signalRequestSend(frame);
         state_ = TransStatus::Finished;
         emit signalFinished(ownId_);
         return true;
     }
     buffer.resize(bytesRead);
-    auto frame = CreateFileFrame(FrameType::FrameFileChuck);
+    auto frame = CreateFrame(FrameType::kFileType_Request_Chuck);
     frame->data = std::move(buffer);
     emit signalRequestSend(frame);
 
@@ -121,26 +121,12 @@ bool OneFileTrans::handleRecvChuck(FramePtr frame)
     curBlockIndex_++;
 
     emit signalProcess(transSize_, totalSize_);
-    auto f = CreateFileFrame(FrameType::FrameFileAck);
+    auto f = CreateFrame(FrameType::kFileType_Request_Ack);
     emit signalRequestSend(f);
     return true;
 }
 
-FramePtr OneFileTrans::CreateControlFrame(MessageType type)
-{
-    Message msg;
-    msg.msType = type;
-    msg.to.clientId = targetId_;
-    msg.uuid = uuid_;
-    auto frame = OneFrame::Create();
-    frame->to = targetId_;
-    frame->from = ownId_;
-    frame->index = curBlockIndex_;
-    frame->data = serializeStruct(msg);
-    return frame;
-}
-
-FramePtr OneFileTrans::CreateFileFrame(FrameType type)
+FramePtr OneFileTrans::CreateFrame(FrameType type)
 {
     auto frame = OneFrame::Create();
     frame->type = type;
@@ -148,6 +134,14 @@ FramePtr OneFileTrans::CreateFileFrame(FrameType type)
     frame->from = ownId_;
     frame->fuuid = uuid_;
     frame->index = curBlockIndex_;
+
+    if (static_cast<uint16_t>(type) < defFileStartNum) {
+        Message msg;
+        msg.to.clientId = targetId_;
+        msg.uuid = uuid_;
+        frame->data = serializeStruct(msg);
+    }
+
     return frame;
 }
 
@@ -169,43 +163,32 @@ void OneFileTrans::onFrameReceive(FramePtr frame)
     if (state_ == TransStatus::Finished || state_ == TransStatus::Interrupted) {
         return;
     }
+    if (static_cast<uint16_t>(frame->type) < defFileStartNum) {
+        return;
+    }
     switch (frame->type) {
-    case FrameType::FrameFileChuck: {
+    case FrameType::kFileType_Request_Chuck: {
         handleRecvChuck(frame);
         break;
     }
-    case FrameType::FrameFileAck: {
+    case FrameType::kFileType_Request_Ack: {
         handleAck(frame);
         break;
     }
+    case FrameType::kFileType_Request_Complete: {
+        handleFinish(frame);
+        break;
+    }
+    case FrameType::kFileType_Request_Cancel: {
+        handleInterrupt(frame);
+        break;
+    }
+    case FrameType::kFileType_Request_Start: {
+        nextSend();
+        break;
+    }
     default: {
-        Message msg;
-        deserializeStruct(frame->data, msg);
-        switch (msg.msType) {
-        case MessageType::kMessageFileRequestComplete: {
-            handleFinish(frame);
-            break;
-        }
-        case MessageType::kMessageFileRequestStart: {
-            handleStart(frame);
-            break;
-        }
-        case MessageType::kMessageFileRequestCancel: {
-            handleInterrupt(frame);
-            break;
-        }
-        case MessageType::kMessageFileAnswerRequestSend: {
-            if (msg.msgStateCode == MessageStateCode::kMessageStateCodeSuccess) {
-                nextSend();
-            } else {
-                handleInterrupt(frame);
-            }
-            break;
-        }
-        default: {
-            break;
-        } break;
-        }
+        break;
     }
     }
 }
@@ -245,18 +228,17 @@ void FileSession::Quit()
 
 void FileSession::handleFrame(FramePtr frame)
 {
-    if (frame->fuuid.empty()) {
+    if (static_cast<uint16_t>(frame->type) < defFileStartNum) {
         Message msg;
         deserializeStruct(frame->data, msg);
-        switch (msg.msType) {
-        case MessageType::kMessageFileRequestDown: {
+        switch (frame->type) {
+        case FrameType::kFileType_Request_Down: {
             auto fileTrans = std::make_shared<OneFileTrans>();
             auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Send, msg.ff, msg.transId,
                                                clientCore_->getOwnClientInfo().clientId, msg.uuid);
             Message resp;
             resp.uuid = msg.uuid;
             resp.to = msg.from;
-            resp.msType = MessageType::kMessageFileAnswerRequestDown;
             if (ret) {
                 {
                     QMutexLocker locker(&transferMapLock_);
@@ -265,21 +247,21 @@ void FileSession::handleFrame(FramePtr frame)
                 fileTrans->nextSend();
             } else {
                 resp.msgStateCode = MessageStateCode::kMessageStateCodeFailed;
-                resp.errData = "文件任务初始化失败（SEND）。";
+                resp.errMsg = "文件任务初始化失败（SEND）。";
                 auto rf = OneFrame::Create();
                 rf->to = msg.from.clientId;
                 rf->data = serializeStruct(resp);
+                rf->type = FrameType::kFileType_Answer_Down;
                 emit signalRequestSend(rf);
             }
             break;
         }
-        case MessageType::kMessageFileRequestSend: {
+        case FrameType::kFileType_Request_Send: {
             auto fileTrans = std::make_shared<OneFileTrans>();
             auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Receive, msg.ff, msg.transId,
                                                clientCore_->getOwnClientInfo().clientId, msg.uuid);
             Message resp;
             resp.uuid = msg.uuid;
-            resp.msType = MessageType::kMessageFileAnswerRequestSend;
             resp.to = msg.from;
             if (ret) {
                 {
@@ -291,11 +273,12 @@ void FileSession::handleFrame(FramePtr frame)
                 resp.msgStateCode = MessageStateCode::kMessageStateCodeSuccess;
             } else {
                 resp.msgStateCode = MessageStateCode::kMessageStateCodeFailed;
-                resp.errData = "文件任务初始化失败（Receive）。";
+                resp.errMsg = "文件任务初始化失败（Receive）。";
             }
             auto rf = OneFrame::Create();
             rf->to = msg.from.clientId;
             rf->data = serializeStruct(resp);
+            rf->type = FrameType::kFileType_Answer_Send;
             emit signalRequestSend(rf);
             break;
         }
@@ -340,10 +323,10 @@ ClientCore* FileSession::getClientCore()
 void FileSession::AskOwnID()
 {
     Message msg;
-    msg.msType = MessageType::kMessageAskId;
-    msg.msData = "倔强的小强";
+    msg.comStr = "倔强的小强";
     auto frame = OneFrame::Create();
     frame->data = serializeStruct(msg);
     frame->sessionId = GetSessionId();
+    frame->type = FrameType::kMsgType_Ask_ID;
     Send(frame);
 }

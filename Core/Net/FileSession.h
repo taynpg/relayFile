@@ -47,16 +47,13 @@ public:
     void initSignals();
 
     bool nextSend();
-    bool handleStart(FramePtr frame);
     bool handleAck(FramePtr frame);
     bool handleRecvChuck(FramePtr frame);
     bool handleInterrupt(FramePtr frame);
     bool handleFinish(FramePtr frame);
 
     void onSendTimeout();
-
-    FramePtr CreateControlFrame(MessageType type);
-    FramePtr CreateFileFrame(FrameType type);
+    FramePtr CreateFrame(FrameType type);
 
 private:
     TransMode tMode_{};

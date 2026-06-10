@@ -70,8 +70,8 @@ public:
     template <typename Callback> bool SendCall(FramePtr frame, Callback callback);
     bool SendWithCall(FramePtr frame, std::function<void(MessagePtr)> callback);
     bool SendWithCall(FramePtr frame, std::function<void(FramePtr)> callback);
-    bool SendWithCall(const Message& msg, std::function<void(MessagePtr)> callback);
-    bool SendWithCall(const Message& msg, std::function<void(FramePtr)> callback);
+    bool SendWithCall(const Message& msg, FrameType type, std::function<void(MessagePtr)> callback);
+    bool SendWithCall(const Message& msg, FrameType type, std::function<void(FramePtr)> callback);
 
 public:
     void Quit();

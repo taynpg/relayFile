@@ -8,7 +8,6 @@
 #include "Protocol/Serialize.hpp"
 #include "ui_RelayTask.h"
 
-
 RelayTask::RelayTask(QWidget* parent) : QDialog(parent), ui(new Ui::RelayTask)
 {
     ui->setupUi(this);
@@ -118,12 +117,12 @@ void RelayTask::handleOneLine(int row)
     // 先请求到Server
     Message reqMsg;
     reqMsg.uuid = Common::GetUUID().toStdString();
-    reqMsg.msType = MessageType::kMessageFileRequestSend;
-    reqMsg.msData = data_->remoteRoot.toStdString();
+    reqMsg.comStr = data_->remoteRoot.toStdString();
     reqMsg.mapData[""] = std::vector<FileMeta>{fileMeta};
 
     auto requestFrame = OneFrame::Create();
     requestFrame->data = serializeStruct(reqMsg);
+    requestFrame->type = FrameType::kFileType_Request_Send;
 
     //  等待Server控制对方建立文件传输通道
     executor.AddStep([this](FramePtr frame) -> FramePtr {
@@ -131,7 +130,7 @@ void RelayTask::handleOneLine(int row)
         deserializeStruct(frame->data, respMsg);
         if (respMsg.msgStateCode != MessageStateCode::kMessageStateCodeSuccess) {
             emit signalLog(
-                QString("Server返回错误[%1]：%2").arg(int(respMsg.msgStateCode)).arg(QString::fromStdString(respMsg.errData)));
+                QString("Server返回错误[%1]：%2").arg(int(respMsg.msgStateCode)).arg(QString::fromStdString(respMsg.comStr)));
             return nullptr;
         }
         // 如果成功，对方必须告知文件传输通道的ID号。

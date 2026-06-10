@@ -89,20 +89,23 @@ void ServerCore::useFrame(FramePtr frame, QTcpSocket* socket, ClientInfo* cli)
 {
     Message msg;
     deserializeStruct(frame->data, msg);
-    qDebug() << "处理消息：" << static_cast<int>(msg.msType);
+    qDebug() << "处理消息：" << static_cast<int>(frame->type);
 
-    switch (msg.msType) {
-    case MessageType::kMessageAskId: {
+    // 文件帧不处理
+    if (static_cast<int>(frame->type) >= defFileStartNum) {
+        return;
+    }
+
+    switch (frame->type) {
+    case FrameType::kMsgType_Ask_ID: {
         Message sourceMsg;
         deserializeStruct(frame->data, sourceMsg);
         Message idMsg;
-        idMsg.msType = MessageType::kMessageAnswerId;
         idMsg.to.clientId = cli->id.toStdString();
-        idMsg.to.clientName = sourceMsg.msData;
-        idMsg.msData = Common::GetUUID().toStdString();
-        cli->uuid = QString::fromStdString(idMsg.msData);
+        idMsg.to.clientName = sourceMsg.comStr;
         cli->name = QString::fromStdString(idMsg.to.clientName);
         auto f = OneFrame::Create();
+        f->type = FrameType::kMsgType_Answer_ID;
         f->data = serializeStruct(idMsg);
         sendData(f, socket);
         std::shared_ptr<ClientInfo> moveCli = nullptr;
@@ -121,40 +124,11 @@ void ServerCore::useFrame(FramePtr frame, QTcpSocket* socket, ClientInfo* cli)
         }
         break;
     }
-    case MessageType::kMessageAnswerId: {
-        Message sourceMsg;
-        deserializeStruct(frame->data, sourceMsg);
-        auto uuid = sourceMsg.msData;
-        bool haveControl = false;
-        {
-            QWriteLocker locker(&rwLock_);
-            haveControl = clientMap_.contains(uuid);
-        }
-        if (!haveControl) {
-            socket->disconnectFromHost();
-            break;
-        }
-        std::shared_ptr<ClientInfo> moveCli = nullptr;
-        {
-            QWriteLocker locker(&tempLock_);
-            if (tempMap_.contains(cli->id.toStdString())) {
-                moveCli = tempMap_[cli->id.toStdString()];
-                tempMap_.remove(cli->id.toStdString());
-            }
-        }
-        if (moveCli) {
-            QWriteLocker locker(&transLock_);
-            if (!transMap_.contains(moveCli->id.toStdString())) {
-                transMap_[moveCli->id.toStdString()] = moveCli;
-            }
-        }
-        break;
-    }
-    case MessageType::kMessageAskClientList: {
+    case FrameType::kMsgType_Ask_FileList: {
         Message asg(msg);
         GetClientList(asg);
         auto f = OneFrame::Create(frame);
-        asg.msType = MessageType::kMessageAnswerClientList;
+        f->type = FrameType::kMsgType_Answer_FileList;
         f->data = serializeStruct(asg);
         sendData(f, socket);
         break;

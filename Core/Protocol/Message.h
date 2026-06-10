@@ -27,41 +27,14 @@ struct ClientInfo {
     }
 };
 
-enum class MessageType {
-    kMessageAskId = 1,
-    kMessageAnswerId,
-    kMessageAskHome,
-    kMessageAnswerHome,
-    kMessageAskClientList,
-    kMessageAnswerClientList,
-    kMessageAskFileList,
-    kMessageAnswerFileList,
-
-    kMessageFileRequestDown = 500,
-    kMessageFileAnswerRequestDown,
-    kMessageFileRequestSend,
-    kMessageFileAnswerRequestSend,
-    kMessageFileRequestConnect,
-    kMessageFileAnswerRequestConnect,
-    kMessageFileRequestDisconnect,
-    kMessageFileAnswerRequestDisconnect,
-    kMessageFileRequestComplete,
-    kMessageFileAnswerRequestComplete,
-    kMessageFileRequestCancel,
-    kMessageFileAnswerRequestCancel,
-    kMessageFileRequestStart,
-    kMessageFileAnswerRequestStart,
-};
-
 struct Message {
 
     Message() = default;
     Message& operator=(const Message& o);
     Message(const Message& o);
 
-    MessageType msType{};
-    std::string msData;
-    std::string errData;
+    std::string comStr;
+    std::string errMsg;
     std::string transId;
     std::string uuid;
     ClientInfo from;
@@ -75,7 +48,7 @@ struct Message {
 
     template <class Archive> void serialize(Archive& ar)
     {
-        ar(msType, msData, errData, transId, uuid, from, to, msgStateCode, ff, ft, mapData);
+        ar(comStr, errMsg, transId, uuid, from, to, msgStateCode, ff, ft, mapData);
     }
 
     static std::shared_ptr<Message> Create();

@@ -130,40 +130,39 @@ void ControlSession::handleFrame(FramePtr frame)
     MessagePtr answerMsg = Message::Create();
     deserializeStruct(frame->data, *answerMsg);
 
-    switch (answerMsg->msType) {
-    case MessageType::kMessageAnswerId: {
+    switch (frame->type) {
+    case FrameType::kMsgType_Answer_ID: {
         ClientInfo info;
         info.clientId = answerMsg->to.clientId;
         info.clientName = answerMsg->to.clientName;
-        info.uuid = answerMsg->msData;
+        info.uuid = answerMsg->comStr;
         emit signalOwnInfo(info);
         break;
     }
-    case MessageType::kMessageAskHome: {
+    case FrameType::kMsgType_Ask_Home: {
         PushOneWork();
         workerPool_->enqueue([this, worker]() {
             QString home;
             FileDir::GetHome(home);
             auto answerFrame = OneFrame::Create(worker->frame);
             Message m;
-            m.msType = MessageType::kMessageAnswerHome;
-            m.msData = home.toStdString();
+            m.comStr = home.toStdString();
             answerFrame->data = serializeStruct(m);
+            answerFrame->type = FrameType::kMsgType_Answer_Home;
             emit signalRequestSend(answerFrame);
             worker->isDone = true;
         });
         break;
     }
-    case MessageType::kMessageAskFileList: {
+    case FrameType::kMsgType_Ask_FileList: {
         PushOneWork();
         workerPool_->enqueue([this, worker]() {
             Message sourceMsg;
             deserializeStruct(worker->frame->data, sourceMsg);
             QVector<RFileMeta> result;
-            FileDir::GetFileList(QString::fromStdString(sourceMsg.msData), result);
+            FileDir::GetFileList(QString::fromStdString(sourceMsg.comStr), result);
             auto answerFrame = OneFrame::Create(worker->frame);
             Message m(sourceMsg);
-            m.msType = MessageType::kMessageAnswerFileList;
             std::vector<FileMeta> stdMeta;
             stdMeta.reserve(result.size());
             for (const auto& item : result) {
@@ -173,6 +172,7 @@ void ControlSession::handleFrame(FramePtr frame)
             }
             m.mapData[""] = stdMeta;
             answerFrame->data = serializeStruct(m);
+            answerFrame->type = FrameType::kMsgType_Answer_FileList;
             emit signalRequestSend(answerFrame);
             worker->isDone = true;
         });
@@ -202,10 +202,11 @@ void ControlSession::handleFrame(FramePtr frame)
     }
 }
 
-bool ControlSession::SendWithCall(const Message& msg, std::function<void(FramePtr)> callback)
+bool ControlSession::SendWithCall(const Message& msg, FrameType type, std::function<void(FramePtr)> callback)
 {
     auto frame = OneFrame::Create();
     frame->data = serializeStruct(msg);
+    frame->type = type;
     frame->to = clientCore_->oInfo_.clientId;
     return SendCall(frame, callback);
 }
@@ -215,10 +216,11 @@ bool ControlSession::SendWithCall(FramePtr frame, std::function<void(MessagePtr)
     return SendCall(frame, std::move(callback));
 }
 
-bool ControlSession::SendWithCall(const Message& msg, std::function<void(MessagePtr)> callback)
+bool ControlSession::SendWithCall(const Message& msg, FrameType type, std::function<void(MessagePtr)> callback)
 {
     auto frame = OneFrame::Create();
     frame->data = serializeStruct(msg);
+    frame->type = type;
     frame->to = clientCore_->oInfo_.clientId;
     return SendCall(frame, std::move(callback));
 }
@@ -231,11 +233,11 @@ bool ControlSession::SendWithCall(FramePtr frame, std::function<void(FramePtr)> 
 void ControlSession::AskOwnID()
 {
     Message msg;
-    msg.msType = MessageType::kMessageAskId;
-    msg.msData = "倔强的小强";
+    msg.comStr = "倔强的小强";
     auto frame = OneFrame::Create();
     frame->data = serializeStruct(msg);
     frame->sessionId = clientCore_->GetSessionId();
+    frame->type = FrameType::kMsgType_Ask_ID;
     emit signalRequestSend(frame);
 }
 

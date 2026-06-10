@@ -78,16 +78,12 @@ void ConnectorControl::initSignals()
 void ConnectorControl::onRefresh()
 {
     Message msg;
-    msg.msType = MessageType::kMessageAskClientList;
-    doubleLinker_->GetControlSession()->SendWithCall(msg, [this](FramePtr frame) {
+    doubleLinker_->GetControlSession()->SendWithCall(msg, FrameType::kMsgType_Ask_FileList, [this](FramePtr frame) {
         if (!frame) {
             return;
         }
         MessagePtr answerMsg = std::make_shared<Message>();
         deserializeStruct(frame->data, *answerMsg);
-        if (answerMsg->msType != MessageType::kMessageAnswerClientList) {
-            return;
-        }
         QMetaObject::invokeMethod(this, [this, answerMsg]() { updateClientList(answerMsg); });
     });
 }
