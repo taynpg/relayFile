@@ -38,6 +38,8 @@ bool OneFileTrans::initTransfer(TransMode mode, const FileMeta& fileMeta, const 
     ownId_ = ownId;
     filePath_ = miniPath::Join(meta_.dir, meta_.name);
 
+    qDebug() << "处理文件路径：" << QString::fromStdString(filePath_);
+
     if (state_ != TransStatus::Idle) {
         return false;
     }
@@ -45,12 +47,14 @@ bool OneFileTrans::initTransfer(TransMode mode, const FileMeta& fileMeta, const 
     if (TransMode::Send == tMode_) {
         sendFile_.open(filePath_, std::ios::binary | std::ios::in);
         if (!sendFile_.is_open()) {
+            qWarning() << "打开文件失败: " << QString::fromStdString(filePath_) << ", " << __LINE__;
             return false;
         }
         state_ = TransStatus::Sending;
     } else {
         recvFile_.open(filePath_, std::ios::binary | std::ios::in);
         if (!recvFile_.is_open()) {
+            qWarning() << "打开文件失败: " << QString::fromStdString(filePath_) << ", " << __LINE__;
             return false;
         }
         state_ = TransStatus::Receving;
@@ -228,65 +232,60 @@ void FileSession::Quit()
 
 void FileSession::handleFrame(FramePtr frame)
 {
-    if (static_cast<uint16_t>(frame->type) < defFileStartNum) {
-        Message msg;
-        deserializeStruct(frame->data, msg);
-        switch (frame->type) {
-        case FrameType::kFileType_Request_Down: {
-            auto fileTrans = std::make_shared<OneFileTrans>();
-            auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Send, msg.ff, msg.transId,
-                                               clientCore_->getOwnClientInfo().clientId, msg.uuid);
-            Message resp;
-            resp.uuid = msg.uuid;
-            resp.to = msg.from;
-            if (ret) {
-                {
-                    QMutexLocker locker(&transferMapLock_);
-                    transferMap_[msg.uuid] = fileTrans;
-                }
-                fileTrans->nextSend();
-            } else {
-                resp.msgStateCode = MessageStateCode::kMessageStateCodeFailed;
-                resp.errMsg = "文件任务初始化失败（SEND）。";
-                auto rf = OneFrame::Create();
-                rf->to = msg.from.clientId;
-                rf->data = serializeStruct(resp);
-                rf->type = FrameType::kFileType_Answer_Down;
-                emit signalRequestSend(rf);
+    Message msg;
+    deserializeStruct(frame->data, msg);
+    switch (frame->type) {
+    case FrameType::kFileType_Request_Down: {
+        auto fileTrans = std::make_shared<OneFileTrans>();
+        auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Send, msg.ff, msg.transId,
+                                           clientCore_->getOwnClientInfo().clientId, msg.uuid);
+        Message resp;
+        resp.uuid = msg.uuid;
+        resp.to = msg.from;
+        if (ret) {
+            {
+                QMutexLocker locker(&transferMapLock_);
+                transferMap_[msg.uuid] = fileTrans;
             }
-            break;
-        }
-        case FrameType::kFileType_Request_Send: {
-            auto fileTrans = std::make_shared<OneFileTrans>();
-            auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Receive, msg.ff, msg.transId,
-                                               clientCore_->getOwnClientInfo().clientId, msg.uuid);
-            Message resp;
-            resp.uuid = msg.uuid;
-            resp.to = msg.from;
-            if (ret) {
-                {
-                    QMutexLocker locker(&transferMapLock_);
-                    transferMap_[msg.uuid] = fileTrans;
-                }
-                // 告知对方自己的传输ID是多少。
-                resp.transId = clientCore_->getOwnClientInfo().clientId;
-                resp.msgStateCode = MessageStateCode::kMessageStateCodeSuccess;
-            } else {
-                resp.msgStateCode = MessageStateCode::kMessageStateCodeFailed;
-                resp.errMsg = "文件任务初始化失败（Receive）。";
-            }
+            fileTrans->nextSend();
+        } else {
+            resp.msgStateCode = MessageStateCode::kMessageStateCodeFailed;
+            resp.errMsg = "文件任务初始化失败（SEND）。";
             auto rf = OneFrame::Create();
             rf->to = msg.from.clientId;
             rf->data = serializeStruct(resp);
-            rf->type = FrameType::kFileType_Answer_Send;
+            rf->type = FrameType::kFileType_Answer_Down;
             emit signalRequestSend(rf);
-            break;
         }
-        default: {
-            break;
+        break;
+    }
+    case FrameType::kFileType_Request_Send: {
+        auto fileTrans = std::make_shared<OneFileTrans>();
+        auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Receive, msg.ff, msg.transId,
+                                           clientCore_->getOwnClientInfo().clientId, msg.uuid);
+        Message resp;
+        resp.uuid = msg.uuid;
+        resp.to = msg.from;
+        if (ret) {
+            {
+                QMutexLocker locker(&transferMapLock_);
+                transferMap_[msg.uuid] = fileTrans;
+            }
+            // 告知对方自己的传输ID是多少。
+            resp.transId = clientCore_->getOwnClientInfo().clientId;
+            resp.msgStateCode = MessageStateCode::kMessageStateCodeSuccess;
+        } else {
+            resp.msgStateCode = MessageStateCode::kMessageStateCodeFailed;
+            resp.errMsg = "文件任务初始化失败（Receive）。";
         }
-        }
-    } else {
+        auto rf = OneFrame::Create();
+        rf->to = msg.from.clientId;
+        rf->data = serializeStruct(resp);
+        rf->type = FrameType::kFileType_Answer_Send;
+        emit signalRequestSend(rf);
+        break;
+    }
+    default: {
         std::shared_ptr<OneFileTrans> fileTrans = nullptr;
         {
             QMutexLocker locker(&transferMapLock_);
@@ -297,6 +296,8 @@ void FileSession::handleFrame(FramePtr frame)
         if (fileTrans) {
             fileTrans->onFrameReceive(frame);
         }
+        break;
+    }
     }
 }
 

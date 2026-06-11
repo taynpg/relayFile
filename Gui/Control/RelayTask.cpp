@@ -120,7 +120,7 @@ void RelayTask::handleOneLine(int row)
     Message reqMsg;
     reqMsg.uuid = Common::GetUUID().toStdString();
     reqMsg.comStr = data_->remoteRoot.toStdString();
-    reqMsg.mapData[""] = std::vector<FileMeta>{fileMeta};
+    reqMsg.ff = fileMeta;
 
     auto requestFrame = OneFrame::Create();
     requestFrame->data = serializeStruct(reqMsg);

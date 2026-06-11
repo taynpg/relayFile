@@ -147,6 +147,8 @@ void ExplorerControl::onFileListChanged(bool isSuccess, const std::vector<FileMe
             QGuiApplication::processEvents();
         }
     }
+    fileMetaList_ = fileList;
+    currentMetaList_ = fileMetaList_;
 }
 
 void ExplorerControl::onRefresh()
