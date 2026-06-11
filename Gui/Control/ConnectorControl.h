@@ -19,6 +19,7 @@ signals:
     void signalDoDisConnect();
     void signalConnectDone();
     void signalAskID();
+    void signalConfirmOther();
 
 public:
     explicit ConnectorControl(QWidget* parent = nullptr);

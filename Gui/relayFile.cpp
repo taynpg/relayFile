@@ -77,6 +77,10 @@ void relayFile::initControls()
 
     // connect(connectorControl_, &ConnectorControl::signalConnectDone, remoteExplorerControl_,
     //         [this]() { remoteExplorerControl_->onHome(true); });
+    connect(connectorControl_, &ConnectorControl::signalConfirmOther, remoteExplorerControl_,
+            [this]() { remoteExplorerControl_->onHome(true); });
+    localExplorerControl_->setTellInfoCall([this](ExplorerSharedData& es) { remoteExplorerControl_->tellInfo(es); });
+    remoteExplorerControl_->setTellInfoCall([this](ExplorerSharedData& es) { localExplorerControl_->tellInfo(es); });
 }
 
 void relayFile::ControlMsgHander(QtMsgType type, const QMessageLogContext& context, const QString& msg)

@@ -13,6 +13,10 @@ namespace Ui {
 class ExplorerControl;
 }
 
+struct ExplorerSharedData {
+    QString currentPath_;
+};
+
 class ExplorerControl : public QDialog
 {
     Q_OBJECT
@@ -34,6 +38,8 @@ public:
     std::shared_ptr<BaseAskDF> getAskDF();
     QString getCurrentPath();
     void setCurrentPath(const QString& path);
+    void tellInfo(ExplorerSharedData& es);
+    void setTellInfoCall(std::function<void(ExplorerSharedData& es)> call);
 
 private:
     void initControl();
@@ -68,6 +74,7 @@ private:
     QString currentPath_;
     std::vector<FileMeta> currentMetaList_;
     std::vector<FileMeta> fileMetaList_;
+    std::function<void(ExplorerSharedData& es)> tellInfoCall_;
 };
 
 #endif   // EXPLORERCONTROL_H

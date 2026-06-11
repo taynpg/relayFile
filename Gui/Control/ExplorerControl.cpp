@@ -259,11 +259,16 @@ void ExplorerControl::onTableContextMenu(const QPoint& pos)
     } else {
     }
 
+    ExplorerSharedData es;
+    if (tellInfoCall_) {
+        tellInfoCall_(es);
+    }
+
     auto* selectAction = menu.exec(tabWidget_->viewport()->mapToGlobal(pos));
     if (selectAction == transAction) {
         auto transData = std::make_shared<RelayTaskData>();
-        transData->localRoot = currentPath_;
-        transData->remoteRoot = currentPath_;
+        transData->localRoot = (askType_ == AskType::ASK_TYPE_LOCAL ? currentPath_ : es.currentPath_);
+        transData->remoteRoot = (askType_ == AskType::ASK_TYPE_LOCAL ? es.currentPath_ : currentPath_);
         transData->isUpload = (askType_ == AskType::ASK_TYPE_LOCAL);
         for (int i = 0; i < datas.size() / headers_.size(); i++) {
             auto curRow = datas[i * headers_.size()]->row();
@@ -292,4 +297,14 @@ void ExplorerControl::onTransForm(std::shared_ptr<RelayTaskData> data)
     auto* transForm = new RelayTask(this);
     transForm->setData(data);
     transForm->exec();
+}
+
+void ExplorerControl::setTellInfoCall(std::function<void(ExplorerSharedData& es)> call)
+{
+    tellInfoCall_ = call;
+}
+
+void ExplorerControl::tellInfo(ExplorerSharedData& es)
+{
+    es.currentPath_ = currentPath_;
 }

@@ -223,4 +223,5 @@ void ConnectorControl::onUseClient(const QString& id, const QString& name)
     o.clientName = name.toStdString();
     doubleLinker_->GetControlSession()->getClientCore()->setOtherClientInfo(o);
     ui->edCurrentClient->setText(infoMsg);
+    emit signalConfirmOther();
 }
