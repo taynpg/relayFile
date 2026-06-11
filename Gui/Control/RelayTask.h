@@ -41,12 +41,7 @@ public:
 signals:
     void signalLog(const QString& log);
     void signalCheckComplete();
-    void signalCheckControlClient();
-    void signalCheckTransClient();
-    void signalCheckLocalRoot();
-    void signalCheckRemoteRoot();
-    void signalCheckSameFile();
-    void signalDoTransConnect(const QString& ip, int16_t port);
+    void signalCheckUnComplete();
     void signalUpdateTable();
 
 public:
@@ -60,19 +55,10 @@ protected:
     void initSignals();
     void baseTask();
     void showEvent(QShowEvent* event) override;
+
     void onBaseCheck();
-
-    void onCheckControlClient();
-    void onCheckTransClient();
-    void onCheckLocalRoot();
-    void onCheckRemoteRoot();
-    void onCheckSameFile();
-
-    void onDoTransConnectDone();
-    void onDoTransConnectFailed();
-    void onDoTransDisconnect();
-    void onDoTransConnecting();
     void onCheckComplete();
+    void onCheckUnComplete();
 
     void onAppendLog(const QString& log);
     void updateTable();
@@ -81,6 +67,11 @@ protected:
     void handleOneLine(int row);
 
 private:
+    void disableControls();
+    void enableControls();
+
+private:
+    bool checkRet_{false};
     std::vector<FileMeta> fileList_;
     QTableWidget* tableWidget_{};
     std::shared_ptr<RelayTaskData> data_;

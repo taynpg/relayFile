@@ -36,10 +36,7 @@ void RelayTask::closeEvent(QCloseEvent* event)
 
 void RelayTask::baseTask()
 {
-    doubleLinker_ = std::make_shared<DoubleLinker>();
-    doubleLinker_->SetControlSession(GlobalData::getInstance()->getControlSession());
-    doubleLinker_->SetFileSession(GlobalData::getInstance()->getFileSession());
-
+    doubleLinker_ = GlobalData::getInstance()->getDoubleLinker();
     askLocalDf_ = BaseAskDF::Create(AskType::ASK_TYPE_LOCAL);
     askRemoteDf_ = BaseAskDF::Create(AskType::ASK_TYPE_REMOTE);
     workerThread_ = std::make_shared<WorkerThread<RelayTask>>(this);
@@ -57,6 +54,8 @@ void RelayTask::initControl()
     ui->pedLog->setEnabled(false);
     ui->lcdNumber->setEnabled(false);
     ui->rbDisconnect->setChecked(true);
+    ui->btnStart->setEnabled(false);
+    ui->btnRetryAll->setEnabled(false);
 
     tableWidget_ = new QTableWidget();
     tableWidget_->setColumnCount(4);
@@ -83,17 +82,6 @@ void RelayTask::initSignals()
 {
     connect(this, &RelayTask::signalLog, this, &RelayTask::onAppendLog);
     connect(this, &RelayTask::signalCheckComplete, this, &RelayTask::onCheckComplete);
-    connect(this, &RelayTask::signalCheckControlClient, this, &RelayTask::onCheckControlClient);
-    connect(this, &RelayTask::signalCheckTransClient, this, &RelayTask::onCheckTransClient);
-    connect(this, &RelayTask::signalCheckLocalRoot, this, &RelayTask::onCheckLocalRoot);
-    connect(this, &RelayTask::signalCheckRemoteRoot, this, &RelayTask::onCheckRemoteRoot);
-    connect(this, &RelayTask::signalCheckSameFile, this, &RelayTask::onCheckSameFile);
-    auto* cliCore = doubleLinker_->GetFileSession()->getClientCore();
-    connect(this, &RelayTask::signalDoTransConnect, cliCore, &ClientCore::connectToServer);
-    connect(cliCore, &ClientCore::signalConnected, this, &RelayTask::onDoTransConnectDone);
-    connect(cliCore, &ClientCore::signalDisconnected, this, &RelayTask::onDoTransConnectFailed);
-    connect(cliCore, &ClientCore::signalDisconnected, this, &RelayTask::onDoTransDisconnect);
-    connect(cliCore, &ClientCore::signalConnectting, this, &RelayTask::onDoTransConnecting);
     connect(ui->btnBasicCheck, &QPushButton::clicked, this, &RelayTask::onBaseCheck);
     connect(ui->btnStart, &QPushButton::clicked, this, &RelayTask::onStartRun);
     connect(this, &RelayTask::signalUpdateTable, this, &RelayTask::updateTable);
@@ -101,6 +89,7 @@ void RelayTask::initSignals()
 
 void RelayTask::onStartRun()
 {
+    workerThread_->invoke([this]() { handleOneLine(0); });
 }
 
 void RelayTask::handleOneLine(int row)
@@ -110,7 +99,7 @@ void RelayTask::handleOneLine(int row)
         return;
     }
 
-    CmdExecutor executor(doubleLinker_);
+    CmdExecutor executor(nullptr, doubleLinker_);
     executor.Reset();
 
     const auto& fileMeta = fileList_[id];
@@ -134,10 +123,12 @@ void RelayTask::handleOneLine(int row)
             return nullptr;
         }
         // 如果成功，对方必须告知文件传输通道的ID号。
+        qDebug() << "Server返回文件传输通道ID号：" << respMsg.comStr;
         return frame;
     });
     //  等待Server通知结果
     //  根据结果进行放弃或者传输
+    qDebug() << "Executor.Execute(requestFrame): " << executor.Execute(requestFrame);
 }
 
 void RelayTask::setData(std::shared_ptr<RelayTaskData> data)
@@ -157,24 +148,52 @@ void RelayTask::showEvent(QShowEvent* event)
 void RelayTask::onBaseCheck()
 {
     emit signalLog("开始检查基础条件...");
-    emit signalCheckControlClient();
-    // 1.检查传输TCP是否正常。
-    // 2.检查控制TCP是否正常。
-    // 3.检查本地根目录是否存在。
-    // 4.检查远程根目录是否存在。
-    // 5.如果是上传，检查远端是否已存在相同文件。
-    // 6.如果是下载，检查本地是否已存在相同文件。
+    checkRet_ = false;
+    disableControls();
+
+    workerThread_->invoke([this]() {
+        // 1.检查传输TCP是否正常。
+        // 2.检查控制TCP是否正常。
+        if (!doubleLinker_->waitFileConnect()) {
+            emit signalLog("传输TCP连接失败。");
+            emit signalCheckUnComplete();
+            return;
+        }
+        emit signalLog("传输TCP连接检查通过。");
+        // 3.检查本地根目录是否存在。
+        for (const auto& item : data_->fileList) {
+            // 文件夹暂时不处理
+            if (item.type == RFileType::mTypeDir) {
+                continue;
+            }
+            auto path = FileDir::Join(data_->localRoot, item.name);
+            emit signalLog(QString("检查本地文件：%1").arg(path));
+            FileMeta meta;
+            meta.sizeStr = item.sizeStr.toStdString();
+            meta.name = path.toStdString();
+            meta.size = item.size;
+            fileList_.push_back(meta);
+        }
+        emit signalLog("本地文件存在检查完成。");
+        // 4.检查远程根目录是否存在。
+        // 5.如果是上传，检查远端是否已存在相同文件。
+        // 6.如果是下载，检查本地是否已存在相同文件。
+        emit signalUpdateTable();
+        emit signalCheckComplete();
+    });
 }
 
-void RelayTask::onCheckControlClient()
+void RelayTask::disableControls()
 {
-    auto* cliCore = doubleLinker_->GetControlSession()->getClientCore();
-    if (!cliCore->isConnected()) {
-        emit signalLog("控制端未连接");
-        return;
-    }
-    emit signalLog("控制端已连接");
-    emit signalCheckTransClient();
+    ui->btnBasicCheck->setEnabled(false);
+    ui->btnRetryAll->setEnabled(false);
+    ui->btnStart->setEnabled(false);
+}
+void RelayTask::enableControls()
+{
+    ui->btnBasicCheck->setEnabled(true);
+    ui->btnRetryAll->setEnabled(true);
+    ui->btnStart->setEnabled(true);
 }
 
 void RelayTask::onAppendLog(const QString& log)
@@ -184,75 +203,20 @@ void RelayTask::onAppendLog(const QString& log)
     ui->pedLog->appendPlainText(msg);
 }
 
-void RelayTask::onCheckTransClient()
-{
-    auto* cliCore = doubleLinker_->GetFileSession()->getClientCore();
-    if (!cliCore->isConnected()) {
-        emit signalLog("传输端未连接，尝试自动连接。");
-        emit signalDoTransConnect(cliCore->getServerIp(), cliCore->getServerPort());
-        return;
-    }
-    emit signalLog("传输端已连接");
-    emit signalCheckLocalRoot();
-}
-
-void RelayTask::onCheckLocalRoot()
-{
-    emit signalLog("本地根目录存在");
-
-    fileList_.clear();
-    for (const auto& item : data_->fileList) {
-        // 文件夹暂时不处理
-        if (item.type == RFileType::mTypeDir) {
-            continue;
-        }
-        auto path = FileDir::Join(data_->localRoot, item.name);
-        FileMeta meta;
-        meta.sizeStr = item.sizeStr.toStdString();
-        meta.name = path.toStdString();
-        meta.size = item.size;
-        fileList_.push_back(meta);
-    }
-    emit signalUpdateTable();
-    emit signalCheckRemoteRoot();
-}
-
-void RelayTask::onCheckRemoteRoot()
-{
-    emit signalLog("远程根目录存在");
-    emit signalCheckSameFile();
-}
-
-void RelayTask::onCheckSameFile()
-{
-    emit signalLog("检查相同文件");
-    emit signalCheckComplete();
-}
-
-void RelayTask::onDoTransConnectDone()
-{
-    emit signalLog("传输端连接成功");
-    emit signalCheckControlClient();
-}
-
-void RelayTask::onDoTransConnectFailed()
-{
-    emit signalLog("传输端连接失败");
-}
-
-void RelayTask::onDoTransDisconnect()
-{
-    emit signalLog("传输端已断开连接");
-}
-
-void RelayTask::onDoTransConnecting()
-{
-    emit signalLog("传输端正在连接中...");
-}
-
 void RelayTask::onCheckComplete()
 {
     emit signalLog("检查完成");
+    checkRet_ = true;
+    enableControls();
+}
+
+void RelayTask::onCheckUnComplete()
+{
+    emit signalLog("检查未完成");
+    checkRet_ = false;
+    ui->btnBasicCheck->setEnabled(true);
+    ui->btnRetryAll->setEnabled(false);
+    ui->btnStart->setEnabled(false);
 }
 
 void RelayTask::updateTable()

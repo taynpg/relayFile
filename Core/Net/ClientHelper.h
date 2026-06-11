@@ -31,7 +31,7 @@ class DoubleLinker : public QObject
     Q_OBJECT
 
 signals:
-    void signalDoConnect(const QString& server, int16_t port);
+    void signalFileDoConnect(const QString& server, int16_t port);
     void signalSendControl(FramePtr frame);
     void signalSendFile(FramePtr frame);
 
@@ -45,6 +45,7 @@ public:
 
 public:
     void Quit();
+    
     void SetControlSession(std::shared_ptr<ControlSession> session);
     void SetFileSession(std::shared_ptr<FileSession> session);
 
@@ -54,13 +55,13 @@ public:
     bool waitFileConnect();
 
 public slots:
-    void onDoConnectSuccess();
-    void onDoConnectFailed();
-    void onDoConnectError();
-    void onSendControl(FramePtr frame);
-    void onSendFile(FramePtr frame);
+    void onDoFileConnectSuccess();
+    void onDoFileConnectFailed();
+    void onDoFileConnectError();
 
 public slots:
+    void onSendControl(FramePtr frame);
+    void onSendFile(FramePtr frame);
     void onDeliverControl(FramePtr frame);
     void onDeliverFile(FramePtr frame);
 
@@ -73,12 +74,13 @@ private:
     FileControlState fcState_{};
 };
 
-class CmdExecutor
+class CmdExecutor : public QObject
 {
     using Step = std::function<FramePtr(FramePtr)>;
+    Q_OBJECT
 
 public:
-    explicit CmdExecutor(std::shared_ptr<DoubleLinker> doubleLinker);
+    explicit CmdExecutor(QObject* parent, std::shared_ptr<DoubleLinker> doubleLinker);
     ~CmdExecutor() = default;
 
 public:

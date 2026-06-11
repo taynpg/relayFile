@@ -40,6 +40,7 @@ void DoubleLinker::SetFileSession(std::shared_ptr<FileSession> session)
     connect(cliCore, &ClientCore::signalDeliverFrame, this, &DoubleLinker::onDeliverFile);
     connect(this, &DoubleLinker::signalSendFile, cliCore, [this, cliCore](FramePtr frame) { cliCore->Send(frame); });
     connect(fileSession_.get(), &FileSession::signalRequestSend, this, &DoubleLinker::onSendFile);
+    connect(this, &DoubleLinker::signalFileDoConnect, cliCore, &ClientCore::connectToServer);
 }
 
 std::shared_ptr<ControlSession> DoubleLinker::GetControlSession() const
@@ -101,16 +102,6 @@ void DoubleLinker::onDeliverControl(FramePtr frame)
 
 void DoubleLinker::onDeliverFile(FramePtr frame)
 {
-    {
-        QMutexLocker locker(&fcStateLock_);
-        if (fcState_ != FileControlState::FCS_Connected) {
-            auto ip = controlSession_->getClientCore()->getServerIp();
-            auto port = controlSession_->getClientCore()->getServerPort();
-            fcState_ = FileControlState::FCS_Connecting;
-            emit signalDoConnect(ip, port);
-            return;
-        }
-    }
     // 暂时先简单等待吧
     if (!waitFileConnect()) {
         // 告诉对方取消。
@@ -138,6 +129,16 @@ bool DoubleLinker::waitFileConnect()
 
     timer->setSingleShot(true);
     timer->setInterval(5000);
+
+    auto ip = controlSession_->getClientCore()->getServerIp();
+    auto port = controlSession_->getClientCore()->getServerPort();
+    emit signalFileDoConnect(ip, port);
+
+    {
+        QMutexLocker locker(&fcStateLock_);
+        fcState_ = FileControlState::FCS_Connecting;
+    }
+
     timer->start();
 
     while (Run) {
@@ -146,31 +147,34 @@ bool DoubleLinker::waitFileConnect()
             return true;
         }
     }
+
+    timer->stop();
     {
         QMutexLocker locker(&fcStateLock_);
         return fcState_ == FileControlState::FCS_Connected;
     }
 }
 
-void DoubleLinker::onDoConnectSuccess()
+void DoubleLinker::onDoFileConnectSuccess()
 {
     QMutexLocker locker(&fcStateLock_);
     fcState_ = FileControlState::FCS_Connected;
 }
 
-void DoubleLinker::onDoConnectFailed()
+void DoubleLinker::onDoFileConnectFailed()
 {
     QMutexLocker locker(&fcStateLock_);
     fcState_ = FileControlState::FCS_Unconnected;
 }
 
-void DoubleLinker::onDoConnectError()
+void DoubleLinker::onDoFileConnectError()
 {
     QMutexLocker locker(&fcStateLock_);
     fcState_ = FileControlState::FCS_Unconnected;
 }
 
-CmdExecutor::CmdExecutor(std::shared_ptr<DoubleLinker> doubleLinker) : doubleLinker_(doubleLinker)
+CmdExecutor::CmdExecutor(QObject* parent, std::shared_ptr<DoubleLinker> doubleLinker)
+    : QObject(parent), doubleLinker_(doubleLinker)
 {
 }
 

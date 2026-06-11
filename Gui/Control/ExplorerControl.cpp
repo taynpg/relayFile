@@ -287,6 +287,7 @@ void ExplorerControl::onTableContextMenu(const QPoint& pos)
             }
             transData->fileList.push_back(itemData);
         }
+        qDebug() << "初始文件个数（含文件夹）:" << transData->fileList.size();
         emit transTaskRun(transData);
     } else if (selectAction == explorerAction) {
     }

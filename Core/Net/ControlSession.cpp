@@ -64,38 +64,43 @@ template <typename Callback> bool ControlSession::SendCall(FramePtr frame, Callb
 
     emit signalRequestSend(frame);
 
-    QTimer* timer = new QTimer();
-    timer->setSingleShot(true);
+    qDebug() << "ControlSession::SendCall:" << static_cast<int>(frame->type) << ", sid=" << sid;
 
-    connect(timer, &QTimer::timeout, this, [this, sid]() {
-        QMutexLocker locker(&requestWaitLock_);
-        auto it = requestWaitFrame_.find(sid);
-        if (it != requestWaitFrame_.end()) {
-            auto& waiter = *it.value();
-            switch (waiter.callType) {
-            case CallType::CT_Message: {
-                MessagePtr msg = nullptr;
-                waiter.call(msg);
-                break;
-            }
-            case CallType::CT_Frame: {
-                FramePtr f = nullptr;
-                waiter.call(f);
-                break;
-            }
-            default:
-                break;
-            }
-            waiter.timer->deleteLater();
-            requestWaitFrame_.erase(it);
-        }
-    });
+    // 这里不能用QTimer，因为QTimer依赖事件循环，而阻塞需求常常会阻塞事件循环，导致定时器失效
+    auto timeoutHandler = [this, sid]() {
+        QMetaObject::invokeMethod(
+            this,
+            [this, sid]() {
+                qDebug() << "ControlSession::SendCall timeout sid:" << sid;
+                QMutexLocker locker(&requestWaitLock_);
+                auto it = requestWaitFrame_.find(sid);
+                if (it != requestWaitFrame_.end()) {
+                    auto& waiter = *it.value();
+                    switch (waiter.callType) {
+                    case CallType::CT_Message: {
+                        MessagePtr msg = nullptr;
+                        waiter.call(msg);
+                        break;
+                    }
+                    case CallType::CT_Frame: {
+                        FramePtr f = nullptr;
+                        waiter.call(f);
+                        break;
+                    }
+                    default:
+                        break;
+                    }
+                    waiter.timer->stop();
+                    requestWaitFrame_.erase(it);
+                }
+            },
+            Qt::QueuedConnection);
+    };
 
     auto waiter = std::make_shared<WaiteFrame>();
     waiter->sessionId = sid;
     using ArgType = typename function_traits<Callback>::argument_type;
     waiter->call = [cb = std::move(callback)](std::any arg) { cb(std::any_cast<ArgType>(arg)); };
-    waiter->timer = timer;
 
     if constexpr (std::is_same_v<ArgType, MessagePtr>) {
         waiter->callType = CallType::CT_Message;
@@ -110,7 +115,8 @@ template <typename Callback> bool ControlSession::SendCall(FramePtr frame, Callb
         requestWaitFrame_[sid] = waiter;
     }
 
-    timer->start(defWaitCmdTimeout);
+    waiter->timer = std::make_shared<TimerStd>(timeoutHandler);
+    waiter->timer->start_once(std::chrono::milliseconds(defWaitCmdTimeout));
     return true;
 }
 
@@ -207,7 +213,7 @@ bool ControlSession::SendWithCall(const Message& msg, FrameType type, std::funct
     frame->data = serializeStruct(msg);
     frame->type = type;
     frame->to = clientCore_->oInfo_.clientId;
-    return SendCall(frame, callback);
+    return SendCall(frame, std::move(callback));
 }
 
 bool ControlSession::SendWithCall(FramePtr frame, std::function<void(MessagePtr)> callback)

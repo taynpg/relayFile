@@ -9,6 +9,7 @@
 #include "ClientCore.h"
 #include "Protocol/Protocol.h"
 #include "Utils/ThreadPoolSTD.hpp"
+#include "Utils/TimerSTD.hpp"
 
 // 我定义了一个叫 function_traits的模板，但我暂时不说它长什么样。
 // 它现在是一个 不完整类型（incomplete type）。
@@ -53,10 +54,10 @@ public:
     ~ControlSession() override;
 
 public:
-    struct WaiteFrame {
+    struct WaiteFrame : std::enable_shared_from_this<WaiteFrame> {
         uint64_t sessionId;
-        QTimer* timer{};
         CallType callType{};
+        std::shared_ptr<TimerStd> timer;
         std::function<void(std::any)> call;
     };
 
