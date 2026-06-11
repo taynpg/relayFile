@@ -5,8 +5,8 @@
 #include <string>
 #include <vector>
 
-#include "Utils/miniUtil.h"
 #include "CoreDefine.hpp"
+#include "Utils/miniUtil.h"
 
 enum class FrameType : int16_t {
     kMsgType_Ask_ID = 0,
@@ -26,7 +26,8 @@ enum class FrameType : int16_t {
     kFileType_Answer_Cancel,
     kFileType_Request_Start,
     kFileType_Answer_Start,
-    kFileType_Request_Ack,
+
+    kFileType_Request_Ack = defDirectTranStartNum,
     kFileType_Answer_Ack,
     kFileType_Request_Chuck,
     kFileType_Answer_Chuck,
@@ -45,8 +46,24 @@ struct OneFrame {
     static void ExChangeIp(std::shared_ptr<OneFrame> frame);
     static std::shared_ptr<OneFrame> Create(std::shared_ptr<OneFrame> frame, bool isChangeIp = true, bool isCopyData = false);
 };
-
 using FramePtr = std::shared_ptr<OneFrame>;
+
+inline bool GIsTurnFrame(FramePtr frame)
+{
+    if (static_cast<std::uint16_t>(frame->type) >= defFileStartNum &&
+        static_cast<std::uint16_t>(frame->type) < defDirectTranStartNum) {
+        return true;
+    }
+    return false;
+}
+inline bool GIsMsgFrame(FramePtr frame)
+{
+    if (static_cast<std::uint16_t>(frame->type) < defFileStartNum) {
+        return true;
+    }
+    return false;
+}
+
 class Protocol
 {
 public:

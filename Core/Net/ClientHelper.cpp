@@ -10,11 +10,36 @@ DoubleLinker::~DoubleLinker()
 {
 }
 
+void DoubleLinker::onSendControl(FramePtr frame)
+{
+    emit signalSendControl(frame);
+}
+
+void DoubleLinker::onSendFile(FramePtr frame)
+{
+    if (GIsTurnFrame(frame)) {
+        emit signalSendControl(frame);
+    } else {
+        emit signalSendFile(frame);
+    }
+}
+
 void DoubleLinker::SetControlSession(std::shared_ptr<ControlSession> session)
 {
     controlSession_ = session;
     auto* cliCore = controlSession_->getClientCore();
     connect(cliCore, &ClientCore::signalDeliverFrame, this, &DoubleLinker::onDeliverControl);
+    connect(this, &DoubleLinker::signalSendControl, cliCore, [this, cliCore](FramePtr frame) { cliCore->Send(frame); });
+    connect(controlSession_.get(), &ControlSession::signalRequestSend, this, &DoubleLinker::onSendControl);
+}
+
+void DoubleLinker::SetFileSession(std::shared_ptr<FileSession> session)
+{
+    fileSession_ = session;
+    auto* cliCore = fileSession_->getClientCore();
+    connect(cliCore, &ClientCore::signalDeliverFrame, this, &DoubleLinker::onDeliverFile);
+    connect(this, &DoubleLinker::signalSendFile, cliCore, [this, cliCore](FramePtr frame) { cliCore->Send(frame); });
+    connect(fileSession_.get(), &FileSession::signalRequestSend, this, &DoubleLinker::onSendFile);
 }
 
 std::shared_ptr<ControlSession> DoubleLinker::GetControlSession() const
@@ -31,13 +56,6 @@ void DoubleLinker::Quit()
 {
     controlSession_->Quit();
     fileSession_->Quit();
-}
-
-void DoubleLinker::SetFileSession(std::shared_ptr<FileSession> session)
-{
-    fileSession_ = session;
-    auto* cliCore = fileSession_->getClientCore();
-    connect(cliCore, &ClientCore::signalDeliverFrame, this, &DoubleLinker::onDeliverFile);
 }
 
 template <typename HandleResp> bool DoubleLinker::bRequest(FramePtr frame, HandleResp handleResp)

@@ -12,6 +12,19 @@ enum class FileControlState {
     FCS_Connecting
 };
 
+/*
+          ----------------->  Server  <------------------
+          |                  ^      ^                   |
+          v                  |      |                   v
+      MsgControl             |      |               MsgControl
+        ^   |                |      |                 ^   |
+        |   v                |      |                 |   v
+      FileControl <-----------      --------------> FileControl
+
+    文件控制相关的消息通过MsgContro转发是因为，对方的FileControl此时可能还不存在。
+    文件体本身的数据，直接发给Server中转，不走MsgControl。
+*/
+
 // 客户端双链接助手
 class DoubleLinker : public QObject
 {
@@ -19,6 +32,8 @@ class DoubleLinker : public QObject
 
 signals:
     void signalDoConnect(const QString& server, int16_t port);
+    void signalSendControl(FramePtr frame);
+    void signalSendFile(FramePtr frame);
 
 public:
     DoubleLinker(QObject* parent = nullptr);
@@ -42,6 +57,8 @@ public slots:
     void onDoConnectSuccess();
     void onDoConnectFailed();
     void onDoConnectError();
+    void onSendControl(FramePtr frame);
+    void onSendFile(FramePtr frame);
 
 public slots:
     void onDeliverControl(FramePtr frame);
