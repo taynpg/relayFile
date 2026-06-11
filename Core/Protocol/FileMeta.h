@@ -19,6 +19,7 @@ struct FileMeta {
     FileMeta(FileMeta&& s) noexcept;
     std::string dir;
     std::string name;
+    std::string fullPath;
     std::uint64_t size;
     std::string sizeStr;
     FileType type;
@@ -26,6 +27,6 @@ struct FileMeta {
     std::uint16_t permission;
     template <class Archive> void serialize(Archive& ar)
     {
-        ar(dir, name, size, sizeStr, type, lastModified, permission);
+        ar(dir, name, fullPath, size, sizeStr, type, lastModified, permission);
     }
 };

@@ -86,3 +86,46 @@ QString FileDir::Join(const QString& path, const QString& n1, const QString& n2)
     combined = QDir(combined).filePath(n2);
     return QDir::cleanPath(combined);
 }
+
+QString FileDir::GenDir(const QString& fullPath)
+{
+    QFileInfo fileInfo(fullPath);
+    return fileInfo.dir().path();
+}
+QString FileDir::GenFileName(const QString& fullPath)
+{
+    QFileInfo fileInfo(fullPath);
+    return fileInfo.fileName();
+}
+
+QString FileDir::GenOutPath(const QString& root, const std::string& fullPath, const QString& outRoot)
+{
+    return GenOutPath(root, QString::fromStdString(fullPath), outRoot);
+}
+
+QString FileDir::GenOutPath(const QString& root, const QString& fullPath, const QString& outRoot)
+{
+    if (root.isEmpty() || fullPath.isEmpty() || outRoot.isEmpty()) {
+        return QString();
+    }
+
+    QFileInfo rootInfo(root);
+    QFileInfo fullPathInfo(fullPath);
+
+    QString absRoot = QDir::cleanPath(rootInfo.absoluteFilePath());
+    QString absFull = QDir::cleanPath(fullPathInfo.absoluteFilePath());
+
+    if (!absRoot.endsWith('/')) {
+        absRoot += '/';
+    }
+
+    if (!absFull.startsWith(absRoot, Qt::CaseInsensitive)) {
+        return QString();
+    }
+
+    QString relativePath = absFull.mid(absRoot.length());
+    QDir outDir(outRoot);
+    QString result = outDir.filePath(relativePath);
+
+    return QDir::cleanPath(result);
+}

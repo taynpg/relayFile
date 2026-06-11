@@ -6,6 +6,9 @@ Message::Message(const Message& o)
     errMsg = o.errMsg;
     from = o.from;
     to = o.to;
+    msgStateCode = o.msgStateCode;
+    ff = o.ff;
+    ft = o.ft;
     clientList = o.clientList;
     mapData = o.mapData;
 }
@@ -21,6 +24,9 @@ Message& Message::operator=(const Message& o)
     uuid = o.uuid;
     from = o.from;
     to = o.to;
+    msgStateCode = o.msgStateCode;
+    ff = o.ff;
+    ft = o.ft;
     clientList = o.clientList;
     mapData = o.mapData;
     return *this;

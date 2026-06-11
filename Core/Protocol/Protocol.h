@@ -18,7 +18,9 @@ enum class FrameType : int16_t {
     kMsgType_Ask_ClientList,
     kMsgType_Answer_ClientList,
 
-    kFileType_Request_Send = defFileStartNum,
+    kFileType_Request_ID = defFileStartNum,
+    kFileType_Answer_ID,
+    kFileType_Request_Send,
     kFileType_Answer_Send,
     kFileType_Request_Down,
     kFileType_Answer_Down,
@@ -52,7 +54,7 @@ using FramePtr = std::shared_ptr<OneFrame>;
 
 inline bool GIsTurnFrame(FramePtr frame)
 {
-    if (static_cast<std::uint16_t>(frame->type) >= defFileStartNum &&
+    if (static_cast<std::uint16_t>(frame->type) >= (defFileStartNum + 2) &&
         static_cast<std::uint16_t>(frame->type) < defDirectTranStartNum) {
         return true;
     }
@@ -61,6 +63,14 @@ inline bool GIsTurnFrame(FramePtr frame)
 inline bool GIsMsgFrame(FramePtr frame)
 {
     if (static_cast<std::uint16_t>(frame->type) < defFileStartNum) {
+        return true;
+    }
+    return false;
+}
+
+inline bool GIsDirectForwarFrame(FramePtr frame)
+{
+    if (static_cast<std::uint16_t>(frame->type) >= (defFileStartNum + 2)) {
         return true;
     }
     return false;

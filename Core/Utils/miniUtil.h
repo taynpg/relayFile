@@ -104,6 +104,7 @@ public:
         std::uint64_t fileSize;
         std::uint64_t lastModified;
     };
+
 public:
     static std::pair<miniErr, std::string> GetExePath();
     static std::pair<miniErr, std::string> GetExeDir();

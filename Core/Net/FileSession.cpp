@@ -52,7 +52,7 @@ bool OneFileTrans::initTransfer(TransMode mode, const FileMeta& fileMeta, const 
         }
         state_ = TransStatus::Sending;
     } else {
-        recvFile_.open(filePath_, std::ios::binary | std::ios::in);
+        recvFile_.open(filePath_, std::ios::binary | std::ios::out);
         if (!recvFile_.is_open()) {
             qWarning() << "打开文件失败: " << QString::fromStdString(filePath_) << ", " << __LINE__;
             return false;
@@ -235,6 +235,13 @@ void FileSession::handleFrame(FramePtr frame)
     Message msg;
     deserializeStruct(frame->data, msg);
     switch (frame->type) {
+    case FrameType::kFileType_Answer_ID: {
+        ClientInfo info;
+        info.clientId = msg.to.clientId;
+        clientCore_->onRecordOwnInfo(info);
+        qDebug() << "传输ID：" << info.clientId;
+        break;
+    }
     case FrameType::kFileType_Request_Down: {
         auto fileTrans = std::make_shared<OneFileTrans>();
         auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Send, msg.ff, msg.transId,
@@ -261,7 +268,7 @@ void FileSession::handleFrame(FramePtr frame)
     }
     case FrameType::kFileType_Request_Send: {
         auto fileTrans = std::make_shared<OneFileTrans>();
-        auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Receive, msg.ff, msg.transId,
+        auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Receive, msg.ft, msg.transId,
                                            clientCore_->getOwnClientInfo().clientId, msg.uuid);
         Message resp;
         resp.uuid = msg.uuid;
@@ -324,10 +331,10 @@ ClientCore* FileSession::getClientCore()
 void FileSession::AskOwnID()
 {
     Message msg;
-    msg.comStr = "倔强的小强";
+    msg.comStr = "F";
     auto frame = OneFrame::Create();
     frame->data = serializeStruct(msg);
     frame->sessionId = GetSessionId();
-    frame->type = FrameType::kMsgType_Ask_ID;
-    Send(frame);
+    frame->type = FrameType::kFileType_Request_ID;
+    emit signalRequestSend(frame);
 }

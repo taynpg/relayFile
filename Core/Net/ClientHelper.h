@@ -34,6 +34,7 @@ signals:
     void signalFileDoConnect(const QString& server, int16_t port);
     void signalSendControl(FramePtr frame);
     void signalSendFile(FramePtr frame);
+    void signalAskFileID();
 
 public:
     DoubleLinker(QObject* parent = nullptr);

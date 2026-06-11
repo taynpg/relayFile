@@ -12,7 +12,7 @@
 #ifdef OS_MINI_WINDOWS
 #include <Windows.h>
 static HANDLE hOut = nullptr;
-#elifdef OS_MINI_UNIXLIKE
+#elif defined(OS_MINI_UNIXLIKE)
 #include <limits.h>
 #include <unistd.h>
 #endif
@@ -470,6 +470,7 @@ bool miniPath::GetList(const std::string& path, std::vector<miniFileMeta>& fileL
             if (filename == "." || filename == "..") {
                 continue;
             }
+            
 #if defined(OS_MINI_WINDOWS)
             DWORD attrs = GetFileAttributesW(U8ToW(entry.path().string()).c_str());
             if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM))) {

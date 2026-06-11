@@ -40,7 +40,11 @@ void DoubleLinker::SetFileSession(std::shared_ptr<FileSession> session)
     connect(cliCore, &ClientCore::signalDeliverFrame, this, &DoubleLinker::onDeliverFile);
     connect(this, &DoubleLinker::signalSendFile, cliCore, [this, cliCore](FramePtr frame) { cliCore->Send(frame); });
     connect(fileSession_.get(), &FileSession::signalRequestSend, this, &DoubleLinker::onSendFile);
+    connect(this, &DoubleLinker::signalAskFileID, fileSession_.get(), &FileSession::AskOwnID);
     connect(this, &DoubleLinker::signalFileDoConnect, cliCore, &ClientCore::connectToServer);
+    connect(cliCore, &ClientCore::signalConnected, this, &DoubleLinker::onDoFileConnectSuccess);
+    connect(cliCore, &ClientCore::signalDisconnected, this, &DoubleLinker::onDoFileConnectFailed);
+    connect(cliCore, &ClientCore::signalErrorOccurred, this, &DoubleLinker::onDoFileConnectError);
 }
 
 std::shared_ptr<ControlSession> DoubleLinker::GetControlSession() const
@@ -159,6 +163,7 @@ void DoubleLinker::onDoFileConnectSuccess()
 {
     QMutexLocker locker(&fcStateLock_);
     fcState_ = FileControlState::FCS_Connected;
+    emit signalAskFileID();
 }
 
 void DoubleLinker::onDoFileConnectFailed()

@@ -238,7 +238,7 @@ bool ControlSession::SendWithCall(FramePtr frame, std::function<void(FramePtr)> 
 void ControlSession::AskOwnID()
 {
     Message msg;
-    msg.comStr = "倔强的小强";
+    msg.from.clientName = "倔强的小强";
     auto frame = OneFrame::Create();
     frame->data = serializeStruct(msg);
     frame->sessionId = clientCore_->GetSessionId();

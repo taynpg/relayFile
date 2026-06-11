@@ -10,6 +10,7 @@ FileMeta::FileMeta(const FileMeta& o)
     this->size = o.size;
     this->type = o.type;
     this->sizeStr = o.sizeStr;
+    this->fullPath = o.fullPath;
     this->lastModified = o.lastModified;
     this->permission = o.permission;
 }
@@ -24,6 +25,7 @@ FileMeta& FileMeta::operator=(const FileMeta& o)
     this->size = o.size;
     this->type = o.type;
     this->sizeStr = o.sizeStr;
+    this->fullPath = o.fullPath;
     this->lastModified = o.lastModified;
     this->permission = o.permission;
     return *this;
@@ -36,6 +38,7 @@ FileMeta::FileMeta(FileMeta&& s) noexcept
     this->size = std::move(s.size);
     this->type = std::move(s.type);
     this->sizeStr = std::move(s.sizeStr);
+    this->fullPath = std::move(s.fullPath);
     this->lastModified = std::move(s.lastModified);
     this->permission = std::move(s.permission);
 }

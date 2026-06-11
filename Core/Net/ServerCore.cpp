@@ -92,21 +92,22 @@ void ServerCore::useFrame(FramePtr frame, QTcpSocket* socket, ClientInfo* cli)
     qDebug() << "处理消息：" << static_cast<int>(frame->type);
 
     // 文件帧不处理
-    if (!GIsMsgFrame(frame)) {
+    if (GIsDirectForwarFrame(frame)) {
         forwarData(frame, frame->to);
         return;
     }
 
     switch (frame->type) {
+    case FrameType::kFileType_Request_ID:
     case FrameType::kMsgType_Ask_ID: {
         Message sourceMsg;
         deserializeStruct(frame->data, sourceMsg);
-        Message idMsg;
+        Message idMsg(sourceMsg);
         idMsg.to.clientId = cli->id.toStdString();
-        idMsg.to.clientName = sourceMsg.comStr;
+        idMsg.to.clientName = sourceMsg.from.clientName;
         cli->name = QString::fromStdString(idMsg.to.clientName);
         auto f = OneFrame::Create();
-        f->type = FrameType::kMsgType_Answer_ID;
+        f->type = static_cast<FrameType>(static_cast<std::uint16_t>(frame->type) + 1);
         f->data = serializeStruct(idMsg);
         sendData(f, socket);
         std::shared_ptr<ClientInfo> moveCli = nullptr;
@@ -118,9 +119,16 @@ void ServerCore::useFrame(FramePtr frame, QTcpSocket* socket, ClientInfo* cli)
             }
         }
         if (moveCli) {
-            QWriteLocker locker(&rwLock_);
-            if (!clientMap_.contains(moveCli->id.toStdString())) {
-                clientMap_[moveCli->id.toStdString()] = moveCli;
+            if (frame->type == FrameType::kMsgType_Ask_ID) {
+                QWriteLocker locker(&rwLock_);
+                if (!clientMap_.contains(moveCli->id.toStdString())) {
+                    clientMap_[moveCli->id.toStdString()] = moveCli;
+                }
+            } else {
+                QWriteLocker locker(&rwLock_);
+                if (!transMap_.contains(moveCli->id.toStdString())) {
+                    transMap_[moveCli->id.toStdString()] = moveCli;
+                }
             }
         }
         break;

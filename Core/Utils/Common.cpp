@@ -4,5 +4,6 @@
 
 QString Common::GetUUID()
 {
-    return QUuid::createUuid().toString();
+    QString uuid = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    return uuid;
 }

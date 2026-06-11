@@ -121,6 +121,15 @@ void RelayTask::handleOneLine(int row)
     reqMsg.uuid = Common::GetUUID().toStdString();
     reqMsg.comStr = data_->remoteRoot.toStdString();
     reqMsg.ff = fileMeta;
+    reqMsg.ft = fileMeta;
+
+    auto oPath = FileDir::GenOutPath(data_->isUpload ? data_->localRoot : data_->remoteRoot, reqMsg.ff.fullPath,
+                                     data_->isUpload ? data_->remoteRoot : data_->localRoot);
+    reqMsg.ft.fullPath = oPath.toStdString();
+    reqMsg.ft.name = FileDir::GenFileName(oPath).toStdString();
+    reqMsg.ft.dir = FileDir::GenDir(oPath).toStdString();
+
+    reqMsg.transId = Common::GetUUID().toStdString();
 
     auto requestFrame = OneFrame::Create();
     requestFrame->data = serializeStruct(reqMsg);
@@ -190,8 +199,10 @@ void RelayTask::onBaseCheck()
             auto path = FileDir::Join(data_->localRoot, item.name);
             emit signalLog(QString("检查本地文件：%1").arg(path));
             FileMeta meta;
+            meta.dir = data_->localRoot.toStdString();
             meta.sizeStr = item.sizeStr.toStdString();
-            meta.name = path.toStdString();
+            meta.name = item.name.toStdString();
+            meta.fullPath = path.toStdString();
             meta.size = item.size;
             fileList_.push_back(meta);
         }

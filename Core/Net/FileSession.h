@@ -97,7 +97,7 @@ public:
     bool getFileMeta(const Message& msg, FileMeta& meta);
     void handleFrame(FramePtr frame);
 
-private:
+public slots:
     void AskOwnID();
 
 private:
