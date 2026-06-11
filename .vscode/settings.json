@@ -2,7 +2,7 @@
     "files.autoSave": "onFocusChange",
     "editor.fontSize": 14,
     "cmake.configureOnOpen": true,
-    "editor.fontFamily": "'Maple Mono NF CN Light', 'Maple Mono NF CN Light', 'Maple Mono NF CN Light'",
+    "editor.fontFamily": "'Maple Mono NF CN', 'Maple Mono NF CN', 'Maple Mono NF CN'",
     "cmake.debugConfig": {
         //"type": "lldb",
         "console": "externalTerminal",

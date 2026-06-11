@@ -12,6 +12,9 @@
 #ifdef OS_MINI_WINDOWS
 #include <Windows.h>
 static HANDLE hOut = nullptr;
+#elifdef OS_MINI_UNIXLIKE
+#include <limits.h>
+#include <unistd.h>
 #endif
 
 namespace fs = std::filesystem;
