@@ -54,7 +54,7 @@ using FramePtr = std::shared_ptr<OneFrame>;
 
 inline bool GIsTurnFrame(FramePtr frame)
 {
-    if (static_cast<std::uint16_t>(frame->type) >= (defFileStartNum + 2) &&
+    if (static_cast<std::uint16_t>(frame->type) >= (defFileStartNum + defSpecialFrameNum) &&
         static_cast<std::uint16_t>(frame->type) < defDirectTranStartNum) {
         return true;
     }
@@ -70,7 +70,7 @@ inline bool GIsMsgFrame(FramePtr frame)
 
 inline bool GIsDirectForwarFrame(FramePtr frame)
 {
-    if (static_cast<std::uint16_t>(frame->type) >= (defFileStartNum + 2)) {
+    if (static_cast<std::uint16_t>(frame->type) >= (defFileStartNum + defSpecialFrameNum)) {
         return true;
     }
     return false;
