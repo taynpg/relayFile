@@ -78,7 +78,7 @@ void ConnectorControl::initSignals()
 void ConnectorControl::onRefresh()
 {
     Message msg;
-    doubleLinker_->GetControlSession()->SendWithCall(msg, FrameType::kMsgType_Ask_FileList, [this](FramePtr frame) {
+    doubleLinker_->GetControlSession()->SendWithCall(msg, FrameType::kMsgType_Ask_ClientList, [this](FramePtr frame) {
         if (!frame) {
             return;
         }

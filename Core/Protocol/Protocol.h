@@ -15,6 +15,8 @@ enum class FrameType : int16_t {
     kMsgType_Answer_Home,
     kMsgType_Ask_FileList,
     kMsgType_Answer_FileList,
+    kMsgType_Ask_ClientList,
+    kMsgType_Answer_ClientList,
 
     kFileType_Request_Send = defFileStartNum,
     kFileType_Answer_Send,

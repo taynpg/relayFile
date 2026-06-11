@@ -93,7 +93,7 @@ void ClientCore::onReadyRead()
 
 void ClientCore::setOtherClientInfo(const ClientInfo& oInfo)
 {
-    qInfo() << "设置客户端信息：" << oInfo.clientId << oInfo.clientName;
+    qInfo() << "设置客户端信息：" << QString::fromStdString(oInfo.clientId) << QString::fromStdString(oInfo.clientName);
     oInfo_ = oInfo;
 }
 

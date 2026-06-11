@@ -92,7 +92,7 @@ template <typename HandleResp> void DoubleLinker::vRequest(FramePtr frame, Handl
 
 void DoubleLinker::onDeliverControl(FramePtr frame)
 {
-    if (frame->fuuid.empty()) {
+    if (GIsMsgFrame(frame)) {
         controlSession_->handleFrame(frame);
     } else {
         onDeliverFile(frame);

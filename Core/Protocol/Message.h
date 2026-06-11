@@ -48,7 +48,7 @@ struct Message {
 
     template <class Archive> void serialize(Archive& ar)
     {
-        ar(comStr, errMsg, transId, uuid, from, to, msgStateCode, ff, ft, mapData);
+        ar(comStr, errMsg, transId, uuid, from, to, msgStateCode, ff, ft, clientList, mapData);
     }
 
     static std::shared_ptr<Message> Create();

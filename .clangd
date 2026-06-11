@@ -10,3 +10,7 @@ Diagnostics:
         ]
     ClangTidy:
         Remove: misc-unused-alias-decls
+
+CompileFlags:
+    Remove:
+        - -mno-direct-extern-access

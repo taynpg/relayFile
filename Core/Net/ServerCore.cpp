@@ -92,7 +92,8 @@ void ServerCore::useFrame(FramePtr frame, QTcpSocket* socket, ClientInfo* cli)
     qDebug() << "处理消息：" << static_cast<int>(frame->type);
 
     // 文件帧不处理
-    if (static_cast<int>(frame->type) >= defFileStartNum) {
+    if (!GIsMsgFrame(frame)) {
+        forwarData(frame, frame->to);
         return;
     }
 
@@ -124,11 +125,11 @@ void ServerCore::useFrame(FramePtr frame, QTcpSocket* socket, ClientInfo* cli)
         }
         break;
     }
-    case FrameType::kMsgType_Ask_FileList: {
+    case FrameType::kMsgType_Ask_ClientList: {
         Message asg(msg);
         GetClientList(asg);
         auto f = OneFrame::Create(frame);
-        f->type = FrameType::kMsgType_Answer_FileList;
+        f->type = FrameType::kMsgType_Answer_ClientList;
         f->data = serializeStruct(asg);
         sendData(f, socket);
         break;

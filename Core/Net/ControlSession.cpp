@@ -55,7 +55,6 @@ void ControlSession::initSignals()
 {
     connect(clearWorkerTimer_, &QTimer::timeout, this, &ControlSession::clearWorker);
     clearWorkerTimer_->start(defClearWorkerTimeout);
-    connect(this, &ControlSession::signalRequestSend, clientCore_, [this](FramePtr frame) { clientCore_->Send(frame); });
 }
 
 template <typename Callback> bool ControlSession::SendCall(FramePtr frame, Callback callback)
