@@ -43,6 +43,8 @@ signals:
     void signalCheckComplete();
     void signalCheckUnComplete();
     void signalUpdateTable();
+    void signalTransComplete();
+    void signalTransFail();
 
 public:
     void Quit();
@@ -65,6 +67,8 @@ protected:
     void setFileItem(const FileMeta& meta, int row, int index);
     void onStartRun();
     void handleOneLine(int row);
+    void onTransComplete();
+    void onTransFail();
 
 private:
     void disableControls();

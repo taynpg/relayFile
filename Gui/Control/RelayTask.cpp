@@ -85,10 +85,23 @@ void RelayTask::initSignals()
     connect(ui->btnBasicCheck, &QPushButton::clicked, this, &RelayTask::onBaseCheck);
     connect(ui->btnStart, &QPushButton::clicked, this, &RelayTask::onStartRun);
     connect(this, &RelayTask::signalUpdateTable, this, &RelayTask::updateTable);
+    connect(this, &RelayTask::signalTransComplete, this, &RelayTask::onTransComplete);
+    connect(this, &RelayTask::signalTransFail, this, &RelayTask::onTransFail);
+}
+
+void RelayTask::onTransComplete()
+{
+    enableControls();
+}
+
+void RelayTask::onTransFail()
+{
+    ui->btnStart->setEnabled(true);
 }
 
 void RelayTask::onStartRun()
 {
+    disableControls();
     workerThread_->invoke([this]() { handleOneLine(0); });
 }
 
@@ -128,7 +141,15 @@ void RelayTask::handleOneLine(int row)
     });
     //  等待Server通知结果
     //  根据结果进行放弃或者传输
-    qDebug() << "Executor.Execute(requestFrame): " << executor.Execute(requestFrame);
+    auto execRet = executor.Execute(requestFrame);
+    qDebug() << "Executor.Execute(requestFrame): " << execRet;
+    if (execRet) {
+        emit signalLog("传输执行成功。");
+        emit signalTransComplete();
+    } else {
+        emit signalLog("传输执行失败。");
+        emit signalTransFail();
+    }
 }
 
 void RelayTask::setData(std::shared_ptr<RelayTaskData> data)
