@@ -76,7 +76,7 @@ void FileSession::handleFrame(FramePtr frame)
 {
     Message msg;
     {
-        if (static_cast<int>(frame->type) < defDirectTranStartNum) {
+        if (static_cast<int>(frame->type) < defDirectChuckAck) {
             deserializeStruct(frame->data, msg);
         }
     }

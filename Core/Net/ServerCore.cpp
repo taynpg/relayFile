@@ -90,11 +90,11 @@ void ServerCore::useFrame(FramePtr frame, QTcpSocket* socket, ClientInfo* cli)
     qDebug() << "处理消息：" << static_cast<int>(frame->type);
 
     // 文件帧不处理
-    if (GIsServerDirectForwardFileChuck(frame)) {
+    if (GIsChuckAckFrame(frame)) {
         forwarFileData(frame, frame->to);
         return;
     }
-    if (GIsServerDirectForwardFileMsg(frame)) {
+    if (GIsFileMessageFrame(frame)) {
         forwarData(frame, frame->to);
         return;
     }

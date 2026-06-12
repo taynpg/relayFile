@@ -1,7 +1,9 @@
 #include "ClientHelper.h"
 
 #include <QTimer>
+
 #include "Protocol/Serialize.hpp"
+#include "Utils/Common.h"
 
 DoubleLinker::DoubleLinker(QObject* parent) : QObject(parent)
 {
@@ -13,7 +15,7 @@ DoubleLinker::~DoubleLinker()
 
 void DoubleLinker::onSendControl(FramePtr frame)
 {
-    if (GIsTurnFrame(frame)) {
+    if (GIsFileMessageFrame(frame)) {
         // 如果是控制消息，那么就添上自己控制端的ID.
         Message sourceMsg;
         deserializeStruct(frame->data, sourceMsg);
@@ -25,7 +27,7 @@ void DoubleLinker::onSendControl(FramePtr frame)
 
 void DoubleLinker::onSendFile(FramePtr frame)
 {
-    if (GIsTurnFrame(frame)) {
+    if (GIsFileMessageFrame(frame)) {
         emit signalSendControl(frame);
     } else {
         emit signalSendFile(frame);
@@ -53,6 +55,30 @@ void DoubleLinker::SetFileSession(std::shared_ptr<FileSession> session)
     connect(cliCore, &ClientCore::signalConnected, this, &DoubleLinker::onDoFileConnectSuccess);
     connect(cliCore, &ClientCore::signalDisconnected, this, &DoubleLinker::onDoFileConnectFailed);
     connect(cliCore, &ClientCore::signalErrorOccurred, this, &DoubleLinker::onDoFileConnectError);
+}
+
+bool DoubleLinker::RunTask(const std::vector<std::shared_ptr<TransItem>>& tasks)
+{
+    for (auto& item : tasks) {
+        if (!RunTaskItem(item)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool DoubleLinker::RunTaskItem(const std::shared_ptr<TransItem>& item)
+{
+    Message reqMsg;
+    reqMsg.uuid = Common::GetUUID().toStdString();
+    reqMsg.ff = item->from;
+    reqMsg.ft = item->to;
+
+    auto requestFrame = OneFrame::Create();
+    requestFrame->data = serializeStruct(reqMsg);
+    requestFrame->type = item->isSend ? FrameType::kFileType_Request_Send : FrameType::kFileType_Request_Down;
+
+    return false;
 }
 
 std::shared_ptr<ControlSession> DoubleLinker::GetControlSession() const
@@ -105,7 +131,7 @@ template <typename HandleResp> void DoubleLinker::vRequest(FramePtr frame, Handl
 
 void DoubleLinker::onDeliverControl(FramePtr frame)
 {
-    if (GIsMsgFrame(frame)) {
+    if (GIsControlMessageFrame(frame)) {
         controlSession_->handleFrame(frame);
     } else {
         onDeliverFile(frame);

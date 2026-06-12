@@ -9,6 +9,17 @@ class FileSession : public QObject
 signals:
     void signalRequestSend(FramePtr frame);
 
+signals:
+    void signalCurFileReqSendSuccess();
+    void signalCurFileReqSendTimeout();
+    void signalCurFileReqSendFailed();
+    void signalCurFileReqSendOver();
+
+    void signalCurFileReqDownSuccess();
+    void signalCurFileReqDownTimeout();
+    void signalCurFileReqDownFailed();
+    void signalCurFileReqDownOver();
+
 public:
     FileSession(QObject* parent = nullptr);
     ~FileSession();

@@ -141,7 +141,7 @@ FramePtr OneFileTrans::CreateFrame(FrameType type)
     frame->index = curBlockIndex_;
     frame->mark = tMode_ == TransMode::Send ? 0 : 1;
 
-    if (static_cast<uint16_t>(type) < defDirectTranStartNum) {
+    if (static_cast<uint16_t>(type) < defDirectChuckAck) {
         Message msg;
         msg.to.clientId = targetId_;
         msg.uuid = uuid_;
@@ -169,7 +169,7 @@ void OneFileTrans::onFrameReceive(FramePtr frame)
     if (state_ == TransStatus::Finished || state_ == TransStatus::Interrupted) {
         return;
     }
-    if (static_cast<uint16_t>(frame->type) < (defFileStartNum + defSpecialFrameNum)) {
+    if (!GIsFileMessageFrame(frame)) {
         return;
     }
     switch (frame->type) {

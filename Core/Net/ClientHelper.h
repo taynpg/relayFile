@@ -12,6 +12,12 @@ enum class FileControlState {
     FCS_Connecting
 };
 
+struct TransItem {
+    FileMeta from;
+    FileMeta to;
+    bool isSend;
+};
+
 /*
           ----------------->  Server  <------------------
           |                  ^      ^                   |
@@ -36,24 +42,33 @@ signals:
     void signalSendFile(FramePtr frame);
     void signalAskFileID();
 
+signals:
+    void signalCurFileItem(const QString& from, const QString& to);
+    void signalCurFileStateStart();
+    void signalCurFileStateDone();
+    void signalCurFileStateFailed();
+    void signalCurFileProgress(std::uint64_t transed, std::uint64_t total);
+
 public:
     DoubleLinker(QObject* parent = nullptr);
     ~DoubleLinker();
 
 public:
+    bool RunTask(const std::vector<std::shared_ptr<TransItem>>& tasks);
     template <typename HandleResp> bool bRequest(FramePtr frame, HandleResp handleResp);
     template <typename HandleResp> void vRequest(FramePtr frame, HandleResp handleResp);
 
 public:
     void Quit();
-    
+    bool waitFileConnect();
     void SetControlSession(std::shared_ptr<ControlSession> session);
     void SetFileSession(std::shared_ptr<FileSession> session);
 
     std::shared_ptr<ControlSession> GetControlSession() const;
     std::shared_ptr<FileSession> GetFileSession() const;
 
-    bool waitFileConnect();
+private:
+    bool RunTaskItem(const std::shared_ptr<TransItem>& item);
 
 public slots:
     void onDoFileConnectSuccess();

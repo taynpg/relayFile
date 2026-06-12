@@ -9,7 +9,7 @@
 #include "Utils/miniUtil.h"
 
 enum class FrameType : int16_t {
-    kMsgType_Ask_ID = 0,
+    kMsgType_Ask_ID = defConsoleMessageStart,
     kMsgType_Answer_ID,
     kMsgType_Ask_Home,
     kMsgType_Answer_Home,
@@ -18,9 +18,7 @@ enum class FrameType : int16_t {
     kMsgType_Ask_ClientList,
     kMsgType_Answer_ClientList,
 
-    kFileType_Request_ID = defFileStartNum,
-    kFileType_Answer_ID,
-    kFileType_Request_Send,
+    kFileType_Request_Send = defFileMessageStart,
     kFileType_Answer_Send,
     kFileType_Request_Down,
     kFileType_Answer_Down,
@@ -31,7 +29,10 @@ enum class FrameType : int16_t {
     kFileType_Request_Start,
     kFileType_Answer_Start,
 
-    kFileType_Request_Ack = defDirectTranStartNum,
+    kFileType_Request_ID = defServerDirectFileStart,
+    kFileType_Answer_ID,
+
+    kFileType_Request_Ack = defDirectChuckAck,
     kFileType_Answer_Ack,
     kFileType_Request_Chuck,
     kFileType_Answer_Chuck,
@@ -52,33 +53,34 @@ struct OneFrame {
 };
 using FramePtr = std::shared_ptr<OneFrame>;
 
-inline bool GIsTurnFrame(FramePtr frame)
+inline bool GIsChuckAckFrame(FramePtr frame)
 {
-    if (static_cast<std::uint16_t>(frame->type) >= (defFileStartNum + defSpecialFrameNum) &&
-        static_cast<std::uint16_t>(frame->type) < defDirectTranStartNum) {
-        return true;
-    }
-    return false;
-}
-inline bool GIsMsgFrame(FramePtr frame)
-{
-    if (static_cast<std::uint16_t>(frame->type) < defFileStartNum) {
+    if (static_cast<std::uint16_t>(frame->type) >= defDirectChuckAck) {
         return true;
     }
     return false;
 }
 
-inline bool GIsServerDirectForwardFileMsg(FramePtr frame)
+inline bool GIsFileMessageFrame(FramePtr frame)
 {
-    if (static_cast<std::uint16_t>(frame->type) >= (defFileStartNum + defSpecialFrameNum)) {
+    if (static_cast<std::uint16_t>(frame->type) >= defFileMessageStart &&
+        static_cast<std::uint16_t>(frame->type) < defServerDirectFileStart) {
         return true;
     }
     return false;
 }
 
-inline bool GIsServerDirectForwardFileChuck(FramePtr frame)
+inline bool GIsControlMessageFrame(FramePtr frame)
 {
-    if (static_cast<std::uint16_t>(frame->type) >= defDirectTranStartNum) {
+    if (static_cast<std::uint16_t>(frame->type) < defFileMessageStart) {
+        return true;
+    }
+    return false;
+}
+
+inline bool GIsMessageFrame(FramePtr frame)
+{
+    if (static_cast<std::uint16_t>(frame->type) < defServerDirectFileStart) {
         return true;
     }
     return false;
