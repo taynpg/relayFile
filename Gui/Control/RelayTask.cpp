@@ -5,6 +5,7 @@
 #include <Utils/Common.h>
 
 #include "Base/BaseHelper.h"
+#include "Base/GuiDefine.hpp"
 #include "Base/MessageBoxHelper.h"
 #include "Protocol/Serialize.hpp"
 #include "ui_RelayTask.h"
@@ -116,12 +117,21 @@ void RelayTask::onTransFail()
 
 void RelayTask::onStartRun()
 {
-    onStartFresh(0);
     disableControls();
-    clearData();
     speedTimer_->start();
-    startTime_ = std::chrono::steady_clock::now();
-    workerThread_->invoke([this]() { handleOneLine(0); });
+    workerThread_->invoke([this]() {
+        auto rows = tableWidget_->rowCount();
+        for (int i = 0; i < rows; ++i) {
+            auto* itemState = tableWidget_->item(i, 3);
+            if (itemState->text() != GUI_FILE_TRAN_STATE_WAIT) {
+                continue;
+            }
+            clearData();
+            onStartFresh(i);
+            startTime_ = std::chrono::steady_clock::now();
+            handleOneLine(i);
+        }
+    });
 }
 
 std::shared_ptr<TransItem> RelayTask::getTransItem(const FileMeta& meta)
@@ -168,12 +178,12 @@ void RelayTask::handleOneLine(int row)
 
 void RelayTask::onStartFresh(int row)
 {
-    QMetaObject::invokeMethod(this, [this, row]() { tableWidget_->item(row, 3)->setText("传输中"); });
+    QMetaObject::invokeMethod(this, [this, row]() { tableWidget_->item(row, 3)->setText(GUI_FILE_TRAN_STATE_TRANS); });
 }
 
 void RelayTask::onFailFresh(int row)
 {
-    QMetaObject::invokeMethod(this, [this, row]() { tableWidget_->item(row, 3)->setText("失败"); });
+    QMetaObject::invokeMethod(this, [this, row]() { tableWidget_->item(row, 3)->setText(GUI_FILE_TRAN_STATE_FAILED); });
 }
 
 void RelayTask::onSuccessFresh(int row)
@@ -186,7 +196,7 @@ void RelayTask::onSuccessFresh(int row)
     QMetaObject::invokeMethod(this, [this, row, speedStr]() { tableWidget_->item(row, 4)->setText(speedStr); });
     QMetaObject::invokeMethod(
         this, [this, row, useTimeStr]() { tableWidget_->item(row, 5)->setText(QString::fromStdString(useTimeStr)); });
-    QMetaObject::invokeMethod(this, [this, row]() { tableWidget_->item(row, 3)->setText("已完成"); });
+    QMetaObject::invokeMethod(this, [this, row]() { tableWidget_->item(row, 3)->setText(GUI_FILE_TRAN_STATE_DONE); });
 }
 
 void RelayTask::setData(std::shared_ptr<RelayTaskData> data)
@@ -246,7 +256,7 @@ void RelayTask::onBaseCheck()
             fileList_.push_back(meta);
         }
         emit signalUpdateTable();
-        auto name = data_->isUpload ? "本地" : "远端";
+        auto name = data_->isUpload ? GUI_DIRECTION_LOCAL : GUI_DIRECTION_REMOTE;
         for (const auto& item : fileList_) {
             bool existExist = false;
             if (!askDfOwn->AskFileExist(item.fullPath, existExist)) {
@@ -265,7 +275,7 @@ void RelayTask::onBaseCheck()
         needConfirmFiles_.clear();
         needRemoveTaskFiles_.clear();
 
-        auto nameConfirm = data_->isUpload ? "远端" : "本地";
+        auto nameConfirm = data_->isUpload ? GUI_DIRECTION_REMOTE : GUI_DIRECTION_LOCAL;
         for (const auto& item : fileList_) {
             bool existExist = false;
             if (!askDfOther->AskFileExist(item.fullPath, existExist)) {
@@ -289,7 +299,7 @@ void RelayTask::onConfirmFiles()
         return;
     }
     bool needAsk = true;
-    auto nameConfirm = data_->isUpload ? "远端" : "本地";
+    auto nameConfirm = data_->isUpload ? GUI_DIRECTION_REMOTE : GUI_DIRECTION_LOCAL;
     for (const auto& item : needConfirmFiles_) {
         if (!needAsk) {
             break;
@@ -309,7 +319,7 @@ void RelayTask::onConfirmFiles()
             auto qFull = QString::fromStdString(item.fullPath);
             if (curTableData_.count(qFull)) {
                 auto* item = tableWidget_->item(curTableData_[qFull], 3);
-                item->setText("跳过");
+                item->setText(GUI_FILE_TRAN_STATE_SKIP);
             }
         });
     }
@@ -440,7 +450,7 @@ void RelayTask::setFileItem(const FileMeta& meta, int row, int index)
     sizeItem->setFlags(indexItem->flags() & ~Qt::ItemIsEditable);
     tableWidget_->setItem(row, 2, sizeItem);
 
-    auto* stateItem = new QTableWidgetItem("等待");
+    auto* stateItem = new QTableWidgetItem(GUI_FILE_TRAN_STATE_WAIT);
     stateItem->setFlags(indexItem->flags() & ~Qt::ItemIsEditable);
     tableWidget_->setItem(row, 3, stateItem);
 
