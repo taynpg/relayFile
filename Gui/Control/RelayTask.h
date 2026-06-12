@@ -70,6 +70,9 @@ protected:
     void onTransComplete();
     void onTransFail();
 
+    void onCurFileProgress(std::uint64_t transed, std::uint64_t total);
+    void onCurFileItem(const QString& from, const QString& to);
+
 private:
     void disableControls();
     void enableControls();

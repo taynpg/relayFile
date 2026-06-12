@@ -43,11 +43,17 @@ std::string FileSession::getMapKeyUUIDByMark(const std::string& uuid, int16_t ma
 }
 
 void FileSession::pushTask(const std::shared_ptr<OneFileTrans>& fileTrans, const Message& msg, const std::string& errMsg,
-                           FrameType type, bool ret)
+                           FrameType type, bool ret, bool needConnect)
 {
     Message resp(msg);
     resp.uuid = msg.uuid;
     resp.to = msg.from;
+
+    if (needConnect && msg.mark != 0) {
+        connect(fileTrans.get(), &OneFileTrans::signalProcess, this, &FileSession::signalCurFileProgress);
+        signalCurFile(QString::fromStdString(msg.ff.fullPath), QString::fromStdString(msg.ft.fullPath));
+        resp.mark = 0;
+    }
 
     auto mapKeyUUID = getMapKeyUUIDByMode(msg.uuid, fileTrans->getTransMode());
     if (ret) {
@@ -93,7 +99,7 @@ void FileSession::handleFrame(FramePtr frame)
         auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Send, msg.ff, msg.transId,
                                            clientCore_->getOwnClientInfo().clientId, msg.uuid);
 
-        pushTask(fileTrans, msg, "文件任务初始化失败（Request_Down）。", FrameType::kFileType_Answer_Down, ret);
+        pushTask(fileTrans, msg, "文件任务初始化失败（Request_Down）。", FrameType::kFileType_Answer_Down, ret, false);
         break;
     }
     case FrameType::kFileType_Answer_Down: {
@@ -101,7 +107,7 @@ void FileSession::handleFrame(FramePtr frame)
         auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Receive, msg.ft, msg.transId,
                                            clientCore_->getOwnClientInfo().clientId, msg.uuid);
 
-        pushTask(fileTrans, msg, "文件任务初始化失败（Answer_Down）。", FrameType::kFileType_Answer_Start, ret);
+        pushTask(fileTrans, msg, "文件任务初始化失败（Answer_Down）。", FrameType::kFileType_Answer_Start, ret, true);
         break;
     }
     case FrameType::kFileType_Request_Send: {
@@ -109,7 +115,7 @@ void FileSession::handleFrame(FramePtr frame)
         auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Receive, msg.ft, msg.transId,
                                            clientCore_->getOwnClientInfo().clientId, msg.uuid);
 
-        pushTask(fileTrans, msg, "文件任务初始化失败（Request_Send）。", FrameType::kFileType_Answer_Send, ret);
+        pushTask(fileTrans, msg, "文件任务初始化失败（Request_Send）。", FrameType::kFileType_Answer_Send, ret, true);
         break;
     }
     case FrameType::kFileType_Answer_Send: {
@@ -117,7 +123,7 @@ void FileSession::handleFrame(FramePtr frame)
         auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Send, msg.ff, msg.transId,
                                            clientCore_->getOwnClientInfo().clientId, msg.uuid);
 
-        pushTask(fileTrans, msg, "文件任务初始化失败（Answer_Send）。", FrameType::kFileType_Request_Start, ret);
+        pushTask(fileTrans, msg, "文件任务初始化失败（Answer_Send）。", FrameType::kFileType_Request_Start, ret, false);
         break;
     }
     // case FrameType::kFileType_Answer_Start: {
@@ -138,6 +144,20 @@ void FileSession::handleFrame(FramePtr frame)
         break;
     }
     }
+}
+
+bool FileSession::getTransStatus(OneFileTrans::TransStatus& status, const std::string& baseUUID, bool isSend)
+{
+    auto mapKeyUUID = getMapKeyUUIDByMode(baseUUID, isSend ? OneFileTrans::TransMode::Send : OneFileTrans::TransMode::Receive);
+    bool have = false;
+    {
+        QMutexLocker locker(&transferMapLock_);
+        if (transferMap_.contains(mapKeyUUID)) {
+            have = true;
+            status = transferMap_[mapKeyUUID]->getTransStatus();
+        }
+    }
+    return have;
 }
 
 bool FileSession::getFileMeta(const Message& msg, FileMeta& meta)

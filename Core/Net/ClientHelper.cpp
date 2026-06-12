@@ -4,6 +4,7 @@
 
 #include "Protocol/Serialize.hpp"
 #include "Utils/Common.h"
+#include "Utils/TimerSTD.hpp"
 
 DoubleLinker::DoubleLinker(QObject* parent) : QObject(parent)
 {
@@ -55,6 +56,10 @@ void DoubleLinker::SetFileSession(std::shared_ptr<FileSession> session)
     connect(cliCore, &ClientCore::signalConnected, this, &DoubleLinker::onDoFileConnectSuccess);
     connect(cliCore, &ClientCore::signalDisconnected, this, &DoubleLinker::onDoFileConnectFailed);
     connect(cliCore, &ClientCore::signalErrorOccurred, this, &DoubleLinker::onDoFileConnectError);
+    connect(fileSession_.get(), &FileSession::signalCurFileProgress,
+            [this](std::uint64_t transed, std::uint64_t total) { emit signalCurFileProgress(transed, total); });
+    connect(fileSession_.get(), &FileSession::signalCurFile, this,
+            [this](const QString& from, const QString& to) { emit signalCurFileItem(from, to); });
 }
 
 bool DoubleLinker::RunTask(const std::vector<std::shared_ptr<TransItem>>& tasks)
@@ -73,12 +78,38 @@ bool DoubleLinker::RunTaskItem(const std::shared_ptr<TransItem>& item)
     reqMsg.uuid = Common::GetUUID().toStdString();
     reqMsg.ff = item->from;
     reqMsg.ft = item->to;
+    reqMsg.mark = 1;
 
     auto requestFrame = OneFrame::Create();
     requestFrame->data = serializeStruct(reqMsg);
     requestFrame->type = item->isSend ? FrameType::kFileType_Request_Send : FrameType::kFileType_Request_Down;
 
-    return false;
+    bool isDone = false;
+    bool isRun = true;
+    OneFileTrans::TransStatus status = OneFileTrans::TransStatus::Idle;
+
+    auto timer = std::make_shared<TimerStd>([this, &isRun, &status, item]() {
+        if (status != (item->isSend ? OneFileTrans::TransStatus::Sending : OneFileTrans::TransStatus::Receving)) {
+            isRun = false;
+        }
+    });
+
+    onSendControl(requestFrame);
+    timer->start_interval(std::chrono::seconds(5));
+
+    while (isRun) {
+        QThread::msleep(1);
+        if (!fileSession_->getTransStatus(status, reqMsg.uuid, item->isSend)) {
+            continue;
+        }
+        if (status == OneFileTrans::TransStatus::Finished) {
+            isRun = false;
+        }
+    }
+    if (status == OneFileTrans::TransStatus::Finished) {
+        isDone = true;
+    }
+    return isDone;
 }
 
 std::shared_ptr<ControlSession> DoubleLinker::GetControlSession() const

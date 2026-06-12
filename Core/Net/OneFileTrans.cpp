@@ -163,13 +163,15 @@ bool OneFileTrans::handleFinish(FramePtr frame)
     return true;
 }
 
+OneFileTrans::TransStatus OneFileTrans::getTransStatus() const
+{
+    return state_;
+}
+
 void OneFileTrans::onFrameReceive(FramePtr frame)
 {
     QMutexLocker locker(&qMut_);
     if (state_ == TransStatus::Finished || state_ == TransStatus::Interrupted) {
-        return;
-    }
-    if (!GIsFileMessageFrame(frame)) {
         return;
     }
     switch (frame->type) {

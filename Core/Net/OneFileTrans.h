@@ -52,6 +52,7 @@ public:
     bool handleInterrupt(FramePtr frame);
     bool handleFinish(FramePtr frame);
     TransMode getTransMode();
+    TransStatus getTransStatus() const;
 
     void onSendTimeout();
     FramePtr CreateFrame(FrameType type);

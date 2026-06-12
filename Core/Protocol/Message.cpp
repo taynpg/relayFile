@@ -9,6 +9,7 @@ Message::Message(const Message& o)
     msgStateCode = o.msgStateCode;
     ff = o.ff;
     ft = o.ft;
+    mark = o.mark;
     clientList = o.clientList;
     mapData = o.mapData;
 }
@@ -27,6 +28,7 @@ Message& Message::operator=(const Message& o)
     msgStateCode = o.msgStateCode;
     ff = o.ff;
     ft = o.ft;
+    mark = o.mark;
     clientList = o.clientList;
     mapData = o.mapData;
     return *this;

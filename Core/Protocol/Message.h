@@ -33,6 +33,7 @@ struct Message {
     Message& operator=(const Message& o);
     Message(const Message& o);
 
+    int32_t mark{};
     std::string comStr;
     std::string errMsg;
     std::string transId;
@@ -48,7 +49,7 @@ struct Message {
 
     template <class Archive> void serialize(Archive& ar)
     {
-        ar(comStr, errMsg, transId, uuid, from, to, msgStateCode, ff, ft, clientList, mapData);
+        ar(mark, comStr, errMsg, transId, uuid, from, to, msgStateCode, ff, ft, clientList, mapData);
     }
 
     static std::shared_ptr<Message> Create();

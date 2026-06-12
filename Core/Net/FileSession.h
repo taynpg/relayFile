@@ -10,35 +10,26 @@ signals:
     void signalRequestSend(FramePtr frame);
 
 signals:
-    void signalCurFileReqSendSuccess();
-    void signalCurFileReqSendTimeout();
-    void signalCurFileReqSendFailed();
-    void signalCurFileReqSendOver();
-
-    void signalCurFileReqDownSuccess();
-    void signalCurFileReqDownTimeout();
-    void signalCurFileReqDownFailed();
-    void signalCurFileReqDownOver();
+    void signalCurFileProgress(std::uint64_t transed, std::uint64_t total);
+    void signalCurFile(const QString& from, const QString& to);
 
 public:
     FileSession(QObject* parent = nullptr);
     ~FileSession();
-
-    bool startFileTransfer(const FileMeta& fileMeta, const std::string& targetId);
-    bool acceptFileTransfer(const std::string& transferId, const std::string& savePath);
-    bool rejectFileTransfer(const std::string& transferId);
 
 public:
     void Quit();
     ClientCore* getClientCore();
     bool getFileMeta(const Message& msg, FileMeta& meta);
     void handleFrame(FramePtr frame);
+    bool getTransStatus(OneFileTrans::TransStatus& status, const std::string& baseUUID, bool isSend);
 
 public slots:
     void AskOwnID();
 
 private:
-    void pushTask(const std::shared_ptr<OneFileTrans>& fileTrans, const Message& msg, const std::string& errMsg, FrameType type, bool ret);
+    void pushTask(const std::shared_ptr<OneFileTrans>& fileTrans, const Message& msg, const std::string& errMsg, FrameType type,
+                  bool ret, bool needConnect);
     std::string getMapKeyUUIDByMode(const std::string& uuid, OneFileTrans::TransMode mode);
     std::string getMapKeyUUIDByMark(const std::string& uuid, int16_t mark);
 

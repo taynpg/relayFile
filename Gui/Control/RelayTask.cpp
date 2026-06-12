@@ -87,6 +87,8 @@ void RelayTask::initSignals()
     connect(this, &RelayTask::signalUpdateTable, this, &RelayTask::updateTable);
     connect(this, &RelayTask::signalTransComplete, this, &RelayTask::onTransComplete);
     connect(this, &RelayTask::signalTransFail, this, &RelayTask::onTransFail);
+    connect(doubleLinker_.get(), &DoubleLinker::signalCurFileProgress, this, &RelayTask::onCurFileProgress);
+    connect(doubleLinker_.get(), &DoubleLinker::signalCurFileItem, this, &RelayTask::onCurFileItem);
 }
 
 void RelayTask::onTransComplete()
@@ -112,43 +114,22 @@ void RelayTask::handleOneLine(int row)
         return;
     }
 
-    CmdExecutor executor(nullptr, doubleLinker_);
-    executor.Reset();
-
     const auto& fileMeta = fileList_[id];
-    // 先请求到Server
-    Message reqMsg;
-    reqMsg.uuid = Common::GetUUID().toStdString();
-    reqMsg.comStr = data_->remoteRoot.toStdString();
-    reqMsg.ff = fileMeta;
-    reqMsg.ft = fileMeta;
+    auto taskItem = std::make_shared<TransItem>();
+    taskItem->from = fileMeta;
+    taskItem->to = fileMeta;
+    taskItem->isSend = data_->isUpload;
 
-    auto oPath = FileDir::GenOutPath(data_->isUpload ? data_->localRoot : data_->remoteRoot, reqMsg.ff.fullPath,
+    auto oPath = FileDir::GenOutPath(data_->isUpload ? data_->localRoot : data_->remoteRoot, taskItem->from.fullPath,
                                      data_->isUpload ? data_->remoteRoot : data_->localRoot);
-    reqMsg.ft.fullPath = oPath.toStdString();
-    reqMsg.ft.name = FileDir::GenFileName(oPath).toStdString();
-    reqMsg.ft.dir = FileDir::GenDir(oPath).toStdString();
-    
-    auto requestFrame = OneFrame::Create();
-    requestFrame->data = serializeStruct(reqMsg);
-    requestFrame->type = FrameType::kFileType_Request_Send;
+                                     
+    taskItem->to.fullPath = oPath.toStdString();
+    taskItem->to.name = FileDir::GenFileName(oPath).toStdString();
+    taskItem->to.dir = FileDir::GenDir(oPath).toStdString();
 
-    //  等待Server控制对方建立文件传输通道
-    executor.AddStep([this](FramePtr frame) -> FramePtr {
-        Message respMsg;
-        deserializeStruct(frame->data, respMsg);
-        if (respMsg.msgStateCode != MessageStateCode::kMessageStateCodeSuccess) {
-            emit signalLog(
-                QString("Server返回错误[%1]：%2").arg(int(respMsg.msgStateCode)).arg(QString::fromStdString(respMsg.comStr)));
-            return nullptr;
-        }
-        // 如果成功，对方必须告知文件传输通道的ID号。
-        qDebug() << "Server返回文件传输通道ID号：" << respMsg.comStr;
-        return frame;
-    });
     //  等待Server通知结果
     //  根据结果进行放弃或者传输
-    auto execRet = executor.Execute(requestFrame);
+    auto execRet = doubleLinker_->RunTaskItem(taskItem);
     qDebug() << "Executor.Execute(requestFrame): " << execRet;
     if (execRet) {
         emit signalLog("传输执行成功。");
@@ -262,6 +243,16 @@ void RelayTask::updateTable()
             QGuiApplication::processEvents();
         }
     }
+}
+
+void RelayTask::onCurFileProgress(std::uint64_t transed, std::uint64_t total)
+{
+    auto cur = transed * 1.0 / total;
+    ui->curProgress->setValue(int(cur * 100));
+}
+
+void RelayTask::onCurFileItem(const QString& from, const QString& to)
+{
 }
 
 void RelayTask::setFileItem(const FileMeta& meta, int row, int index)
