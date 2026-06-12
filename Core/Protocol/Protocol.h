@@ -68,9 +68,17 @@ inline bool GIsMsgFrame(FramePtr frame)
     return false;
 }
 
-inline bool GIsDirectForwarFrame(FramePtr frame)
+inline bool GIsServerDirectForwardFileMsg(FramePtr frame)
 {
     if (static_cast<std::uint16_t>(frame->type) >= (defFileStartNum + defSpecialFrameNum)) {
+        return true;
+    }
+    return false;
+}
+
+inline bool GIsServerDirectForwardFileChuck(FramePtr frame)
+{
+    if (static_cast<std::uint16_t>(frame->type) >= defDirectTranStartNum) {
         return true;
     }
     return false;

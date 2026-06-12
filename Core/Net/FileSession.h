@@ -27,6 +27,9 @@ public slots:
     void AskOwnID();
 
 private:
+    void pushTask(const std::shared_ptr<OneFileTrans>& fileTrans, const Message& msg, const std::string& errMsg, FrameType type, bool ret);
+
+private:
     ClientCore* clientCore_{};
     ClientWorker* clientWorker_{};
     QMutex transferMapLock_;

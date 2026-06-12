@@ -42,6 +42,7 @@ private:
 
     void useFrame(FramePtr frame, QTcpSocket* socket, ClientInfo* cli);
     bool forwarData(FramePtr frame, const std::string& otherId);
+    bool forwarFileData(FramePtr frame, const std::string& otherId);
     bool sendData(FramePtr frame, QTcpSocket* socket);
     bool sendData(const char* data, int len, QTcpSocket* socket);
 

@@ -87,15 +87,19 @@ void ServerCore::onRead()
 
 void ServerCore::useFrame(FramePtr frame, QTcpSocket* socket, ClientInfo* cli)
 {
-    Message msg;
-    deserializeStruct(frame->data, msg);
     qDebug() << "处理消息：" << static_cast<int>(frame->type);
 
     // 文件帧不处理
-    if (GIsDirectForwarFrame(frame)) {
+    if (GIsServerDirectForwardFileChuck(frame)) {
+        forwarFileData(frame, frame->to);
+        return;
+    }
+    if (GIsServerDirectForwardFileMsg(frame)) {
         forwarData(frame, frame->to);
         return;
     }
+    Message msg;
+    deserializeStruct(frame->data, msg);
 
     switch (frame->type) {
     case FrameType::kFileType_Request_ID:
@@ -154,6 +158,19 @@ bool ServerCore::forwarData(FramePtr frame, const std::string& otherId)
     {
         QReadLocker locker(&rwLock_);
         o = clientMap_[otherId];
+    }
+    if (!o) {
+        return false;
+    }
+    return sendData(frame, o->socket);
+}
+
+bool ServerCore::forwarFileData(FramePtr frame, const std::string& otherId)
+{
+    std::shared_ptr<ClientInfo> o = nullptr;
+    {
+        QReadLocker locker(&transLock_);
+        o = transMap_[otherId];
     }
     if (!o) {
         return false;
