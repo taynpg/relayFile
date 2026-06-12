@@ -188,19 +188,13 @@ bool DoubleLinker::waitFileConnect()
         }
     }
 
-    QTimer* timer = new QTimer();
-
     bool Run = true;
-    connect(timer, &QTimer::timeout, this, [this, &Run, timer]() {
-        Run = false;
-        timer->deleteLater();
-    });
 
-    timer->setSingleShot(true);
-    timer->setInterval(5000);
-
+    auto quitHandle = [this, &Run]() { Run = false; };
+    auto stdTimer = std::make_shared<TimerStd>(quitHandle);
     auto ip = controlSession_->getClientCore()->getServerIp();
     auto port = controlSession_->getClientCore()->getServerPort();
+
     emit signalFileDoConnect(ip, port);
 
     {
@@ -208,16 +202,14 @@ bool DoubleLinker::waitFileConnect()
         fcState_ = FileControlState::FCS_Connecting;
     }
 
-    timer->start();
-
+    stdTimer->start_once(std::chrono::seconds(5));
     while (Run) {
         QThread::msleep(1);
         if (fileSession_->getClientCore()->isConnected()) {
             return true;
         }
     }
-
-    timer->stop();
+    stdTimer->stop();
     {
         QMutexLocker locker(&fcStateLock_);
         return fcState_ == FileControlState::FCS_Connected;
