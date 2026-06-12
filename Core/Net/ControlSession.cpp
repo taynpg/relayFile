@@ -18,7 +18,8 @@
         }                                                                                                                        \
     }
 
-ControlSession::ControlSession(QObject* parent) : QObject(parent), workerPool_(std::make_shared<ThreadPool>(8))
+ControlSession::ControlSession(QObject* parent)
+    : QObject(parent), workerPool_(std::make_shared<ThreadPool>(3)), timerPoolStd_(std::make_shared<TimerPoolStd>(3))
 {
     clearWorkerTimer_ = new QTimer(this);
     clientCore_ = new ClientCore();
@@ -36,6 +37,7 @@ ClientCore* ControlSession::getClientCore()
 
 ControlSession::~ControlSession()
 {
+    timerPoolStd_->stop();
     delete clientCore_;
     delete clientWorker_;
 }
@@ -90,7 +92,7 @@ template <typename Callback> bool ControlSession::SendCall(FramePtr frame, Callb
                     default:
                         break;
                     }
-                    waiter.timer->stop();
+                    timerPoolStd_->stop(waiter.timerId);
                     requestWaitFrame_.erase(it);
                 }
             },
@@ -115,8 +117,7 @@ template <typename Callback> bool ControlSession::SendCall(FramePtr frame, Callb
         requestWaitFrame_[sid] = waiter;
     }
 
-    waiter->timer = std::make_shared<TimerStd>(timeoutHandler);
-    waiter->timer->start_once(std::chrono::milliseconds(defWaitCmdTimeout));
+    waiter->timerId = timerPoolStd_->start_once(std::chrono::milliseconds(defWaitCmdTimeout), timeoutHandler);
     return true;
 }
 
@@ -216,6 +217,8 @@ void ControlSession::handleFrame(FramePtr frame)
             default:
                 break;
             }
+            timerPoolStd_->stop(it.value()->timerId);
+            requestWaitFrame_.erase(it);
         }
         break;
     }

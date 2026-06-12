@@ -9,7 +9,7 @@
 #include "ClientCore.h"
 #include "Protocol/Protocol.h"
 #include "Utils/ThreadPoolSTD.hpp"
-#include "Utils/TimerSTD.hpp"
+#include "Utils/TimerPoolSTD.hpp"
 
 // 我定义了一个叫 function_traits的模板，但我暂时不说它长什么样。
 // 它现在是一个 不完整类型（incomplete type）。
@@ -57,7 +57,7 @@ public:
     struct WaiteFrame : std::enable_shared_from_this<WaiteFrame> {
         uint64_t sessionId;
         CallType callType{};
-        std::shared_ptr<TimerStd> timer;
+        TimerPoolStd::TimerId timerId{};
         std::function<void(std::any)> call;
     };
 
@@ -95,6 +95,7 @@ private:
     QMutex responseWaitLock_;
     ClientWorker* clientWorker_{};
     std::shared_ptr<ThreadPool> workerPool_{};
+    std::shared_ptr<TimerPoolStd> timerPoolStd_{};
     QMap<uint64_t, std::shared_ptr<WaiteFrame>> requestWaitFrame_;
     QMap<uint64_t, std::shared_ptr<TaskWorker>> responseWaitWorker_;
 };
