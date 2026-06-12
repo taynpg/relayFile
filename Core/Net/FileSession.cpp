@@ -3,7 +3,7 @@
 #include "CoreDefine.hpp"
 #include "Protocol/Serialize.hpp"
 
-FileSession::FileSession(QObject* parent) : ClientCore(parent)
+FileSession::FileSession(QObject* parent)
 {
     clientCore_ = new ClientCore();
     clientCore_->setIsControl(false);
@@ -24,16 +24,36 @@ void FileSession::Quit()
     clientWorker_->wait();
 }
 
+std::string FileSession::getMapKeyUUIDByMode(const std::string& uuid, OneFileTrans::TransMode mode)
+{
+    if (mode == OneFileTrans::TransMode::Send) {
+        return uuid + "S";
+    } else {
+        return uuid + "R";
+    }
+}
+
+std::string FileSession::getMapKeyUUIDByMark(const std::string& uuid, int16_t mark)
+{
+    if (0 != mark) {
+        return uuid + "S";
+    } else {
+        return uuid + "R";
+    }
+}
+
 void FileSession::pushTask(const std::shared_ptr<OneFileTrans>& fileTrans, const Message& msg, const std::string& errMsg,
                            FrameType type, bool ret)
 {
     Message resp(msg);
     resp.uuid = msg.uuid;
     resp.to = msg.from;
+
+    auto mapKeyUUID = getMapKeyUUIDByMode(msg.uuid, fileTrans->getTransMode());
     if (ret) {
         {
             QMutexLocker locker(&transferMapLock_);
-            transferMap_[msg.uuid] = fileTrans;
+            transferMap_[mapKeyUUID] = fileTrans;
         }
         resp.transId = clientCore_->getOwnClientInfo().clientId;
         resp.msgStateCode = MessageStateCode::kMessageStateCodeSuccess;
@@ -45,6 +65,7 @@ void FileSession::pushTask(const std::shared_ptr<OneFileTrans>& fileTrans, const
     rf->to = msg.from.clientId;
     rf->data = serializeStruct(resp);
     rf->type = type;
+    rf->mark = fileTrans->getTransMode() == OneFileTrans::TransMode::Send ? 0 : 1;
     rf->fuuid = msg.uuid;
 
     connect(fileTrans.get(), &OneFileTrans::signalRequestSend, this, [this](FramePtr frame) { signalRequestSend(frame); });
@@ -105,9 +126,10 @@ void FileSession::handleFrame(FramePtr frame)
     default: {
         std::shared_ptr<OneFileTrans> fileTrans = nullptr;
         {
+            auto mapKeyUUID = getMapKeyUUIDByMark(frame->fuuid, frame->mark);
             QMutexLocker locker(&transferMapLock_);
-            if (transferMap_.contains(frame->fuuid)) {
-                fileTrans = transferMap_[frame->fuuid];
+            if (transferMap_.contains(mapKeyUUID)) {
+                fileTrans = transferMap_[mapKeyUUID];
             }
         }
         if (fileTrans) {
@@ -144,7 +166,7 @@ void FileSession::AskOwnID()
     msg.comStr = "F";
     auto frame = OneFrame::Create();
     frame->data = serializeStruct(msg);
-    frame->sessionId = GetSessionId();
+    frame->sessionId = getClientCore()->GetSessionId();
     frame->type = FrameType::kFileType_Request_ID;
     emit signalRequestSend(frame);
 }

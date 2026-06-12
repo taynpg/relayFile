@@ -1,6 +1,7 @@
 #include "ClientHelper.h"
 
 #include <QTimer>
+#include "Protocol/Serialize.hpp"
 
 DoubleLinker::DoubleLinker(QObject* parent) : QObject(parent)
 {
@@ -12,6 +13,13 @@ DoubleLinker::~DoubleLinker()
 
 void DoubleLinker::onSendControl(FramePtr frame)
 {
+    if (GIsTurnFrame(frame)) {
+        // 如果是控制消息，那么就添上自己控制端的ID.
+        Message sourceMsg;
+        deserializeStruct(frame->data, sourceMsg);
+        sourceMsg.transId = fileSession_->getClientCore()->getOwnClientInfo().clientId;
+        frame->data = serializeStruct(sourceMsg);
+    }
     emit signalSendControl(frame);
 }
 

@@ -128,9 +128,7 @@ void RelayTask::handleOneLine(int row)
     reqMsg.ft.fullPath = oPath.toStdString();
     reqMsg.ft.name = FileDir::GenFileName(oPath).toStdString();
     reqMsg.ft.dir = FileDir::GenDir(oPath).toStdString();
-
-    reqMsg.transId = Common::GetUUID().toStdString();
-
+    
     auto requestFrame = OneFrame::Create();
     requestFrame->data = serializeStruct(reqMsg);
     requestFrame->type = FrameType::kFileType_Request_Send;

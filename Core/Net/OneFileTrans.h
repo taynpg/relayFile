@@ -51,6 +51,7 @@ public:
     bool handleRecvChuck(FramePtr frame);
     bool handleInterrupt(FramePtr frame);
     bool handleFinish(FramePtr frame);
+    TransMode getTransMode();
 
     void onSendTimeout();
     FramePtr CreateFrame(FrameType type);

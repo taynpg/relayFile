@@ -2,7 +2,7 @@
 
 #include "OneFileTrans.h"
 
-class FileSession : public ClientCore
+class FileSession : public QObject
 {
     Q_OBJECT
 
@@ -11,7 +11,7 @@ signals:
 
 public:
     FileSession(QObject* parent = nullptr);
-    ~FileSession() override;
+    ~FileSession();
 
     bool startFileTransfer(const FileMeta& fileMeta, const std::string& targetId);
     bool acceptFileTransfer(const std::string& transferId, const std::string& savePath);
@@ -28,6 +28,8 @@ public slots:
 
 private:
     void pushTask(const std::shared_ptr<OneFileTrans>& fileTrans, const Message& msg, const std::string& errMsg, FrameType type, bool ret);
+    std::string getMapKeyUUIDByMode(const std::string& uuid, OneFileTrans::TransMode mode);
+    std::string getMapKeyUUIDByMark(const std::string& uuid, int16_t mark);
 
 private:
     ClientCore* clientCore_{};

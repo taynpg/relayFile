@@ -22,6 +22,11 @@ void OneFileTrans::onSendTimeout()
     }
 }
 
+OneFileTrans::TransMode OneFileTrans::getTransMode()
+{
+    return tMode_;
+}
+
 bool OneFileTrans::initTransfer(TransMode mode, const FileMeta& fileMeta, const std::string& targetId, const std::string& ownId,
                                 const std::string& uuid)
 {
@@ -67,17 +72,13 @@ bool OneFileTrans::nextSend()
     if (TransStatus::Sending != state_) {
         return false;
     }
-    if (curBlockIndex_ * blockSize_ >= totalSize_) {
-        auto frame = CreateFrame(FrameType::kFileType_Request_Complete);
-        emit signalRequestSend(frame);
-        state_ = TransStatus::Finished;
-        emit signalFinished(ownId_);
-        return true;
-    }
     std::vector<char> buffer(blockSize_);
     sendFile_.read(buffer.data(), blockSize_);
     auto bytesRead = sendFile_.gcount();
     if (bytesRead <= 0) {
+        if (sendFile_.is_open()) {
+            sendFile_.close();
+        }
         auto frame = CreateFrame(FrameType::kFileType_Request_Complete);
         emit signalRequestSend(frame);
         state_ = TransStatus::Finished;
@@ -121,11 +122,12 @@ bool OneFileTrans::handleRecvChuck(FramePtr frame)
     }
     recvFile_.write(frame->data.data(), frame->data.size());
     transSize_ += frame->data.size();
-    curBlockIndex_++;
 
     emit signalProcess(transSize_, totalSize_);
     auto f = CreateFrame(FrameType::kFileType_Request_Ack);
     emit signalRequestSend(f);
+
+    curBlockIndex_++;
     return true;
 }
 
@@ -137,8 +139,9 @@ FramePtr OneFileTrans::CreateFrame(FrameType type)
     frame->from = ownId_;
     frame->fuuid = uuid_;
     frame->index = curBlockIndex_;
+    frame->mark = tMode_ == TransMode::Send ? 0 : 1;
 
-    if (static_cast<uint16_t>(type) < defFileStartNum) {
+    if (static_cast<uint16_t>(type) < defDirectTranStartNum) {
         Message msg;
         msg.to.clientId = targetId_;
         msg.uuid = uuid_;
@@ -187,7 +190,17 @@ void OneFileTrans::onFrameReceive(FramePtr frame)
         break;
     }
     case FrameType::kFileType_Request_Start: {
-        nextSend();
+        // 如果自己是接收方，那么消息原地返回。
+        if (tMode_ == TransMode::Receive) {
+            std::swap(frame->from, frame->to);
+            frame->mark = frame->mark == 0 ? 1 : 0;
+            emit signalRequestSend(frame);
+            break;
+        }
+        // 如果自己是发送方，那么继续发送。
+        if (tMode_ == TransMode::Send) {
+            nextSend();
+        }
         break;
     }
     default: {
