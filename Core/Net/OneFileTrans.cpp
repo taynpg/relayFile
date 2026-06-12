@@ -40,25 +40,25 @@ bool OneFileTrans::initTransfer(TransMode mode, const FileMeta& fileMeta, const 
     uuid_ = uuid;
     curBlockIndex_ = 0;
     ownId_ = ownId;
-    filePath_ = miniPath::Join(meta_.dir, meta_.name);
+    filePath_ = QString::fromStdString(miniPath::Join(meta_.dir, meta_.name));
 
-    qDebug() << "处理文件路径：" << QString::fromStdString(filePath_);
+    qDebug() << "处理文件路径：" << filePath_;
 
     if (state_ != TransStatus::Idle) {
         return false;
     }
 
-    if (TransMode::Send == tMode_) {
-        sendFile_.open(filePath_, std::ios::binary | std::ios::in);
-        if (!sendFile_.is_open()) {
-            qWarning() << "打开文件失败: " << QString::fromStdString(filePath_) << ", " << __LINE__;
+    if (tMode_ == TransMode::Send) {
+        sendFile_.setFileName(filePath_);
+        if (!sendFile_.open(QIODevice::ReadOnly)) {
+            qWarning() << "打开发送文件失败:" << filePath_ << sendFile_.errorString();
             return false;
         }
         state_ = TransStatus::Sending;
     } else {
-        recvFile_.open(filePath_, std::ios::binary | std::ios::out);
-        if (!recvFile_.is_open()) {
-            qWarning() << "打开文件失败: " << QString::fromStdString(filePath_) << ", " << __LINE__;
+        recvFile_.setFileName(filePath_);
+        if (!recvFile_.open(QIODevice::WriteOnly)) {
+            qWarning() << "打开接收文件失败:" << filePath_ << recvFile_.errorString();
             return false;
         }
         state_ = TransStatus::Receving;
@@ -72,25 +72,22 @@ bool OneFileTrans::nextSend()
     if (TransStatus::Sending != state_) {
         return false;
     }
-    std::vector<char> buffer(blockSize_);
-    sendFile_.read(buffer.data(), blockSize_);
-    auto bytesRead = sendFile_.gcount();
+    QByteArray buffer(blockSize_, Qt::Uninitialized);
+    qint64 bytesRead = sendFile_.read(buffer.data(), blockSize_);
+
     if (bytesRead <= 0) {
-        if (sendFile_.is_open()) {
-            sendFile_.close();
-        }
+        sendFile_.close();
         auto frame = CreateFrame(FrameType::kFileType_Request_Complete);
         emit signalRequestSend(frame);
         state_ = TransStatus::Finished;
         emit signalFinished(ownId_);
         return true;
     }
-    buffer.resize(bytesRead);
-    auto frame = CreateFrame(FrameType::kFileType_Request_Chuck);
-    frame->data = std::move(buffer);
-    emit signalRequestSend(frame);
 
-    // timer
+    buffer.resize(static_cast<int>(bytesRead));
+    auto frame = CreateFrame(FrameType::kFileType_Request_Chuck);
+    frame->data.assign(buffer.begin(), buffer.end());
+    emit signalRequestSend(frame);
     sendTimeoutTimer_->start(defSendTimeout);
     return true;
 }
@@ -120,7 +117,10 @@ bool OneFileTrans::handleRecvChuck(FramePtr frame)
     if (frame->index != curBlockIndex_) {
         return false;
     }
-    recvFile_.write(frame->data.data(), frame->data.size());
+    qint64 written = recvFile_.write(frame->data.data(), static_cast<qint64>(frame->data.size()));
+    if (written != static_cast<qint64>(frame->data.size())) {
+        qWarning() << "写入文件失败";
+    }
     transSize_ += frame->data.size();
 
     emit signalProcess(transSize_, totalSize_);
@@ -154,7 +154,7 @@ FramePtr OneFileTrans::CreateFrame(FrameType type)
 bool OneFileTrans::handleFinish(FramePtr frame)
 {
     if (tMode_ == TransMode::Receive) {
-        if (recvFile_.is_open()) {
+        if (recvFile_.isOpen()) {
             recvFile_.close();
         }
         emit signalFinished(ownId_);
@@ -214,10 +214,10 @@ void OneFileTrans::onFrameReceive(FramePtr frame)
 bool OneFileTrans::handleInterrupt(FramePtr frame)
 {
     state_ = TransStatus::Interrupted;
-    if (recvFile_.is_open()) {
+    if (recvFile_.isOpen()) {
         recvFile_.close();
     }
-    if (sendFile_.is_open()) {
+    if (sendFile_.isOpen()) {
         sendFile_.close();
     }
     return true;

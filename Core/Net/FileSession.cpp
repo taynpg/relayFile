@@ -107,7 +107,7 @@ void FileSession::handleFrame(FramePtr frame)
         auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Receive, msg.ft, msg.transId,
                                            clientCore_->getOwnClientInfo().clientId, msg.uuid);
 
-        pushTask(fileTrans, msg, "文件任务初始化失败（Answer_Down）。", FrameType::kFileType_Answer_Start, ret, true);
+        pushTask(fileTrans, msg, "文件任务初始化失败（Answer_Down）。", FrameType::kFileType_Request_Start, ret, true);
         break;
     }
     case FrameType::kFileType_Request_Send: {

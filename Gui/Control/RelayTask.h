@@ -66,7 +66,7 @@ protected:
     void updateTable();
     void setFileItem(const FileMeta& meta, int row, int index);
     void onStartRun();
-    void handleOneLine(int row);
+    bool handleOneLine(int row);
     void onTransComplete();
     void onTransFail();
 
@@ -79,8 +79,7 @@ protected:
     void onConfirmFiles();
 
     bool normalCheckFileExist();
-
-    std::shared_ptr<TransItem> getTransItem(const FileMeta& meta);
+    void GenOtherMetaPath(const FileMeta& in, FileMeta& out, bool isSend);
 
 private:
     void disableControls();
@@ -111,6 +110,7 @@ private:
     std::shared_ptr<BaseAskDF> askLocalDf_{};
     std::shared_ptr<BaseAskDF> askRemoteDf_{};
     std::shared_ptr<DoubleLinker> doubleLinker_{};
+    std::vector<std::shared_ptr<TransItem>> transItems_;
     std::shared_ptr<WorkerThread<RelayTask>> workerThread_{};
 };
 

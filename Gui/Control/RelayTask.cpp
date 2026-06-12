@@ -120,6 +120,7 @@ void RelayTask::onStartRun()
     disableControls();
     speedTimer_->start();
     workerThread_->invoke([this]() {
+        bool allSuccess = true;
         auto rows = tableWidget_->rowCount();
         for (int i = 0; i < rows; ++i) {
             auto* itemState = tableWidget_->item(i, 3);
@@ -129,50 +130,50 @@ void RelayTask::onStartRun()
             clearData();
             onStartFresh(i);
             startTime_ = std::chrono::steady_clock::now();
-            handleOneLine(i);
+            bool handleSuccess = handleOneLine(i);
+            if (!handleSuccess) {
+                allSuccess = false;
+                break;
+            }
+        }
+        if (allSuccess) {
+            emit signalTransComplete();
+        } else {
+            emit signalTransFail();
         }
     });
 }
 
-std::shared_ptr<TransItem> RelayTask::getTransItem(const FileMeta& meta)
+void RelayTask::GenOtherMetaPath(const FileMeta& in, FileMeta& out, bool isSend)
 {
-    auto taskItem = std::make_shared<TransItem>();
-    taskItem->from = meta;
-    taskItem->to = meta;
-    taskItem->isSend = data_->isUpload;
-
-    auto oPath = FileDir::GenOutPath(data_->isUpload ? data_->localRoot : data_->remoteRoot, taskItem->from.fullPath,
-                                     data_->isUpload ? data_->remoteRoot : data_->localRoot);
-
-    taskItem->to.fullPath = oPath.toStdString();
-    taskItem->to.name = FileDir::GenFileName(oPath).toStdString();
-    taskItem->to.dir = FileDir::GenDir(oPath).toStdString();
-    return taskItem;
+    out = in;
+    auto fullPath = FileDir::GenOutPath(isSend ? data_->localRoot : data_->remoteRoot, in.fullPath,
+                                        isSend ? data_->remoteRoot : data_->localRoot);
+    out.fullPath = fullPath.toStdString();
+    out.name = FileDir::GenFileName(fullPath).toStdString();
+    out.dir = FileDir::GenDir(fullPath).toStdString();
 }
 
-void RelayTask::handleOneLine(int row)
+bool RelayTask::handleOneLine(int row)
 {
     int id = tableWidget_->item(row, 0)->text().toInt();
     if (id >= fileList_.size()) {
-        return;
+        return false;
     }
-
-    const auto& fileMeta = fileList_[id];
-    auto taskItem = getTransItem(fileMeta);
 
     //  等待Server通知结果
     //  根据结果进行放弃或者传输
-    auto execRet = doubleLinker_->RunTaskItem(taskItem);
+    auto execRet = doubleLinker_->RunTaskItem(transItems_[id]);
     qDebug() << "handleOneLine: " << execRet;
 
     if (execRet) {
         emit signalLog("传输执行成功。");
         onSuccessFresh(row);
-        emit signalTransComplete();
+        return true;
     } else {
         emit signalLog("传输执行失败。");
         onFailFresh(row);
-        emit signalTransFail();
+        return false;
     }
 }
 
@@ -234,9 +235,7 @@ void RelayTask::onBaseCheck()
 
         for (const auto& item : data_->fileList) {
             auto path = FileDir::Join(data_->isUpload ? data_->localRoot : data_->remoteRoot, item.name);
-            // 文件夹暂时不处理
             if (item.type == RFileType::mTypeDir) {
-
                 std::vector<FileMeta> fileList;
                 if (!askDfOwn->AskFileList(path.toStdString(), fileList, true)) {
                     emit signalLog(QString("获取目录内容：%1 失败。").arg(path));
@@ -248,7 +247,7 @@ void RelayTask::onBaseCheck()
             }
             emit signalLog(QString("检查本地文件：%1").arg(path));
             FileMeta meta;
-            meta.dir = data_->isUpload ? data_->remoteRoot.toStdString() : data_->localRoot.toStdString();
+            meta.dir = data_->isUpload ? data_->localRoot.toStdString() : data_->remoteRoot.toStdString();
             meta.sizeStr = item.sizeStr.toStdString();
             meta.name = item.name.toStdString();
             meta.fullPath = path.toStdString();
@@ -275,17 +274,27 @@ void RelayTask::onBaseCheck()
         needConfirmFiles_.clear();
         needRemoveTaskFiles_.clear();
 
+        // 存在性检查需要生成路径
+        transItems_.clear();
+        for (auto& item : fileList_) {
+            auto trItem = std::make_shared<TransItem>();
+            trItem->isSend = data_->isUpload;
+            trItem->from = item;
+            GenOtherMetaPath(item, trItem->to, data_->isUpload);
+            transItems_.push_back(trItem);
+        }
+
         auto nameConfirm = data_->isUpload ? GUI_DIRECTION_REMOTE : GUI_DIRECTION_LOCAL;
-        for (const auto& item : fileList_) {
+        for (const auto& item : transItems_) {
             bool existExist = false;
-            if (!askDfOther->AskFileExist(item.fullPath, existExist)) {
-                emit signalLog(QString("%1文件文件存在性检查：%2 失败。").arg(nameConfirm).arg(item.fullPath));
+            if (!askDfOther->AskFileExist(item->to.fullPath, existExist)) {
+                emit signalLog(QString("%1文件文件存在性检查：%2 失败。").arg(nameConfirm).arg(item->to.fullPath));
                 emit signalCheckUnComplete();
                 return;
             }
             if (existExist) {
-                emit signalLog(QString("%1文件：%2 已存在相同文件。").arg(nameConfirm).arg(item.fullPath));
-                needConfirmFiles_.push_back(item);
+                emit signalLog(QString("%1文件：%2 已存在相同文件。").arg(nameConfirm).arg(item->to.fullPath));
+                needConfirmFiles_.push_back(item->to);
             }
         }
         emit signalNeedConfirmFiles();
@@ -323,9 +332,6 @@ void RelayTask::onConfirmFiles()
             }
         });
     }
-    fileList_.erase(
-        std::remove_if(fileList_.begin(), fileList_.end(), [&](const FileMeta& item) { return item.fullPath == item.fullPath; }),
-        fileList_.end());
     emit signalCheckComplete();
 }
 

@@ -34,8 +34,8 @@ private:
     std::string getMapKeyUUIDByMark(const std::string& uuid, int16_t mark);
 
 private:
+    QMutex transferMapLock_;
     ClientCore* clientCore_{};
     ClientWorker* clientWorker_{};
-    QMutex transferMapLock_;
     QMap<std::string, std::shared_ptr<OneFileTrans>> transferMap_;
 };

@@ -1,15 +1,16 @@
 #pragma once
 
+#include <QFile>
 #include <QMutex>
 #include <QObject>
 #include <QTimer>
 #include <fstream>
 #include <memory>
-#include <string>
 
 #include "ClientCore.h"
 #include "Protocol/FileMeta.h"
 #include "Protocol/Protocol.h"
+
 
 class OneFileTrans : public QObject
 {
@@ -64,13 +65,13 @@ private:
     TransStatus state_{};
 
     FileMeta meta_;
+    QString filePath_;
     std::string uuid_;
-
-    std::ofstream recvFile_;
-    std::ifstream sendFile_;
-    std::string filePath_;
     std::string targetId_;
     std::string ownId_;
+
+    QFile sendFile_;
+    QFile recvFile_;
 
     std::uint64_t totalSize_{};
     std::uint64_t transSize_{};

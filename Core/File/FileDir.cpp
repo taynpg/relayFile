@@ -8,17 +8,20 @@ thread_local QString errInfo;
 
 bool FileDir::IsDir(const QString& path)
 {
-    return miniPath::IsExist(path.toStdString());
+    QFileInfo info(path);
+    return info.exists() && info.isDir();
 }
 
 bool FileDir::IsFile(const QString& path)
 {
-    return miniPath::IsExist(path.toStdString());
+    QFileInfo info(path);
+    return info.exists() && info.isFile();
 }
 
 bool FileDir::IsExist(const QString& path)
 {
-    return IsDir(path) || IsFile(path);
+    QFileInfo info(path);
+    return info.exists();
 }
 
 QString FileDir::GetErrInfo()
