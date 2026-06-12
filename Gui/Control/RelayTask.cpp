@@ -114,6 +114,7 @@ void RelayTask::onTransFail()
 
 void RelayTask::onStartRun()
 {
+    onStartFresh(0);
     disableControls();
     clearData();
     speedTimer_->start();
@@ -161,6 +162,11 @@ void RelayTask::handleOneLine(int row)
         onFailFresh(row);
         emit signalTransFail();
     }
+}
+
+void RelayTask::onStartFresh(int row)
+{
+    QMetaObject::invokeMethod(this, [this, row]() { tableWidget_->item(row, 3)->setText("传输中"); });
 }
 
 void RelayTask::onFailFresh(int row)

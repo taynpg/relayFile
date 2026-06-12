@@ -74,6 +74,7 @@ protected:
     void onRefreshSpeed();
     void onSuccessFresh(int row);
     void onFailFresh(int row);
+    void onStartFresh(int row);
 
     std::shared_ptr<TransItem> getTransItem(const FileMeta& meta);
 
