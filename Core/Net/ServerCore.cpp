@@ -87,7 +87,7 @@ void ServerCore::onRead()
 
 void ServerCore::useFrame(FramePtr frame, QTcpSocket* socket, ClientInfo* cli)
 {
-    qDebug() << "处理消息：" << static_cast<int>(frame->type);
+    // qDebug() << "处理消息：" << static_cast<int>(frame->type);
 
     // 文件帧不处理
     if (GIsChuckAckFrame(frame)) {
@@ -213,21 +213,23 @@ void ServerCore::onClearClient()
     if (!cli) {
         return;
     }
-    qWarning() << "客户端连接关闭：" << cli->id;
+    // qWarning() << "客户端连接关闭：" << cli->id;
     socket->disconnectFromHost();
     socket->close();
 
     bool isRemove = false;
     {
         QWriteLocker locker(&rwLock_);
-        if (clientMap_.contains(cli->uuid.toStdString())) {
-            clientMap_.remove(cli->uuid.toStdString());
+        if (clientMap_.contains(cli->id.toStdString())) {
+            qDebug() << "clientMap_移除客户端：" << cli->id;
+            clientMap_.remove(cli->id.toStdString());
             isRemove = true;
         }
     }
     if (!isRemove) {
         QWriteLocker locker(&tempLock_);
         if (tempMap_.contains(cli->id.toStdString())) {
+            qDebug() << "tempMap_移除客户端：" << cli->id;
             tempMap_.remove(cli->id.toStdString());
             isRemove = true;
         }
@@ -235,7 +237,9 @@ void ServerCore::onClearClient()
     if (!isRemove) {
         QWriteLocker locker(&transLock_);
         if (transMap_.contains(cli->id.toStdString())) {
+            qDebug() << "transMap_移除客户端：" << cli->id;
             transMap_.remove(cli->id.toStdString());
+            isRemove = true;
         }
     }
     socket->deleteLater();

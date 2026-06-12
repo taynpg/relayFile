@@ -102,7 +102,9 @@ bool OneFileTrans::handleAck(FramePtr frame)
             transSize_ = totalSize_;
         }
         curBlockIndex_++;
-        emit signalProcess(transSize_, totalSize_);
+        if (curBlockIndex_ % 10 == 0) {
+            emit signalProcess(transSize_, totalSize_);
+        }
         nextSend();
         return true;
     }
