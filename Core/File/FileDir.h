@@ -26,7 +26,7 @@ public:
 
 public:
     static bool GetHome(QString& home);
-    static bool GetFileList(const QString& path, QVector<RFileMeta>& fileList);
+    static bool GetFileList(const QString& path, QVector<RFileMeta>& fileList, bool recursive);
     static void TurnMeta(const RFileMeta& rmeta, FileMeta& meta);
     static QString GetErrInfo();
     static QString cdUp(const QString& path);
@@ -36,4 +36,7 @@ public:
     static QString GenOutPath(const QString& root, const std::string& fullPath, const QString& outRoot);
     static QString GenDir(const QString& fullPath);
     static QString GenFileName(const QString& fullPath);
+    static bool IsDir(const QString& path);
+    static bool IsFile(const QString& path);
+    static bool IsExist(const QString& path);
 };

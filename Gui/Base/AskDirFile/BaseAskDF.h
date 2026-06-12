@@ -17,8 +17,9 @@ public:
     ~BaseAskDF() = default;
 
 public:
-    virtual bool AskFileList(const std::string& path, std::vector<FileMeta>& fileList) = 0;
+    virtual bool AskFileList(const std::string& path, std::vector<FileMeta>& fileList, bool recursive = false) = 0;
     virtual bool AskHome(std::string& home) = 0;
+    virtual bool AskFileExist(const std::string& path, bool& existExist) = 0;
 
 public:
     static std::shared_ptr<BaseAskDF> Create(AskType askType);

@@ -15,8 +15,9 @@ public:
     template <typename HandleResp> bool Request(Message& msg, HandleResp handleResp, FrameType type);
 
 public:
-    bool AskFileList(const std::string& path, std::vector<FileMeta>& fileList) override;
+    bool AskFileList(const std::string& path, std::vector<FileMeta>& fileList, bool recursive) override;
     bool AskHome(std::string& home) override;
+    bool AskFileExist(const std::string& path, bool& existExist) override;
 
 private:
     std::shared_ptr<ControlSession> controlSession_{};

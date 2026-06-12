@@ -1,8 +1,25 @@
 #include "FileDir.h"
 
 #include <QDir>
+#include <QQueue>
+#include <Utils/miniUtil.h>
 
 thread_local QString errInfo;
+
+bool FileDir::IsDir(const QString& path)
+{
+    return miniPath::IsExist(path.toStdString());
+}
+
+bool FileDir::IsFile(const QString& path)
+{
+    return miniPath::IsExist(path.toStdString());
+}
+
+bool FileDir::IsExist(const QString& path)
+{
+    return IsDir(path) || IsFile(path);
+}
 
 QString FileDir::GetErrInfo()
 {
@@ -15,42 +32,46 @@ QString FileDir::cdUp(const QString& path)
     return qdir.cdUp() ? qdir.absolutePath() : path;
 }
 
-bool FileDir::GetFileList(const QString& path, QVector<RFileMeta>& fileList)
+bool FileDir::GetFileList(const QString& path, QVector<RFileMeta>& fileList, bool recursive)
 {
     fileList.clear();
-    QString dirPath = path;
+    QQueue<QString> dirQueue;
+    dirQueue.enqueue(path);
 
-    QDir qdir(dirPath);
-    if (!qdir.exists()) {
-        errInfo = "路径不存在";
-        return false;
-    }
+    while (!dirQueue.isEmpty()) {
+        QString currentDir = dirQueue.dequeue();
+        QDir qdir(currentDir);
 
-    if (!qdir.isReadable()) {
-        errInfo = "目录不可读";
-        return false;
-    }
-
-    const auto entries = qdir.entryInfoList(QDir::Dirs | QDir::Files | QDir::NoDotAndDotDot);
-
-    for (const auto& entry : entries) {
-        RFileMeta info;
-        info.dir = entry.absoluteFilePath();
-        info.fileName = entry.fileName();
-        info.permission = entry.permissions();
-
-        if (entry.isDir()) {
-            info.fileType = RFileType::mTypeDir;
-            info.fileSize = 0;
-        } else if (entry.isFile()) {
-            info.fileType = RFileType::mTypeFile;
-            info.fileSize = entry.size();
-        } else {
+        if (!qdir.exists() || !qdir.isReadable()) {
             continue;
         }
 
-        info.lastModified = entry.lastModified().toMSecsSinceEpoch();
-        fileList.append(info);
+        const auto entries = qdir.entryInfoList(QDir::Dirs | QDir::Files | QDir::NoDotAndDotDot);
+
+        for (const auto& entry : entries) {
+
+            RFileMeta info;
+            info.dir = entry.absoluteFilePath();
+            info.fileName = entry.fileName();
+            info.permission = entry.permissions();
+
+            if (entry.isDir()) {
+                info.fileType = RFileType::mTypeDir;
+                info.fileSize = 0;
+                if (recursive) {
+                    dirQueue.enqueue(entry.absoluteFilePath());
+                    continue;
+                }
+            } else if (entry.isFile()) {
+                info.fileType = RFileType::mTypeFile;
+                info.fileSize = entry.size();
+            } else {
+                continue;
+            }
+
+            info.lastModified = entry.lastModified().toMSecsSinceEpoch();
+            fileList.append(info);
+        }
     }
 
     return true;
@@ -64,9 +85,11 @@ bool FileDir::GetHome(QString& home)
 
 void FileDir::TurnMeta(const RFileMeta& rmeta, FileMeta& meta)
 {
+    meta.fullPath = rmeta.dir.toStdString();
     meta.dir = rmeta.dir.toStdString();
     meta.name = rmeta.fileName.toStdString();
     meta.size = rmeta.fileSize;
+    meta.sizeStr = miniUtil::GetSizeInfo(rmeta.fileSize);
     meta.lastModified = rmeta.lastModified;
     meta.permission = rmeta.permission;
     meta.type = rmeta.fileType == RFileType::mTypeDir ? FileType::FILE_TYPE_DIR : FileType::FILE_TYPE_FILE;

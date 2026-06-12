@@ -53,3 +53,27 @@ void GlobalData::setGlobalConfigPath(const QString& globalConfigPath)
     std::lock_guard<std::mutex> lock(mutex_);
     globalConfigPath_ = globalConfigPath;
 }
+
+void GlobalData::setAskDfLocal(std::shared_ptr<BaseAskDF> askDfLocal)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    askDfLocal_ = askDfLocal;
+}
+
+std::shared_ptr<BaseAskDF> GlobalData::getAskDfLocal()
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return askDfLocal_;
+}
+
+void GlobalData::setAskDfRemote(std::shared_ptr<BaseAskDF> askDfRemote)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    askDfRemote_ = askDfRemote;
+}
+
+std::shared_ptr<BaseAskDF> GlobalData::getAskDfRemote()
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return askDfRemote_;
+}

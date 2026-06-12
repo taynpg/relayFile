@@ -165,7 +165,7 @@ void ControlSession::handleFrame(FramePtr frame)
             Message sourceMsg;
             deserializeStruct(worker->frame->data, sourceMsg);
             QVector<RFileMeta> result;
-            FileDir::GetFileList(QString::fromStdString(sourceMsg.comStr), result);
+            FileDir::GetFileList(QString::fromStdString(sourceMsg.comStr), result, sourceMsg.mark == 1);
             auto answerFrame = OneFrame::Create(worker->frame);
             Message m(sourceMsg);
             std::vector<FileMeta> stdMeta;
@@ -178,6 +178,21 @@ void ControlSession::handleFrame(FramePtr frame)
             m.mapData[""] = stdMeta;
             answerFrame->data = serializeStruct(m);
             answerFrame->type = FrameType::kMsgType_Answer_FileList;
+            emit signalRequestSend(answerFrame);
+            worker->isDone = true;
+        });
+        break;
+    }
+    case FrameType::kMsgType_Ask_FileExist: {
+        PushOneWork();
+        workerPool_->enqueue([this, worker]() {
+            Message sourceMsg;
+            deserializeStruct(worker->frame->data, sourceMsg);
+            auto answerFrame = OneFrame::Create(worker->frame);
+            Message m(sourceMsg);
+            m.comStr = FileDir::IsExist(QString::fromStdString(sourceMsg.comStr)) ? "1" : "0";
+            answerFrame->data = serializeStruct(m);
+            answerFrame->type = FrameType::kMsgType_Answer_FileExist;
             emit signalRequestSend(answerFrame);
             worker->isDone = true;
         });

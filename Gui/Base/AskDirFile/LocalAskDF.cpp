@@ -1,21 +1,17 @@
 #include "LocalAskDF.h"
 
 #include <File/FileDir.h>
+#include <Utils/miniUtil.h>
 
-bool LocalAskDF::AskFileList(const std::string& path, std::vector<FileMeta>& fileList)
+bool LocalAskDF::AskFileList(const std::string& path, std::vector<FileMeta>& fileList, bool recursive)
 {
     QVector<RFileMeta> result;
-    if (!FileDir::GetFileList(QString::fromStdString(path), result)) {
+    if (!FileDir::GetFileList(QString::fromStdString(path), result, recursive)) {
         return false;
     }
     for (const auto& rmeta : result) {
         FileMeta meta;
-        meta.dir = rmeta.dir.toStdString();
-        meta.name = rmeta.fileName.toStdString();
-        meta.size = rmeta.fileSize;
-        meta.lastModified = rmeta.lastModified;
-        meta.permission = rmeta.permission;
-        meta.type = rmeta.fileType == RFileType::mTypeDir ? FileType::FILE_TYPE_DIR : FileType::FILE_TYPE_FILE;
+        FileDir::TurnMeta(rmeta, meta);
         fileList.push_back(meta);
     }
     return true;
@@ -27,5 +23,11 @@ bool LocalAskDF::AskHome(std::string& home)
         return false;
     }
     home = homeStr.toStdString();
+    return true;
+}
+
+bool LocalAskDF::AskFileExist(const std::string& path, bool& existExist)
+{
+    existExist = FileDir::IsExist(QString::fromStdString(path));
     return true;
 }

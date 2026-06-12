@@ -25,6 +25,7 @@ set(CONTROL_SOURCES
     Control/ExplorerControl.h Control/ExplorerControl.cpp Control/ExplorerControl.ui
     Control/RelayTask.h Control/RelayTask.cpp Control/RelayTask.ui
     Control/LogControl.h Control/LogControl.cpp Control/LogControl.ui
+    Base/MessageBoxHelper.h Base/MessageBoxHelper.cpp
 )
 
 set(BASE_SOURCES

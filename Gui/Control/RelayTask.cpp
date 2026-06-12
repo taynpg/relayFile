@@ -5,6 +5,7 @@
 #include <Utils/Common.h>
 
 #include "Base/BaseHelper.h"
+#include "Base/MessageBoxHelper.h"
 #include "Protocol/Serialize.hpp"
 #include "ui_RelayTask.h"
 
@@ -39,8 +40,8 @@ void RelayTask::closeEvent(QCloseEvent* event)
 void RelayTask::baseTask()
 {
     doubleLinker_ = GlobalData::getInstance()->getDoubleLinker();
-    askLocalDf_ = BaseAskDF::Create(AskType::ASK_TYPE_LOCAL);
-    askRemoteDf_ = BaseAskDF::Create(AskType::ASK_TYPE_REMOTE);
+    askLocalDf_ = GlobalData::getInstance()->getAskDfLocal();
+    askRemoteDf_ = GlobalData::getInstance()->getAskDfRemote();
     workerThread_ = std::make_shared<WorkerThread<RelayTask>>(this);
     workerThread_->start();
     speedTimer_ = new QTimer(this);
@@ -98,6 +99,7 @@ void RelayTask::initSignals()
     connect(doubleLinker_.get(), &DoubleLinker::signalCurFileProgress, this, &RelayTask::onCurFileProgress);
     connect(doubleLinker_.get(), &DoubleLinker::signalCurFileItem, this, &RelayTask::onCurFileItem);
     connect(speedTimer_, &QTimer::timeout, this, &RelayTask::onRefreshSpeed);
+    connect(this, &RelayTask::signalNeedConfirmFiles, this, &RelayTask::onConfirmFiles);
 }
 
 void RelayTask::onTransComplete()
@@ -217,28 +219,109 @@ void RelayTask::onBaseCheck()
         }
         emit signalLog("传输TCP连接检查通过。");
         // 3.检查本地根目录是否存在。
+        std::shared_ptr<BaseAskDF> askDfOwn = data_->isUpload ? askLocalDf_ : askRemoteDf_;
+        std::shared_ptr<BaseAskDF> askDfOther = data_->isUpload ? askRemoteDf_ : askLocalDf_;
+
         for (const auto& item : data_->fileList) {
+            auto path = FileDir::Join(data_->isUpload ? data_->localRoot : data_->remoteRoot, item.name);
             // 文件夹暂时不处理
             if (item.type == RFileType::mTypeDir) {
+
+                std::vector<FileMeta> fileList;
+                if (!askDfOwn->AskFileList(path.toStdString(), fileList, true)) {
+                    emit signalLog(QString("获取目录内容：%1 失败。").arg(path));
+                    emit signalCheckUnComplete();
+                    return;
+                }
+                fileList_.insert(fileList_.end(), fileList.begin(), fileList.end());
                 continue;
             }
-            auto path = FileDir::Join(data_->localRoot, item.name);
             emit signalLog(QString("检查本地文件：%1").arg(path));
             FileMeta meta;
-            meta.dir = data_->localRoot.toStdString();
+            meta.dir = data_->isUpload ? data_->remoteRoot.toStdString() : data_->localRoot.toStdString();
             meta.sizeStr = item.sizeStr.toStdString();
             meta.name = item.name.toStdString();
             meta.fullPath = path.toStdString();
             meta.size = item.size;
             fileList_.push_back(meta);
         }
-        emit signalLog("本地文件存在检查完成。");
-        // 4.检查远程根目录是否存在。
-        // 5.如果是上传，检查远端是否已存在相同文件。
-        // 6.如果是下载，检查本地是否已存在相同文件。
         emit signalUpdateTable();
-        emit signalCheckComplete();
+        auto name = data_->isUpload ? "本地" : "远端";
+        for (const auto& item : fileList_) {
+            bool existExist = false;
+            if (!askDfOwn->AskFileExist(item.fullPath, existExist)) {
+                emit signalLog(QString("%1文件文件存在性检查：%2 失败。").arg(name).arg(item.fullPath));
+                emit signalCheckUnComplete();
+                return;
+            }
+            if (!existExist) {
+                emit signalLog(QString("%1文件：%2 不存在。").arg(name).arg(item.fullPath));
+                emit signalCheckUnComplete();
+                return;
+            }
+        }
+        emit signalLog("本地文件存在检查完成。");
+
+        needConfirmFiles_.clear();
+        needRemoveTaskFiles_.clear();
+
+        auto nameConfirm = data_->isUpload ? "远端" : "本地";
+        for (const auto& item : fileList_) {
+            bool existExist = false;
+            if (!askDfOther->AskFileExist(item.fullPath, existExist)) {
+                emit signalLog(QString("%1文件文件存在性检查：%2 失败。").arg(nameConfirm).arg(item.fullPath));
+                emit signalCheckUnComplete();
+                return;
+            }
+            if (existExist) {
+                emit signalLog(QString("%1文件：%2 已存在相同文件。").arg(nameConfirm).arg(item.fullPath));
+                needConfirmFiles_.push_back(item);
+            }
+        }
+        emit signalNeedConfirmFiles();
     });
+}
+
+void RelayTask::onConfirmFiles()
+{
+    if (needConfirmFiles_.empty()) {
+        emit signalCheckComplete();
+        return;
+    }
+    bool needAsk = true;
+    auto nameConfirm = data_->isUpload ? "远端" : "本地";
+    for (const auto& item : needConfirmFiles_) {
+        if (!needAsk) {
+            break;
+        }
+        auto r = MessageBoxHelper::questionFourButtons(
+            this, "警告", QString("已存在%1文件%2, 是否覆盖？").arg(nameConfirm).arg(QString::fromStdString(item.fullPath)));
+        if (r == MessageBoxHelper::Result::No) {
+            needRemoveTaskFiles_.push_back(item);
+        } else if (r == MessageBoxHelper::Result::Exit) {
+            emit signalCheckUnComplete();
+        } else if (r == MessageBoxHelper::Result::ALL) {
+            needAsk = false;
+        }
+    }
+    for (const auto& item : needRemoveTaskFiles_) {
+        QMetaObject::invokeMethod(this, [this, item]() {
+            auto qFull = QString::fromStdString(item.fullPath);
+            if (curTableData_.count(qFull)) {
+                auto* item = tableWidget_->item(curTableData_[qFull], 3);
+                item->setText("跳过");
+            }
+        });
+    }
+    fileList_.erase(
+        std::remove_if(fileList_.begin(), fileList_.end(), [&](const FileMeta& item) { return item.fullPath == item.fullPath; }),
+        fileList_.end());
+    emit signalCheckComplete();
+}
+
+bool RelayTask::normalCheckFileExist()
+{
+    return false;
 }
 
 void RelayTask::disableControls()
@@ -281,6 +364,7 @@ void RelayTask::updateTable()
 {
     tableWidget_->clearContents();
     tableWidget_->setRowCount(0);
+    curTableData_.clear();
 
     for (int i = 0; i < fileList_.size(); ++i) {
         auto row = tableWidget_->rowCount();
@@ -342,11 +426,13 @@ void RelayTask::onRefreshSpeed()
 
 void RelayTask::setFileItem(const FileMeta& meta, int row, int index)
 {
+    curTableData_[QString::fromStdString(meta.fullPath)] = row;
+
     auto* indexItem = new QTableWidgetItem(QString::number(index));
     indexItem->setFlags(indexItem->flags() & ~Qt::ItemIsEditable);
     tableWidget_->setItem(row, 0, indexItem);
 
-    auto* nameItem = new QTableWidgetItem(QString::fromStdString(meta.name));
+    auto* nameItem = new QTableWidgetItem(QString::fromStdString(meta.fullPath));
     nameItem->setFlags(indexItem->flags() & ~Qt::ItemIsEditable);
     tableWidget_->setItem(row, 1, nameItem);
 

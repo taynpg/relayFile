@@ -30,10 +30,14 @@ template <typename HandleResp> bool RemoteAskDF::Request(Message& msg, HandleRes
     return handleResp(ret);
 }
 
-bool RemoteAskDF::AskFileList(const std::string& path, std::vector<FileMeta>& fileList)
+bool RemoteAskDF::AskFileList(const std::string& path, std::vector<FileMeta>& fileList, bool recursive)
 {
     Message msg;
     msg.comStr = path;
+
+    if (recursive) {
+        msg.mark = 1;
+    }
 
     fileList.clear();
 
@@ -68,4 +72,20 @@ bool RemoteAskDF::AskHome(std::string& home)
             return true;
         },
         FrameType::kMsgType_Ask_Home);
+}
+
+bool RemoteAskDF::AskFileExist(const std::string& path, bool& existExist)
+{
+    Message msg;
+    msg.comStr = path;
+    return Request(
+        msg,
+        [&existExist](MessagePtr ret) {
+            if (ret == nullptr) {
+                return false;
+            }
+            existExist = ret->comStr == "1";
+            return true;
+        },
+        FrameType::kMsgType_Ask_FileExist);
 }

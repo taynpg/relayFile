@@ -69,6 +69,9 @@ void relayFile::initControls()
     localExplorerControl_->setAskDF(AskType::ASK_TYPE_LOCAL);
     remoteExplorerControl_->setAskDF(AskType::ASK_TYPE_REMOTE);
 
+    GlobalData::getInstance()->setAskDfLocal(localExplorerControl_->getAskDF());
+    GlobalData::getInstance()->setAskDfRemote(remoteExplorerControl_->getAskDF());
+
     comparisonControl_ = new ComparisonControl(this);
     logControl_ = new LogControl(this);
     tabWidget_ = new QTabWidget(this);

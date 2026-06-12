@@ -9,6 +9,7 @@ public:
     ~LocalAskDF() = default;
 
 public:
-    bool AskFileList(const std::string& path, std::vector<FileMeta>& fileList) override;
+    bool AskFileList(const std::string& path, std::vector<FileMeta>& fileList, bool recursive) override;
     bool AskHome(std::string& home) override;
+    bool AskFileExist(const std::string& path, bool& existExist) override;
 };

@@ -44,6 +44,7 @@ signals:
     void signalUpdateTable();
     void signalTransComplete();
     void signalTransFail();
+    void signalNeedConfirmFiles();
 
 public:
     void Quit();
@@ -75,6 +76,9 @@ protected:
     void onSuccessFresh(int row);
     void onFailFresh(int row);
     void onStartFresh(int row);
+    void onConfirmFiles();
+
+    bool normalCheckFileExist();
 
     std::shared_ptr<TransItem> getTransItem(const FileMeta& meta);
 
@@ -100,6 +104,10 @@ private:
     Ui::RelayTask* ui;
 
 private:
+    std::vector<FileMeta> needConfirmFiles_;
+    std::vector<FileMeta> needRemoveTaskFiles_;
+
+    std::map<QString, int> curTableData_;
     std::shared_ptr<BaseAskDF> askLocalDf_{};
     std::shared_ptr<BaseAskDF> askRemoteDf_{};
     std::shared_ptr<DoubleLinker> doubleLinker_{};
