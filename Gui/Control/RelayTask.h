@@ -10,7 +10,6 @@
 #include "Base/AskDirFile/BaseAskDF.h"
 #include "Base/WorkerThread.hpp"
 
-
 struct FileItemData {
     QString name;
     QString path;
@@ -72,15 +71,30 @@ protected:
 
     void onCurFileProgress(std::uint64_t transed, std::uint64_t total);
     void onCurFileItem(const QString& from, const QString& to);
+    void onRefreshSpeed();
+    void onSuccessFresh(int row);
+    void onFailFresh(int row);
+
+    std::shared_ptr<TransItem> getTransItem(const FileMeta& meta);
 
 private:
     void disableControls();
     void enableControls();
+    void clearData();
+    QString getSpeedStr(uint64_t transed);
 
 private:
+    // 标准库计时开始点
+    std::chrono::steady_clock::time_point startTime_;
+
+    uint64_t preTransed_{0};
+    uint64_t totalSize_{0};
+    uint64_t curTransed_{0};
+
     bool checkRet_{false};
     std::vector<FileMeta> fileList_;
     QTableWidget* tableWidget_{};
+    QTimer* speedTimer_{};
     std::shared_ptr<RelayTaskData> data_;
     Ui::RelayTask* ui;
 

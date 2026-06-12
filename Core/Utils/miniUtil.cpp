@@ -120,6 +120,36 @@ std::string miniUtil::GetSizeInfo(std::uint64_t size)
     return std::to_string(size / 1024 / 1024 / 1024) + " GB";
 }
 
+std::string miniUtil::GetTimeInfo(std::uint64_t milliseconds)
+{
+    constexpr std::uint64_t MS_PER_SEC = 1000;
+    constexpr std::uint64_t MS_PER_MIN = 60 * MS_PER_SEC;
+    constexpr std::uint64_t MS_PER_HOUR = 60 * MS_PER_MIN;
+
+    std::uint64_t hours = milliseconds / MS_PER_HOUR;
+    std::uint64_t remain = milliseconds % MS_PER_HOUR;
+
+    std::uint64_t minutes = remain / MS_PER_MIN;
+    remain %= MS_PER_MIN;
+
+    std::uint64_t seconds = remain / MS_PER_SEC;
+    std::uint64_t ms = remain % MS_PER_SEC;
+
+    if (hours > 0) {
+        return std::to_string(hours) + "时" + std::to_string(minutes) + "分";
+    }
+
+    if (minutes > 0) {
+        return std::to_string(minutes) + "分" + std::to_string(seconds) + "秒";
+    }
+
+    if (seconds > 0) {
+        return std::to_string(seconds) + "秒" + std::to_string(ms) + "毫秒";
+    }
+
+    return std::to_string(ms) + "毫秒";
+}
+
 std::string miniUtil::Upper(const std::string& str)
 {
     std::string result = str;
@@ -470,7 +500,7 @@ bool miniPath::GetList(const std::string& path, std::vector<miniFileMeta>& fileL
             if (filename == "." || filename == "..") {
                 continue;
             }
-            
+
 #if defined(OS_MINI_WINDOWS)
             DWORD attrs = GetFileAttributesW(U8ToW(entry.path().string()).c_str());
             if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM))) {

@@ -8,6 +8,8 @@
 #include "Protocol/Serialize.hpp"
 #include "ui_RelayTask.h"
 
+constexpr int SPEED_TIMER_INTERVAL = 500;
+
 RelayTask::RelayTask(QWidget* parent) : QDialog(parent), ui(new Ui::RelayTask)
 {
     ui->setupUi(this);
@@ -41,6 +43,8 @@ void RelayTask::baseTask()
     askRemoteDf_ = BaseAskDF::Create(AskType::ASK_TYPE_REMOTE);
     workerThread_ = std::make_shared<WorkerThread<RelayTask>>(this);
     workerThread_->start();
+    speedTimer_ = new QTimer(this);
+    speedTimer_->setInterval(SPEED_TIMER_INTERVAL);
 }
 
 void RelayTask::initControl()
@@ -52,25 +56,29 @@ void RelayTask::initControl()
     ui->rbDisconnect->setEnabled(false);
     ui->rbNormal->setEnabled(false);
     ui->pedLog->setEnabled(false);
-    ui->lcdNumber->setEnabled(false);
+    // ui->lbSpeed->setEnabled(false);
     ui->rbDisconnect->setChecked(true);
     ui->btnStart->setEnabled(false);
     ui->btnRetryAll->setEnabled(false);
 
     tableWidget_ = new QTableWidget();
-    tableWidget_->setColumnCount(4);
-    tableWidget_->setHorizontalHeaderLabels({"序号", "名称", "大小", "状态"});
+    tableWidget_->setColumnCount(6);
+    tableWidget_->setHorizontalHeaderLabels({"序号", "名称", "大小", "状态", "平均速度", "用时"});
     tableWidget_->setSelectionBehavior(QAbstractItemView::SelectRows);
     tableWidget_->setContextMenuPolicy(Qt::CustomContextMenu);
 
     tableWidget_->setColumnWidth(0, 50);
     tableWidget_->setColumnWidth(2, 100);
     tableWidget_->setColumnWidth(3, 100);
+    tableWidget_->setColumnWidth(4, 130);
+    tableWidget_->setColumnWidth(5, 120);
     tableWidget_->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
     tableWidget_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Fixed);
     tableWidget_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
     tableWidget_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
     tableWidget_->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Fixed);
+    tableWidget_->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Fixed);
+    tableWidget_->horizontalHeader()->setSectionResizeMode(5, QHeaderView::Fixed);
 
     auto* layout = new QVBoxLayout();
     layout->addWidget(tableWidget_);
@@ -89,22 +97,44 @@ void RelayTask::initSignals()
     connect(this, &RelayTask::signalTransFail, this, &RelayTask::onTransFail);
     connect(doubleLinker_.get(), &DoubleLinker::signalCurFileProgress, this, &RelayTask::onCurFileProgress);
     connect(doubleLinker_.get(), &DoubleLinker::signalCurFileItem, this, &RelayTask::onCurFileItem);
+    connect(speedTimer_, &QTimer::timeout, this, &RelayTask::onRefreshSpeed);
 }
 
 void RelayTask::onTransComplete()
 {
+    speedTimer_->stop();
     enableControls();
 }
 
 void RelayTask::onTransFail()
 {
+    speedTimer_->stop();
     ui->btnStart->setEnabled(true);
 }
 
 void RelayTask::onStartRun()
 {
     disableControls();
+    clearData();
+    speedTimer_->start();
+    startTime_ = std::chrono::steady_clock::now();
     workerThread_->invoke([this]() { handleOneLine(0); });
+}
+
+std::shared_ptr<TransItem> RelayTask::getTransItem(const FileMeta& meta)
+{
+    auto taskItem = std::make_shared<TransItem>();
+    taskItem->from = meta;
+    taskItem->to = meta;
+    taskItem->isSend = data_->isUpload;
+
+    auto oPath = FileDir::GenOutPath(data_->isUpload ? data_->localRoot : data_->remoteRoot, taskItem->from.fullPath,
+                                     data_->isUpload ? data_->remoteRoot : data_->localRoot);
+
+    taskItem->to.fullPath = oPath.toStdString();
+    taskItem->to.name = FileDir::GenFileName(oPath).toStdString();
+    taskItem->to.dir = FileDir::GenDir(oPath).toStdString();
+    return taskItem;
 }
 
 void RelayTask::handleOneLine(int row)
@@ -115,29 +145,40 @@ void RelayTask::handleOneLine(int row)
     }
 
     const auto& fileMeta = fileList_[id];
-    auto taskItem = std::make_shared<TransItem>();
-    taskItem->from = fileMeta;
-    taskItem->to = fileMeta;
-    taskItem->isSend = data_->isUpload;
-
-    auto oPath = FileDir::GenOutPath(data_->isUpload ? data_->localRoot : data_->remoteRoot, taskItem->from.fullPath,
-                                     data_->isUpload ? data_->remoteRoot : data_->localRoot);
-                                     
-    taskItem->to.fullPath = oPath.toStdString();
-    taskItem->to.name = FileDir::GenFileName(oPath).toStdString();
-    taskItem->to.dir = FileDir::GenDir(oPath).toStdString();
+    auto taskItem = getTransItem(fileMeta);
 
     //  等待Server通知结果
     //  根据结果进行放弃或者传输
     auto execRet = doubleLinker_->RunTaskItem(taskItem);
-    qDebug() << "Executor.Execute(requestFrame): " << execRet;
+    qDebug() << "handleOneLine: " << execRet;
+
     if (execRet) {
         emit signalLog("传输执行成功。");
+        onSuccessFresh(row);
         emit signalTransComplete();
     } else {
         emit signalLog("传输执行失败。");
+        onFailFresh(row);
         emit signalTransFail();
     }
+}
+
+void RelayTask::onFailFresh(int row)
+{
+    QMetaObject::invokeMethod(this, [this, row]() { tableWidget_->item(row, 3)->setText("失败"); });
+}
+
+void RelayTask::onSuccessFresh(int row)
+{
+    auto stopPoint = std::chrono::steady_clock::now();
+    auto useTime = std::chrono::duration_cast<std::chrono::milliseconds>(stopPoint - startTime_);
+    auto speedSize = totalSize_ * 1.0 / useTime.count();
+    auto speedStr = getSpeedStr(speedSize * 1000);
+    auto useTimeStr = miniUtil::GetTimeInfo(useTime.count());
+    QMetaObject::invokeMethod(this, [this, row, speedStr]() { tableWidget_->item(row, 4)->setText(speedStr); });
+    QMetaObject::invokeMethod(
+        this, [this, row, useTimeStr]() { tableWidget_->item(row, 5)->setText(QString::fromStdString(useTimeStr)); });
+    QMetaObject::invokeMethod(this, [this, row]() { tableWidget_->item(row, 3)->setText("已完成"); });
 }
 
 void RelayTask::setData(std::shared_ptr<RelayTaskData> data)
@@ -249,10 +290,48 @@ void RelayTask::onCurFileProgress(std::uint64_t transed, std::uint64_t total)
 {
     auto cur = transed * 1.0 / total;
     ui->curProgress->setValue(int(cur * 100));
+    totalSize_ = total;
+    curTransed_ = transed;
+}
+
+void RelayTask::clearData()
+{
+    preTransed_ = 0;
+    totalSize_ = 0;
+    curTransed_ = 0;
 }
 
 void RelayTask::onCurFileItem(const QString& from, const QString& to)
 {
+}
+
+QString RelayTask::getSpeedStr(uint64_t transed)
+{
+    double speed = static_cast<double>(transed);
+    QString unit = "B/s";
+
+    if (speed >= 1024.0) {
+        speed /= 1024.0;
+        unit = "KB/s";
+
+        if (speed >= 1024.0) {
+            speed /= 1024.0;
+            unit = "MB/s";
+
+            if (speed >= 1024.0) {
+                speed /= 1024.0;
+                unit = "GB/s";
+            }
+        }
+    }
+    return QString("%1 %2").arg(speed, 0, 'f', 2).arg(unit);
+}
+
+void RelayTask::onRefreshSpeed()
+{
+    auto speedStr = getSpeedStr((curTransed_ - preTransed_) * (1000 / SPEED_TIMER_INTERVAL));
+    ui->lbSpeed->setText(speedStr);
+    preTransed_ = curTransed_;
 }
 
 void RelayTask::setFileItem(const FileMeta& meta, int row, int index)
@@ -272,4 +351,12 @@ void RelayTask::setFileItem(const FileMeta& meta, int row, int index)
     auto* stateItem = new QTableWidgetItem("等待");
     stateItem->setFlags(indexItem->flags() & ~Qt::ItemIsEditable);
     tableWidget_->setItem(row, 3, stateItem);
+
+    auto* speedItem = new QTableWidgetItem("N/A");
+    speedItem->setFlags(indexItem->flags() & ~Qt::ItemIsEditable);
+    tableWidget_->setItem(row, 4, speedItem);
+
+    auto* useItem = new QTableWidgetItem("N/A");
+    useItem->setFlags(indexItem->flags() & ~Qt::ItemIsEditable);
+    tableWidget_->setItem(row, 5, useItem);
 }
