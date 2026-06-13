@@ -19,7 +19,8 @@
     }
 
 ControlSession::ControlSession(QObject* parent)
-    : QObject(parent), workerPool_(std::make_shared<ThreadPool>(3)), timerPoolStd_(std::make_shared<TimerPoolStd>(3))
+    : QObject(parent), workerPool_(std::make_shared<ThreadPool>(3)), timerPoolStd_(std::make_shared<TimerPoolStd>(3)),
+      baseConfig_(std::make_shared<BaseConfig>())
 {
     clearWorkerTimer_ = new QTimer(this);
     clientCore_ = new ClientCore();
@@ -256,7 +257,7 @@ bool ControlSession::SendWithCall(FramePtr frame, std::function<void(FramePtr)> 
 void ControlSession::AskOwnID()
 {
     Message msg;
-    msg.from.clientName = "倔强的小强";
+    msg.from.clientName = baseConfig_->getCurrentName().toStdString();
     auto frame = OneFrame::Create();
     frame->data = serializeStruct(msg);
     frame->sessionId = clientCore_->GetSessionId();

@@ -10,6 +10,7 @@
 #include "Protocol/Protocol.h"
 #include "Utils/ThreadPoolSTD.hpp"
 #include "Utils/TimerPoolSTD.hpp"
+#include "Utils/Common.h"
 
 // 我定义了一个叫 function_traits的模板，但我暂时不说它长什么样。
 // 它现在是一个 不完整类型（incomplete type）。
@@ -96,6 +97,7 @@ private:
     ClientWorker* clientWorker_{};
     std::shared_ptr<ThreadPool> workerPool_{};
     std::shared_ptr<TimerPoolStd> timerPoolStd_{};
+    std::shared_ptr<BaseConfig> baseConfig_{};
     QMap<uint64_t, std::shared_ptr<WaiteFrame>> requestWaitFrame_;
     QMap<uint64_t, std::shared_ptr<TaskWorker>> responseWaitWorker_;
 };

@@ -25,8 +25,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE}/)
 
 include(CMake/Compile.cmake)
 
-include_directories(${CMAKE_CURRENT_LIST_DIR}/Third)
-
+set(THIRD_PATH ${CMAKE_CURRENT_LIST_DIR}/Third)
 add_subdirectory(Core)
 add_subdirectory(Gui)
 add_subdirectory(Console)

@@ -37,8 +37,8 @@ void RelayTask::closeEvent(QCloseEvent* event)
     if (status_ == RelayTaskStatus::Transing) {
         if (MessageBoxHelper::questionYesNo(this, "确认", "正在传输中，是否确认退出？")) {
             doubleLinker_->Interrupt();
-            event->accept();
-                Quit();
+            Quit();
+            QDialog::closeEvent(event);
             return;
         }
     }

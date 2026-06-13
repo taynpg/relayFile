@@ -11,3 +11,20 @@ private:
 public:
     static QString GetUUID();
 };
+
+class BaseConfig
+{
+public:
+    BaseConfig();
+    ~BaseConfig() = default;
+
+public:
+    QString getCurrentName();
+    QString generateRandomName();
+
+private:
+    void genPath();
+
+public:
+    QString baseConfigPath_;
+};
