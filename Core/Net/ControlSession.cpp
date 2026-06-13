@@ -122,6 +122,11 @@ template <typename Callback> bool ControlSession::SendCall(FramePtr frame, Callb
     return true;
 }
 
+std::shared_ptr<BaseConfig> ControlSession::getBaseConfig()
+{
+    return baseConfig_;
+}
+
 ClientInfo ControlSession::getOtherInfo()
 {
     return clientCore_->oInfo_;

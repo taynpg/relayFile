@@ -32,6 +32,7 @@ private:
     void initTable();
     void initSignals();
     void initUI();
+    void initLoadIp();
 
 public slots:
     void onConnectSuccess();
@@ -52,6 +53,7 @@ private:
     void updateClientList(const MessagePtr& msg);
 
 private:
+    std::shared_ptr<BaseConfig> baseConfig_{};
     std::shared_ptr<DoubleLinker> doubleLinker_{};
     Ui::ConnectorControl* ui;
 };

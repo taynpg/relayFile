@@ -75,6 +75,8 @@ public:
     bool SendWithCall(const Message& msg, FrameType type, std::function<void(MessagePtr)> callback);
     bool SendWithCall(const Message& msg, FrameType type, std::function<void(FramePtr)> callback);
 
+    std::shared_ptr<BaseConfig> getBaseConfig();
+
 public:
     void Quit();
     void handleFrame(FramePtr frame);

@@ -15,11 +15,11 @@ ConnectorControl::ConnectorControl(QWidget* parent) : QDialog(parent), ui(new Ui
     initTable();
     initUI();
 
+    ui->cbIp->setEditable(true);
     doubleLinker_ = GlobalData::getInstance()->getDoubleLinker();
     initSignals();
-
-    // 临时调试设置
-    ui->edServerIp->setText("127.0.0.1:9008");
+    baseConfig_ = GlobalData::getInstance()->getBaseConfig();
+    initLoadIp();
 }
 
 void ConnectorControl::Quit()
@@ -30,6 +30,18 @@ void ConnectorControl::initUI()
 {
     ui->lineEdit->setEnabled(false);
     ui->edCurrentClient->setEnabled(false);
+}
+
+void ConnectorControl::initLoadIp()
+{
+    IpHistory history;
+    if (baseConfig_->getIpHistory(history)) {
+        auto curip = history.current;
+        for (const auto& ip : history.history) {
+            ui->cbIp->addItem(QString::fromStdString(ip));
+        }
+        ui->cbIp->setCurrentText(QString::fromStdString(curip));
+    }
 }
 
 ConnectorControl::~ConnectorControl()
@@ -118,7 +130,7 @@ void ConnectorControl::updateClientList(const MessagePtr& msg)
 
 void ConnectorControl::connectToServer()
 {
-    auto serverIp = ui->edServerIp->text().trimmed();
+    auto serverIp = ui->cbIp->currentText().trimmed();
     QString ip, port;
     if (!parseIpPort(serverIp, ip, port)) {
         qWarning() << "不合法的IPV4地址:" << serverIp;
@@ -163,6 +175,8 @@ void ConnectorControl::onConnectSuccess()
     ui->btnRefresh->setEnabled(true);
     emit signalConnectDone();
     emit signalAskID();
+    baseConfig_->pushOneIp(ui->cbIp->currentText().toStdString());
+    initLoadIp();
 }
 
 void ConnectorControl::onDisconnectSuccess()

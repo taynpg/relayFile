@@ -77,3 +77,15 @@ std::shared_ptr<BaseAskDF> GlobalData::getAskDfRemote()
     std::lock_guard<std::mutex> lock(mutex_);
     return askDfRemote_;
 }
+
+void GlobalData::setBaseConfig(std::shared_ptr<BaseConfig> baseConfig)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    baseConfig_ = baseConfig;
+}
+
+std::shared_ptr<BaseConfig> GlobalData::getBaseConfig()
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return baseConfig_;
+}

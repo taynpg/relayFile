@@ -1,5 +1,6 @@
 #include "Common.h"
 
+#include <QDebug>
 #include <QFile>
 #include <QRandomGenerator>
 #include <QString>
@@ -30,6 +31,7 @@ void BaseConfig::genPath()
 
 QString BaseConfig::getCurrentName()
 {
+    QMutexLocker locker(&mutex_);
     QFile config(baseConfigPath_);
     if (!config.exists()) {
         auto newName = generateRandomName();
@@ -91,4 +93,102 @@ QString BaseConfig::generateRandomName()
     const QString& noun = nouns[rg->bounded(nouns.size())];
 
     return adj + noun;
+}
+
+void from_json(const nlohmann::json& j, IpHistory& h)
+{
+    j.at("history").get_to(h.history);
+    j.at("current").get_to(h.current);
+}
+
+void to_json(nlohmann::json& j, const IpHistory& h)
+{
+    j = nlohmann::json{{"history", h.history}, {"current", h.current}};
+}
+
+bool BaseConfig::getIpHistory(IpHistory& out)
+{
+    QMutexLocker locker(&mutex_);
+
+    QFile file(baseConfigPath_);
+    if (!file.exists()) {
+        return false;
+    }
+
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return false;
+    }
+
+    QByteArray data = file.readAll();
+    file.close();
+
+    try {
+        nlohmann::json j = nlohmann::json::parse(data.toStdString());
+        if (!j.contains("ipHistory") || j["ipHistory"].is_null()) {
+            return false;
+        }
+        out = j["ipHistory"].get<IpHistory>();
+        return true;
+    } catch (const nlohmann::json::exception& e) {
+        qWarning() << "Json parse error:" << e.what();
+        return false;
+    }
+}
+
+bool BaseConfig::pushOneIp(const std::string& ip)
+{
+    QMutexLocker locker(&mutex_);
+
+    QFile file(baseConfigPath_);
+    if (!file.open(QIODevice::ReadWrite | QIODevice::Text)) {
+        return false;
+    }
+
+    nlohmann::json j;
+    IpHistory history;
+    QByteArray data = file.readAll();
+
+    try {
+        if (!data.isEmpty()) {
+            j = nlohmann::json::parse(data.toStdString());
+        }
+        if (j.contains("ipHistory") && !j["ipHistory"].is_null()) {
+            history = j["ipHistory"].get<IpHistory>();
+        }
+    } catch (const nlohmann::json::exception& e) {
+        qWarning() << "Json parse error:" << e.what();
+        file.close();
+        return false;
+    }
+
+    if (!history.current.empty()) {
+        history.history.push_back(history.current);
+    }
+
+    history.current = ip;
+    history.history.push_back(ip);
+
+    std::unordered_set<std::string> seen;
+    std::vector<std::string> uniqueHistory;
+
+    for (auto it = history.history.rbegin(); it != history.history.rend(); ++it) {
+        if (seen.insert(*it).second) {
+            uniqueHistory.push_back(*it);
+        }
+    }
+    std::reverse(uniqueHistory.begin(), uniqueHistory.end());
+    history.history = std::move(uniqueHistory);
+
+    constexpr size_t MaxHistory = 10;
+    if (history.history.size() > MaxHistory) {
+        history.history.erase(history.history.begin(), history.history.end() - MaxHistory);
+    }
+
+    j["ipHistory"] = history;
+
+    file.resize(0);
+    file.write(QByteArray(j.dump(4).c_str()));
+    file.close();
+
+    return true;
 }

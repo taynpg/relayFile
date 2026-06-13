@@ -25,6 +25,7 @@ relayFile::relayFile(QWidget* parent) : QWidget(parent), ui(new Ui::relayFile)
     doubleLinker_->SetControlSession(controlSession);
     doubleLinker_->SetFileSession(fileSession);
     GlobalData::getInstance()->setDoubleLinker(doubleLinker_);
+    GlobalData::getInstance()->setBaseConfig(controlSession->getBaseConfig());
 
     Logger logger;
     logger.setInfo("log/relayFileGUI.log", "relayFileGUI");
