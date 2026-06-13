@@ -29,10 +29,16 @@ QString FileDir::GetErrInfo()
     return errInfo;
 }
 
+// QString FileDir::cdUp(const QString& path)
+// {
+//     QDir qdir(path);
+//     return qdir.cdUp() ? qdir.absolutePath() : path;
+// }
 QString FileDir::cdUp(const QString& path)
 {
-    QDir qdir(path);
-    return qdir.cdUp() ? qdir.absolutePath() : path;
+    QFileInfo fi(path);
+    QString up = fi.dir().absolutePath();
+    return (up == path) ? path : up;
 }
 
 bool FileDir::GetFileList(const QString& path, QVector<RFileMeta>& fileList, bool recursive)
