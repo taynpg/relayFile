@@ -14,4 +14,5 @@ public:
 
     static Result questionThreeButtons(QWidget* parent, const QString& title, const QString& text);
     static Result questionFourButtons(QWidget* parent, const QString& title, const QString& text);
+    static bool questionYesNo(QWidget* parent, const QString& title, const QString& text);
 };

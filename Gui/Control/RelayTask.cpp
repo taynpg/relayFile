@@ -34,6 +34,14 @@ void RelayTask::Quit()
 
 void RelayTask::closeEvent(QCloseEvent* event)
 {
+    if (status_ == RelayTaskStatus::Transing) {
+        if (MessageBoxHelper::questionYesNo(this, "确认", "正在传输中，是否确认退出？")) {
+            doubleLinker_->Interrupt();
+            event->accept();
+                Quit();
+            return;
+        }
+    }
     Quit();
     QDialog::closeEvent(event);
 }
@@ -103,18 +111,26 @@ void RelayTask::initSignals()
     connect(doubleLinker_.get(), &DoubleLinker::signalCurFileItem, this, &RelayTask::onCurFileItem);
     connect(speedTimer_, &QTimer::timeout, this, &RelayTask::onRefreshSpeed);
     connect(this, &RelayTask::signalNeedConfirmFiles, this, &RelayTask::onConfirmFiles);
+    connect(this, &RelayTask::signalTransing, this, &RelayTask::onTransing);
 }
 
 void RelayTask::onTransComplete()
 {
     speedTimer_->stop();
     enableControls();
+    status_ = RelayTaskStatus::TransComplete;
 }
 
 void RelayTask::onTransFail()
 {
     speedTimer_->stop();
     ui->btnStart->setEnabled(true);
+    status_ = RelayTaskStatus::TransFail;
+}
+
+void RelayTask::onTransing()
+{
+    status_ = RelayTaskStatus::Transing;
 }
 
 void RelayTask::onStartRun()
@@ -124,6 +140,7 @@ void RelayTask::onStartRun()
     workerThread_->invoke([this]() {
         bool allSuccess = true;
         auto rows = tableWidget_->rowCount();
+        emit signalTransing();
         for (int i = 0; i < rows; ++i) {
             auto* itemState = tableWidget_->item(i, 3);
             if (itemState->text() != GUI_FILE_TRAN_STATE_WAIT) {
@@ -223,6 +240,7 @@ void RelayTask::onBaseCheck()
     disableControls();
 
     workerThread_->invoke([this]() {
+        status_ = RelayTaskStatus::Checking;
         // 1.检查传输TCP是否正常。
         // 2.检查控制TCP是否正常。
         if (!doubleLinker_->waitFileConnect()) {

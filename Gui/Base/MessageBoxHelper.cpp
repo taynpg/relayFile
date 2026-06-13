@@ -51,3 +51,17 @@ MessageBoxHelper::Result MessageBoxHelper::questionFourButtons(QWidget* parent, 
     }
     return Exit;
 }
+
+bool MessageBoxHelper::questionYesNo(QWidget* parent, const QString& title, const QString& text)
+{
+    QMessageBox msgBox(parent);
+    msgBox.setWindowTitle(title);
+    msgBox.setText(text);
+    msgBox.setIcon(QMessageBox::Question);
+
+    QPushButton* yesBtn = msgBox.addButton("是", QMessageBox::YesRole);
+    QPushButton* noBtn = msgBox.addButton("否", QMessageBox::NoRole);
+
+    msgBox.exec();
+    return msgBox.clickedButton() == yesBtn;
+}

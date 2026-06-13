@@ -67,6 +67,11 @@ bool OneFileTrans::initTransfer(TransMode mode, const FileMeta& fileMeta, const 
     return true;
 }
 
+void OneFileTrans::stopTrans()
+{
+    normalTrans_ = false;
+}
+
 bool OneFileTrans::nextSend()
 {
     if (TransStatus::Sending != state_) {
@@ -172,6 +177,10 @@ OneFileTrans::TransStatus OneFileTrans::getTransStatus() const
 
 void OneFileTrans::onFrameReceive(FramePtr frame)
 {
+    if (!normalTrans_) {
+        handleInterrupt(frame);
+        return;
+    }
     QMutexLocker locker(&qMut_);
     if (state_ == TransStatus::Finished || state_ == TransStatus::Interrupted) {
         return;
@@ -215,12 +224,27 @@ void OneFileTrans::onFrameReceive(FramePtr frame)
 
 bool OneFileTrans::handleInterrupt(FramePtr frame)
 {
+    if (tMode_ == TransMode::Receive && state_ == TransStatus::Receving) {
+        auto f = CreateFrame(FrameType::kFileType_Request_Cancel);
+        emit signalRequestSend(f);
+    }
+    if (tMode_ == TransMode::Send && state_ == TransStatus::Sending) {
+        auto f = CreateFrame(FrameType::kFileType_Request_Cancel);
+        emit signalRequestSend(f);
+    }
     state_ = TransStatus::Interrupted;
     if (recvFile_.isOpen()) {
+        qWarning() << "关闭接收文件" << filePath_;
         recvFile_.close();
     }
     if (sendFile_.isOpen()) {
+        qWarning() << "关闭发送文件" << filePath_;
         sendFile_.close();
     }
     return true;
+}
+
+QString OneFileTrans::getTransName() const
+{
+    return filePath_;
 }

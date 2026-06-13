@@ -26,6 +26,7 @@ public:
 
 public slots:
     void AskOwnID();
+    void StopTrans();
 
 private:
     void pushTask(const std::shared_ptr<OneFileTrans>& fileTrans, const Message& msg, const std::string& errMsg, FrameType type,

@@ -25,6 +25,14 @@ struct RelayTaskData {
     bool isUpload{};
 };
 
+enum class RelayTaskStatus {
+    Init,
+    Checking,
+    Transing,
+    TransComplete,
+    TransFail,
+};
+
 namespace Ui {
 class RelayTask;
 }
@@ -43,6 +51,7 @@ signals:
     void signalCheckUnComplete();
     void signalUpdateTable();
     void signalTransComplete();
+    void signalTransing();
     void signalTransFail();
     void signalNeedConfirmFiles();
 
@@ -69,6 +78,7 @@ protected:
     bool handleOneLine(int row);
     void onTransComplete();
     void onTransFail();
+    void onTransing();
 
     void onCurFileProgress(std::uint64_t transed, std::uint64_t total);
     void onCurFileItem(const QString& from, const QString& to);
@@ -109,6 +119,7 @@ private:
     std::map<QString, int> curTableData_;
     std::shared_ptr<BaseAskDF> askLocalDf_{};
     std::shared_ptr<BaseAskDF> askRemoteDf_{};
+    RelayTaskStatus status_{RelayTaskStatus::Init};
     std::shared_ptr<DoubleLinker> doubleLinker_{};
     std::vector<std::shared_ptr<TransItem>> transItems_;
     std::shared_ptr<WorkerThread<RelayTask>> workerThread_{};

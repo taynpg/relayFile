@@ -11,7 +11,6 @@
 #include "Protocol/FileMeta.h"
 #include "Protocol/Protocol.h"
 
-
 class OneFileTrans : public QObject
 {
     Q_OBJECT
@@ -47,6 +46,7 @@ public:
                       const std::string& uuid);
     void initSignals();
 
+    void stopTrans();
     bool nextSend();
     bool handleAck(FramePtr frame);
     bool handleRecvChuck(FramePtr frame);
@@ -54,6 +54,7 @@ public:
     bool handleFinish(FramePtr frame);
     TransMode getTransMode();
     TransStatus getTransStatus() const;
+    QString getTransName() const;
 
     void onSendTimeout();
     FramePtr CreateFrame(FrameType type);
@@ -73,6 +74,7 @@ private:
     QFile sendFile_;
     QFile recvFile_;
 
+    bool normalTrans_{true};
     std::uint64_t totalSize_{};
     std::uint64_t transSize_{};
     std::uint64_t curBlockIndex_{};

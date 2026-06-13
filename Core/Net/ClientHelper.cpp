@@ -216,6 +216,11 @@ bool DoubleLinker::waitFileConnect()
     }
 }
 
+void DoubleLinker::Interrupt()
+{
+    fileSession_->StopTrans();
+}
+
 void DoubleLinker::onDoFileConnectSuccess()
 {
     QMutexLocker locker(&fcStateLock_);

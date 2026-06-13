@@ -78,13 +78,21 @@ void FileSession::pushTask(const std::shared_ptr<OneFileTrans>& fileTrans, const
     emit signalRequestSend(rf);
 }
 
+void FileSession::StopTrans()
+{
+    {
+        QMutexLocker locker(&transferMapLock_);
+        for (auto& fileTrans : transferMap_) {
+            fileTrans->stopTrans();
+        }
+    }
+}
+
 void FileSession::handleFrame(FramePtr frame)
 {
     Message msg;
-    {
-        if (static_cast<int>(frame->type) < defDirectChuckAck) {
-            deserializeStruct(frame->data, msg);
-        }
+    if (static_cast<int>(frame->type) < defDirectChuckAck) {
+        deserializeStruct(frame->data, msg);
     }
     switch (frame->type) {
     case FrameType::kFileType_Answer_ID: {

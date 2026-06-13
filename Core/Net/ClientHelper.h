@@ -53,6 +53,7 @@ public:
 public:
     bool RunTask(const std::vector<std::shared_ptr<TransItem>>& tasks);
     bool RunTaskItem(const std::shared_ptr<TransItem>& item);
+    void Interrupt();
     template <typename HandleResp> bool bRequest(FramePtr frame, HandleResp handleResp);
     template <typename HandleResp> void vRequest(FramePtr frame, HandleResp handleResp);
 
