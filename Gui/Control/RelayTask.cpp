@@ -41,6 +41,8 @@ void RelayTask::closeEvent(QCloseEvent* event)
             QDialog::closeEvent(event);
             return;
         }
+        event->ignore();
+        return;
     }
     Quit();
     QDialog::closeEvent(event);

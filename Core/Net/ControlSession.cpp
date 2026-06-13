@@ -143,6 +143,7 @@ void ControlSession::handleFrame(FramePtr frame)
         info.clientId = answerMsg->to.clientId;
         info.clientName = answerMsg->to.clientName;
         info.uuid = answerMsg->comStr;
+        clientCore_->onRecordOwnInfo(info);
         emit signalOwnInfo(info);
         break;
     }
