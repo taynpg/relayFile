@@ -185,9 +185,9 @@ bool DoubleLinker::waitFileConnect()
 {
     {
         QMutexLocker locker(&fcStateLock_);
-        if (fcState_ == FileControlState::FCS_Connected) {
-            return true;
-        }
+        auto connected = fcState_ == FileControlState::FCS_Connected;
+        auto getIded = !fileSession_->getClientCore()->getOwnClientInfo().clientId.empty();
+        return connected && getIded;
     }
 
     bool Run = true;
@@ -205,16 +205,19 @@ bool DoubleLinker::waitFileConnect()
     }
 
     stdTimer->start_once(std::chrono::seconds(5));
+    auto* cli = fileSession_->getClientCore();
     while (Run) {
         QThread::msleep(1);
-        if (fileSession_->getClientCore()->isConnected()) {
+        if (cli->isConnected() && !cli->getOwnClientInfo().clientId.empty()) {
             return true;
         }
     }
     stdTimer->stop();
     {
         QMutexLocker locker(&fcStateLock_);
-        return fcState_ == FileControlState::FCS_Connected;
+        auto connected = fcState_ == FileControlState::FCS_Connected;
+        auto getIded = !cli->getOwnClientInfo().clientId.empty();
+        return connected && getIded;
     }
 }
 

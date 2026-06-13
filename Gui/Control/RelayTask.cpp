@@ -255,6 +255,7 @@ void RelayTask::onBaseCheck()
         // 3.检查本地根目录是否存在。
         std::shared_ptr<BaseAskDF> askDfOwn = data_->isUpload ? askLocalDf_ : askRemoteDf_;
         std::shared_ptr<BaseAskDF> askDfOther = data_->isUpload ? askRemoteDf_ : askLocalDf_;
+        auto name = data_->isUpload ? GUI_DIRECTION_LOCAL : GUI_DIRECTION_REMOTE;
 
         for (const auto& item : data_->fileList) {
             auto path = FileDir::Join(data_->isUpload ? data_->localRoot : data_->remoteRoot, item.name);
@@ -268,7 +269,7 @@ void RelayTask::onBaseCheck()
                 fileList_.insert(fileList_.end(), fileList.begin(), fileList.end());
                 continue;
             }
-            emit signalLog(QString("检查本地文件：%1").arg(path));
+            emit signalLog(QString("检查%1文件：%2").arg(name).arg(path));
             FileMeta meta;
             meta.dir = data_->isUpload ? data_->localRoot.toStdString() : data_->remoteRoot.toStdString();
             meta.sizeStr = item.sizeStr.toStdString();
@@ -278,7 +279,6 @@ void RelayTask::onBaseCheck()
             fileList_.push_back(meta);
         }
         emit signalUpdateTable();
-        auto name = data_->isUpload ? GUI_DIRECTION_LOCAL : GUI_DIRECTION_REMOTE;
         for (const auto& item : fileList_) {
             bool existExist = false;
             if (!askDfOwn->AskFileExist(item.fullPath, existExist)) {
@@ -292,7 +292,8 @@ void RelayTask::onBaseCheck()
                 return;
             }
         }
-        emit signalLog("本地文件存在检查完成。");
+        emit signalLog("源端文件存在性检查完成。");
+        emit signalLog("开始校验目标端文件是否已存在相同文件。");
 
         needConfirmFiles_.clear();
         needRemoveTaskFiles_.clear();
