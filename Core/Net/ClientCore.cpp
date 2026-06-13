@@ -134,7 +134,9 @@ bool ClientCore::Send(FramePtr frame)
 {
     if (isControl_) {
         frame->from = mInfo_.clientId;
-        frame->to = oInfo_.clientId;
+        if (frame->to.empty()) {
+            frame->to = oInfo_.clientId;
+        }
         if (frame->sessionId == 0) {
             frame->sessionId = GetSessionId();
         }
