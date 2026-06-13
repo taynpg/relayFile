@@ -24,9 +24,7 @@ void ClientCore::instance()
 void ClientCore::initSignals()
 {
     connect(tcp_, &QTcpSocket::readyRead, this, &ClientCore::onReadyRead);
-    connect(tcp_, &QTcpSocket::disconnected, this, [this]() {
-        emit signalDisconnected();
-    });
+    connect(tcp_, &QTcpSocket::disconnected, this, [this]() { emit signalDisconnected(); });
 }
 
 void ClientCore::disconnectFromServer()
@@ -128,12 +126,7 @@ bool ClientCore::isControl() const
 bool ClientCore::Send(const Message& msg)
 {
     auto frame = OneFrame::Create();
-    if (isControl_) {
-        frame->from = mInfo_.clientId;
-        frame->to = oInfo_.clientId;
-    }
     frame->data = serializeStruct(msg);
-    frame->sessionId = GetSessionId();
     return Send(frame);
 }
 
@@ -142,6 +135,9 @@ bool ClientCore::Send(FramePtr frame)
     if (isControl_) {
         frame->from = mInfo_.clientId;
         frame->to = oInfo_.clientId;
+        if (frame->sessionId == 0) {
+            frame->sessionId = GetSessionId();
+        }
     }
     auto data = Protocol::Pack(frame);
     return Send(data.data(), data.size());

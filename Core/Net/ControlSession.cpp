@@ -14,6 +14,8 @@
         if (!responseWaitWorker_.contains(worker->frame->sessionId)) {                                                           \
             responseWaitWorker_.insert(worker->frame->sessionId, worker);                                                        \
         } else {                                                                                                                 \
+            qWarning() << "PushOneWork:" << QString::fromStdString(worker->frame->from) << "，会话ID已存在。"                    \
+                       << worker->frame->sessionId;                                                                              \
             return;                                                                                                              \
         }                                                                                                                        \
     }
@@ -66,7 +68,6 @@ template <typename Callback> bool ControlSession::SendCall(FramePtr frame, Callb
     frame->sessionId = sid;
 
     emit signalRequestSend(frame);
-
     qDebug() << "ControlSession::SendCall:" << static_cast<int>(frame->type) << ", sid=" << sid;
 
     // 这里不能用QTimer，因为QTimer依赖事件循环，而阻塞需求常常会阻塞事件循环，导致定时器失效
@@ -149,6 +150,7 @@ void ControlSession::handleFrame(FramePtr frame)
         info.clientName = answerMsg->to.clientName;
         info.uuid = answerMsg->comStr;
         clientCore_->onRecordOwnInfo(info);
+        qDebug() << "本机信息：" << QString::fromStdString(info.clientId) << ", " << QString::fromStdString(info.clientName);
         emit signalOwnInfo(info);
         break;
     }

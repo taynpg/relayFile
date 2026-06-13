@@ -144,6 +144,8 @@ void ServerCore::useFrame(FramePtr frame, QTcpSocket* socket, ClientInfo* cli)
         f->type = FrameType::kMsgType_Answer_ClientList;
         f->data = serializeStruct(asg);
         sendData(f, socket);
+        // qDebug() << "客户端" << QString::fromStdString(frame->from) << "的sessionID为:" << frame->sessionId;
+        // qDebug() << "回复SessionID为" << f->sessionId;
         break;
     }
     default:
@@ -157,9 +159,12 @@ bool ServerCore::forwarData(FramePtr frame, const std::string& otherId)
     std::shared_ptr<ClientInfo> o = nullptr;
     {
         QReadLocker locker(&rwLock_);
-        o = clientMap_[otherId];
+        if (clientMap_.contains(otherId)) {
+            o = clientMap_[otherId];
+        }
     }
     if (!o) {
+        qWarning() << QString::fromStdString(frame->from) << "转发到:" << QString::fromStdString(otherId) << "，但是不存在。";
         return false;
     }
     return sendData(frame, o->socket);
