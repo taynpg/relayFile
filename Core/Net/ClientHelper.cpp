@@ -78,6 +78,8 @@ bool DoubleLinker::RunTaskItem(const std::shared_ptr<TransItem>& item)
     reqMsg.uuid = Common::GetUUID().toStdString();
     reqMsg.ff = item->from;
     reqMsg.ft = item->to;
+    reqMsg.from.clientId = controlSession_->getOwnInfo().clientId;
+    reqMsg.to.clientId = controlSession_->getOtherInfo().clientId;
     reqMsg.mark = 1;
 
     auto requestFrame = OneFrame::Create();

@@ -133,7 +133,9 @@ bool ClientCore::Send(const Message& msg)
 bool ClientCore::Send(FramePtr frame)
 {
     if (isControl_) {
-        frame->from = mInfo_.clientId;
+        if (frame->from.empty()) {
+            frame->from = mInfo_.clientId;
+        }
         if (frame->to.empty()) {
             frame->to = oInfo_.clientId;
         }
