@@ -62,6 +62,8 @@ void RelayTask::initControl()
     ui->rbDisconnect->setChecked(true);
     ui->btnStart->setEnabled(false);
     ui->btnRetryAll->setEnabled(false);
+    ui->curProgress->setValue(0);
+    ui->lbSpeed->setText("--");
 
     tableWidget_ = new QTableWidget();
     tableWidget_->setColumnCount(6);
@@ -229,6 +231,7 @@ void RelayTask::onBaseCheck()
             return;
         }
         emit signalLog("传输TCP连接检查通过。");
+        fileList_.clear();
         // 3.检查本地根目录是否存在。
         std::shared_ptr<BaseAskDF> askDfOwn = data_->isUpload ? askLocalDf_ : askRemoteDf_;
         std::shared_ptr<BaseAskDF> askDfOther = data_->isUpload ? askRemoteDf_ : askLocalDf_;
