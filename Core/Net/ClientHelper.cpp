@@ -1,10 +1,12 @@
 #include "ClientHelper.h"
 
+#include <QCoreApplication>
 #include <QTimer>
 
 #include "Protocol/Serialize.hpp"
 #include "Utils/Common.h"
 #include "Utils/TimerSTD.hpp"
+
 
 DoubleLinker::DoubleLinker(QObject* parent) : QObject(parent)
 {
@@ -101,6 +103,7 @@ bool DoubleLinker::RunTaskItem(const std::shared_ptr<TransItem>& item)
 
     while (isRun) {
         QThread::msleep(1);
+        QCoreApplication::processEvents();
         if (!fileSession_->getTransStatus(status, reqMsg.uuid, item->isSend)) {
             continue;
         }
@@ -174,7 +177,7 @@ void DoubleLinker::onDeliverControl(FramePtr frame)
 void DoubleLinker::onDeliverFile(FramePtr frame)
 {
     // 暂时先简单等待吧
-    if (!waitFileConnect()) {
+    if (FrameType::kFileType_Answer_ID != frame->type && !waitFileConnect()) {
         // 告诉对方取消。
         return;
     }
@@ -183,11 +186,15 @@ void DoubleLinker::onDeliverFile(FramePtr frame)
 
 bool DoubleLinker::waitFileConnect()
 {
+    auto* cli = fileSession_->getClientCore();
+
     {
         QMutexLocker locker(&fcStateLock_);
         auto connected = fcState_ == FileControlState::FCS_Connected;
-        auto getIded = !fileSession_->getClientCore()->getOwnClientInfo().clientId.empty();
-        return connected && getIded;
+        auto getIded = !cli->getOwnClientInfo().clientId.empty();
+        if (connected && getIded) {
+            return true;
+        }
     }
 
     bool Run = true;
@@ -205,9 +212,9 @@ bool DoubleLinker::waitFileConnect()
     }
 
     stdTimer->start_once(std::chrono::seconds(5));
-    auto* cli = fileSession_->getClientCore();
     while (Run) {
         QThread::msleep(1);
+        QCoreApplication::processEvents();
         if (cli->isConnected() && !cli->getOwnClientInfo().clientId.empty()) {
             return true;
         }

@@ -104,13 +104,16 @@ void ServerCore::useFrame(FramePtr frame, QTcpSocket* socket, ClientInfo* cli)
     switch (frame->type) {
     case FrameType::kFileType_Request_ID:
     case FrameType::kMsgType_Ask_ID: {
+
         Message sourceMsg;
         deserializeStruct(frame->data, sourceMsg);
         Message idMsg(sourceMsg);
+        frame->from = cli->id.toStdString();
         idMsg.to.clientId = cli->id.toStdString();
         idMsg.to.clientName = sourceMsg.from.clientName;
+
         cli->name = QString::fromStdString(idMsg.to.clientName);
-        auto f = OneFrame::Create();
+        auto f = OneFrame::Create(frame);
         f->type = static_cast<FrameType>(static_cast<std::uint16_t>(frame->type) + 1);
         f->data = serializeStruct(idMsg);
         sendData(f, socket);

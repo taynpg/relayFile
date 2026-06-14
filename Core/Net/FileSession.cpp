@@ -47,7 +47,7 @@ void FileSession::pushTask(const std::shared_ptr<OneFileTrans>& fileTrans, const
 {
     Message resp(msg);
     resp.uuid = msg.uuid;
-    resp.to = msg.from;
+    std::swap(resp.from, resp.to);
 
     if (needConnect && msg.mark != 0) {
         connect(fileTrans.get(), &OneFileTrans::signalProcess, this, &FileSession::signalCurFileProgress);
@@ -68,7 +68,7 @@ void FileSession::pushTask(const std::shared_ptr<OneFileTrans>& fileTrans, const
         resp.errMsg = errMsg;
     }
     auto rf = OneFrame::Create();
-    rf->to = msg.from.clientId;
+    rf->to = resp.to.clientId;
     rf->data = serializeStruct(resp);
     rf->type = type;
     rf->mark = fileTrans->getTransMode() == OneFileTrans::TransMode::Send ? 0 : 1;
@@ -107,7 +107,10 @@ void FileSession::handleFrame(FramePtr frame)
         auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Send, msg.ff, msg.transId,
                                            clientCore_->getOwnClientInfo().clientId, msg.uuid);
 
+        fileTrans->setTargetControlId(frame->from);
         pushTask(fileTrans, msg, "文件任务初始化失败（Request_Down）。", FrameType::kFileType_Answer_Down, ret, false);
+        qDebug() << QString::fromStdString(msg.from.clientId) << "kFileType_Answer_Down:" << QString::fromStdString(msg.ff.fullPath)
+                 << "，结果：" << ret;
         break;
     }
     case FrameType::kFileType_Answer_Down: {
@@ -115,7 +118,10 @@ void FileSession::handleFrame(FramePtr frame)
         auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Receive, msg.ft, msg.transId,
                                            clientCore_->getOwnClientInfo().clientId, msg.uuid);
 
+        fileTrans->setTargetControlId(frame->from);
         pushTask(fileTrans, msg, "文件任务初始化失败（Answer_Down）。", FrameType::kFileType_Request_Start, ret, true);
+        qDebug() << QString::fromStdString(msg.from.clientId) << "kFileType_Answer_Down:" << QString::fromStdString(msg.ft.fullPath)
+                 << "，结果：" << ret;
         break;
     }
     case FrameType::kFileType_Request_Send: {
@@ -123,7 +129,10 @@ void FileSession::handleFrame(FramePtr frame)
         auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Receive, msg.ft, msg.transId,
                                            clientCore_->getOwnClientInfo().clientId, msg.uuid);
 
+        fileTrans->setTargetControlId(frame->from);
         pushTask(fileTrans, msg, "文件任务初始化失败（Request_Send）。", FrameType::kFileType_Answer_Send, ret, true);
+        qDebug() << QString::fromStdString(msg.from.clientId) << "kFileType_Request_Send:" << QString::fromStdString(msg.ft.fullPath)
+                 << "，结果：" << ret;
         break;
     }
     case FrameType::kFileType_Answer_Send: {
@@ -131,7 +140,10 @@ void FileSession::handleFrame(FramePtr frame)
         auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Send, msg.ff, msg.transId,
                                            clientCore_->getOwnClientInfo().clientId, msg.uuid);
 
+        fileTrans->setTargetControlId(frame->from);
         pushTask(fileTrans, msg, "文件任务初始化失败（Answer_Send）。", FrameType::kFileType_Request_Start, ret, false);
+        qDebug() << QString::fromStdString(msg.from.clientId) << "kFileType_Answer_Send:" << QString::fromStdString(msg.ff.fullPath)
+                 << "，结果：" << ret;
         break;
     }
     // case FrameType::kFileType_Answer_Start: {

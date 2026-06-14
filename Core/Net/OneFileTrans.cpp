@@ -18,6 +18,7 @@ void OneFileTrans::onSendTimeout()
     QMutexLocker locker(&qMut_);
     if (state_ == TransStatus::Sending) {
         emit signalFailed(ownId_, "超时");
+        qWarning() << "发送超时:" << ownId_;
         state_ = TransStatus::Interrupted;
     }
 }
@@ -72,6 +73,11 @@ void OneFileTrans::stopTrans()
     normalTrans_ = false;
 }
 
+void OneFileTrans::setTargetControlId(const std::string& targetControlId)
+{
+    targetControlId_ = targetControlId;
+}
+
 bool OneFileTrans::nextSend()
 {
     if (TransStatus::Sending != state_) {
@@ -83,6 +89,7 @@ bool OneFileTrans::nextSend()
     if (bytesRead <= 0) {
         sendFile_.close();
         auto frame = CreateFrame(FrameType::kFileType_Request_Complete);
+        frame->to = targetControlId_;
         emit signalRequestSend(frame);
         state_ = TransStatus::Finished;
         emit signalFinished(ownId_);
@@ -181,8 +188,11 @@ void OneFileTrans::onFrameReceive(FramePtr frame)
         handleInterrupt(frame);
         return;
     }
+    qDebug() << "收到消息:" << static_cast<int>(frame->type) << "，from:" << frame->from << "，to:" << frame->to
+             << "，index:" << frame->index;
     QMutexLocker locker(&qMut_);
     if (state_ == TransStatus::Finished || state_ == TransStatus::Interrupted) {
+        qWarning() << "文件传输已结束，无法处理消息, state is:" << static_cast<int>(state_);
         return;
     }
     switch (frame->type) {
@@ -195,10 +205,12 @@ void OneFileTrans::onFrameReceive(FramePtr frame)
         break;
     }
     case FrameType::kFileType_Request_Complete: {
+        qDebug() << QString::fromStdString(frame->from) << ", kFileType_Request_Complete.";
         handleFinish(frame);
         break;
     }
     case FrameType::kFileType_Request_Cancel: {
+        qDebug() << QString::fromStdString(frame->from) << ", kFileType_Request_Cancel.";
         handleInterrupt(frame);
         break;
     }
@@ -207,11 +219,13 @@ void OneFileTrans::onFrameReceive(FramePtr frame)
         if (tMode_ == TransMode::Receive) {
             std::swap(frame->from, frame->to);
             frame->mark = frame->mark == 0 ? 1 : 0;
+            qDebug() << QString::fromStdString(frame->from) << ", kFileType_Request_Start.";
             emit signalRequestSend(frame);
             break;
         }
         // 如果自己是发送方，那么继续发送。
         if (tMode_ == TransMode::Send) {
+            qDebug() << QString::fromStdString(frame->from) << ", nextSend.";
             nextSend();
         }
         break;

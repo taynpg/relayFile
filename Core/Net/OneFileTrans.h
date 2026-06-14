@@ -57,6 +57,7 @@ public:
     QString getTransName() const;
 
     void onSendTimeout();
+    void setTargetControlId(const std::string& targetControlId);
     FramePtr CreateFrame(FrameType type);
 
 private:
@@ -69,6 +70,7 @@ private:
     QString filePath_;
     std::string uuid_;
     std::string targetId_;
+    std::string targetControlId_;
     std::string ownId_;
 
     QFile sendFile_;
