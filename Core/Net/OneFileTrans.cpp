@@ -188,8 +188,8 @@ void OneFileTrans::onFrameReceive(FramePtr frame)
         handleInterrupt(frame);
         return;
     }
-    qDebug() << "收到消息:" << static_cast<int>(frame->type) << "，from:" << frame->from << "，to:" << frame->to
-             << "，index:" << frame->index;
+    // qDebug() << "收到消息:" << static_cast<int>(frame->type) << "，from:" << frame->from << "，to:" << frame->to
+    //          << "，index:" << frame->index;
     QMutexLocker locker(&qMut_);
     if (state_ == TransStatus::Finished || state_ == TransStatus::Interrupted) {
         qWarning() << "文件传输已结束，无法处理消息, state is:" << static_cast<int>(state_);
