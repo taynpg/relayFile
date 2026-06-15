@@ -20,8 +20,10 @@ ComDropTable::~ComDropTable()
 void ComDropTable::setItemData(int row, int col, const QString& text, bool isReplace)
 {
     auto* curItem = this->item(row, col);
-    if (curItem && isReplace) {
-        curItem->setText(text);
+    if (curItem) {
+        if (isReplace) {
+            curItem->setText(text);
+        }
     } else {
         QTableWidgetItem* item = new QTableWidgetItem(text);
         setItem(row, col, item);
@@ -51,10 +53,10 @@ void ComDropTable::dropEvent(QDropEvent* event)
         curRow = rowCount();
     }
     // headers_ << "ID" << "名称" << "类型" << "标记" << "本地目录" << "远程目录";
-    if (startCol != 4 && startRow != 5) {
+    if (startCol != 4 && startCol != 5) {
         return;
     }
-    for (int i = 0; i < infoDrop.items.size(); i++) {
+    for (int i = 0; i < infoDrop.items.size(); i++, ++curRow) {
         if (curRow >= rowCount()) {
             insertRow(rowCount());
         }
@@ -62,7 +64,7 @@ void ComDropTable::dropEvent(QDropEvent* event)
         if (curItem.type == 0) {
             setItemData(curRow, 1, curItem.fileName, false);
             setItemData(curRow, 2, "Dir", false);
-            setItemData(curRow, 3, "Dir", true);
+            setItemData(curRow, 3, "Dir", false);
 
         } else {
             setItemData(curRow, 1, curItem.fileName, true);
@@ -110,7 +112,7 @@ ExpDropTable::~ExpDropTable()
 
 void ExpDropTable::dropEvent(QDropEvent* event)
 {
-    ExpDropTable::dropEvent(event);
+    QTableWidget::dropEvent(event);
 }
 
 void ExpDropTable::dragEnterEvent(QDragEnterEvent* event)

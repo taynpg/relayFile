@@ -27,8 +27,8 @@ void ComparisonControl::initTableWidget()
     tableWidget_->setContextMenuPolicy(Qt::CustomContextMenu);
 
     tableWidget_->setColumnWidth(0, 50);
-    tableWidget_->setColumnWidth(1, 230);
-    tableWidget_->setColumnWidth(2, 100);
+    tableWidget_->setColumnWidth(1, 280);
+    tableWidget_->setColumnWidth(2, 50);
     tableWidget_->setColumnWidth(3, 80);
 
     tableWidget_->viewport()->setAcceptDrops(true);
