@@ -28,6 +28,16 @@ void ComDropTable::setItemData(int row, int col, const QString& text, bool isRep
     }
 }
 
+void ComDropTable::dragMoveEvent(QDragMoveEvent* event)
+{
+    auto have = event->mimeData()->hasFormat(MY_MIME_DROP_TYPE);
+    if (!have) {
+        event->ignore();
+        return;
+    }
+    event->acceptProposedAction();
+}
+
 void ComDropTable::dropEvent(QDropEvent* event)
 {
     auto mimeData = event->mimeData()->data(MY_MIME_DROP_TYPE);
@@ -104,6 +114,21 @@ void ExpDropTable::dropEvent(QDropEvent* event)
 }
 
 void ExpDropTable::dragEnterEvent(QDragEnterEvent* event)
+{
+    const QTableWidget* s = qobject_cast<const QTableWidget*>(event->source());
+    if (this == s) {
+        event->ignore();
+        return;
+    }
+    auto have = event->mimeData()->hasFormat(MY_MIME_DROP_TYPE);
+    if (!have) {
+        event->ignore();
+        return;
+    }
+    event->acceptProposedAction();
+}
+
+void ExpDropTable::dragMoveEvent(QDragMoveEvent* event)
 {
     const QTableWidget* s = qobject_cast<const QTableWidget*>(event->source());
     if (this == s) {
