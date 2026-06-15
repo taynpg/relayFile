@@ -21,8 +21,7 @@
     }
 
 ControlSession::ControlSession(QObject* parent)
-    : QObject(parent), workerPool_(std::make_shared<ThreadPool>(3)), timerPoolStd_(std::make_shared<TimerPoolStd>(3)),
-      baseConfig_(std::make_shared<BaseConfig>())
+    : QObject(parent), workerPool_(std::make_shared<ThreadPool>(3)), timerPoolStd_(std::make_shared<TimerPoolStd>(3))
 {
     clearWorkerTimer_ = new QTimer(this);
     clientCore_ = new ClientCore();
@@ -121,11 +120,6 @@ template <typename Callback> bool ControlSession::SendCall(FramePtr frame, Callb
 
     waiter->timerId = timerPoolStd_->start_once(std::chrono::milliseconds(defWaitCmdTimeout), timeoutHandler);
     return true;
-}
-
-std::shared_ptr<BaseConfig> ControlSession::getBaseConfig()
-{
-    return baseConfig_;
 }
 
 ClientInfo ControlSession::getOtherInfo()
@@ -262,10 +256,10 @@ bool ControlSession::SendWithCall(FramePtr frame, std::function<void(FramePtr)> 
     return SendCall(frame, std::move(callback));
 }
 
-void ControlSession::AskOwnID()
+void ControlSession::AskOwnID(const QString& name)
 {
     Message msg;
-    msg.from.clientName = baseConfig_->getCurrentName().toStdString();
+    msg.from.clientName = name.toStdString();
     auto frame = OneFrame::Create();
     frame->data = serializeStruct(msg);
     frame->sessionId = clientCore_->GetSessionId();

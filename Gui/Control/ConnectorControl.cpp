@@ -83,7 +83,8 @@ void ConnectorControl::initSignals()
 
     auto controlSession = doubleLinker_->GetControlSession();
     connect(controlSession.get(), &ControlSession::signalOwnInfo, this, &ConnectorControl::onOwnInfo);
-    connect(this, &ConnectorControl::signalAskID, controlSession.get(), &ControlSession::AskOwnID);
+    connect(this, &ConnectorControl::signalAskID, controlSession.get(),
+            [this](const QString& name) { doubleLinker_->GetControlSession()->AskOwnID(name); });
     connect(ui->tableClients, &QTableWidget::customContextMenuRequested, this, &ConnectorControl::onTableContextMenu);
 }
 
@@ -174,7 +175,7 @@ void ConnectorControl::onConnectSuccess()
     ui->btnDisconnect->setEnabled(true);
     ui->btnRefresh->setEnabled(true);
     emit signalConnectDone();
-    emit signalAskID();
+    emit signalAskID(baseConfig_->getCurrentName());
     baseConfig_->pushOneIp(ui->cbIp->currentText().toStdString());
     initLoadIp();
 }

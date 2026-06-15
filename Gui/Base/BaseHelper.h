@@ -3,10 +3,37 @@
 #include <Net/ClientHelper.h>
 #include <Net/ControlSession.h>
 #include <Net/FileSession.h>
-#include <Utils/Common.h>
 #include <QString>
+#include <Utils/Common.h>
 
 #include "AskDirFile/BaseAskDF.h"
+
+struct IpHistory {
+    std::vector<std::string> history;
+    std::string current;
+};
+
+class BaseConfig
+{
+public:
+    BaseConfig();
+    ~BaseConfig() = default;
+
+public:
+    QString getCurrentName();
+    QString generateRandomName();
+    bool getIpHistory(IpHistory& history);
+    bool pushOneIp(const std::string& ip);
+    std::pair<int, int> getWidthHeight();
+    bool saveWidthHeight(int width, int height);
+
+private:
+    void genPath();
+
+public:
+    QMutex mutex_;
+    QString baseConfigPath_;
+};
 
 class GlobalData
 {

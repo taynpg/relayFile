@@ -1,10 +1,11 @@
 #ifndef CONNECTORCONTROL_H
 #define CONNECTORCONTROL_H
 
+#include <Net/ClientCore.h>
+#include <Net/ClientHelper.h>
 #include <QDialog>
 
-#include "Net/ClientCore.h"
-#include "Net/ClientHelper.h"
+#include "Base/BaseHelper.h"
 
 namespace Ui {
 class ConnectorControl;
@@ -18,7 +19,7 @@ signals:
     void signalDoConnect(const QString& ip, int16_t port);
     void signalDoDisConnect();
     void signalConnectDone();
-    void signalAskID();
+    void signalAskID(const QString& name);
     void signalConfirmOther();
 
 public:

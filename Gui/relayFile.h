@@ -37,6 +37,7 @@ protected:
 private:
     void initControls();
     void initLayout();
+    void initAfter();
 
 private:
     ConnectorControl* connectorControl_{};
@@ -46,6 +47,7 @@ private:
     LogControl* logControl_{};
     QTabWidget* tabWidget_{};
     
+    std::shared_ptr<BaseConfig> baseConfig_{};
     std::shared_ptr<DoubleLinker> doubleLinker_{};
     Ui::relayFile* ui;
 };

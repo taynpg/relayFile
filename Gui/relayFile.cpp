@@ -18,6 +18,7 @@ relayFile::relayFile(QWidget* parent) : QWidget(parent), ui(new Ui::relayFile)
 
     auto controlSession = std::make_shared<ControlSession>();
     auto fileSession = std::make_shared<FileSession>();
+    baseConfig_ = std::make_shared<BaseConfig>();
     GlobalData::getInstance()->setControlSession(controlSession);
     GlobalData::getInstance()->setFileSession(fileSession);
 
@@ -25,7 +26,7 @@ relayFile::relayFile(QWidget* parent) : QWidget(parent), ui(new Ui::relayFile)
     doubleLinker_->SetControlSession(controlSession);
     doubleLinker_->SetFileSession(fileSession);
     GlobalData::getInstance()->setDoubleLinker(doubleLinker_);
-    GlobalData::getInstance()->setBaseConfig(controlSession->getBaseConfig());
+    GlobalData::getInstance()->setBaseConfig(baseConfig_);
 
     Logger logger;
     logger.setInfo("log/relayFileGUI.log", "relayFileGUI");
@@ -39,6 +40,13 @@ relayFile::relayFile(QWidget* parent) : QWidget(parent), ui(new Ui::relayFile)
 
     qInstallMessageHandler(ControlMsgHander);
     qInfo() << "启动。";
+    initAfter();
+}
+
+void relayFile::initAfter()
+{
+    auto size = baseConfig_->getWidthHeight();
+    resize(size.first, size.second);
 }
 
 relayFile::~relayFile()
@@ -57,6 +65,7 @@ void relayFile::Quit()
 
 void relayFile::closeEvent(QCloseEvent* event)
 {
+    baseConfig_->saveWidthHeight(width(), height());
     Quit();
     event->accept();
 }

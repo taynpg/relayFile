@@ -75,8 +75,6 @@ public:
     bool SendWithCall(const Message& msg, FrameType type, std::function<void(MessagePtr)> callback);
     bool SendWithCall(const Message& msg, FrameType type, std::function<void(FramePtr)> callback);
 
-    std::shared_ptr<BaseConfig> getBaseConfig();
-
 public:
     void Quit();
     void handleFrame(FramePtr frame);
@@ -85,7 +83,7 @@ public:
     ClientCore* getClientCore();
 
 public slots:
-    void AskOwnID();
+    void AskOwnID(const QString& name);
 
 private:
     void initSignals();
@@ -99,7 +97,6 @@ private:
     ClientWorker* clientWorker_{};
     std::shared_ptr<ThreadPool> workerPool_{};
     std::shared_ptr<TimerPoolStd> timerPoolStd_{};
-    std::shared_ptr<BaseConfig> baseConfig_{};
     QMap<uint64_t, std::shared_ptr<WaiteFrame>> requestWaitFrame_;
     QMap<uint64_t, std::shared_ptr<TaskWorker>> responseWaitWorker_;
 };
