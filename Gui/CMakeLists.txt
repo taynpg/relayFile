@@ -39,8 +39,12 @@ set(BASE_SOURCES
     Sqlite/ComparisonSql.h Sqlite/ComparisonSql.cpp
 )
 
+set(RESOURCE_SOURCES
+    Resource/relayFileC.rc relayFile.qrc
+)
+
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-add_executable(relayFileGui ${PROJECT_SOURCES} ${CONTROL_SOURCES} ${BASE_SOURCES})
+add_executable(relayFileGui ${PROJECT_SOURCES} ${CONTROL_SOURCES} ${BASE_SOURCES} ${RESOURCE_SOURCES})
 target_link_libraries(relayFileGui PRIVATE relayFileCore 
     Qt${QT_VERSION_MAJOR}::Widgets 
     Qt${QT_VERSION_MAJOR}::Network 

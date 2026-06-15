@@ -47,6 +47,7 @@ void relayFile::initAfter()
 {
     auto size = baseConfig_->getWidthHeight();
     resize(size.first, size.second);
+    setWindowIcon(QIcon("://Resource/Client.ico"));
 }
 
 relayFile::~relayFile()
