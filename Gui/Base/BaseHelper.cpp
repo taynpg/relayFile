@@ -8,7 +8,6 @@
 #include <QString>
 #include <QUuid>
 #include <Utils/miniUtil.h>
-#include <nlohmann/json.hpp>
 
 GlobalData* GlobalData::getInstance()
 {
@@ -100,40 +99,6 @@ std::shared_ptr<BaseConfig> GlobalData::getBaseConfig()
     return baseConfig_;
 }
 
-void BaseConfig::genPath()
-{
-    auto configDir = miniPath::Join(miniPath::GetHome().second, ".config", "relayFile");
-    if (!miniPath::IsExist(configDir)) {
-        miniPath::CreateDir(configDir);
-    }
-    baseConfigPath_ = QString::fromStdString(miniPath::Join(configDir, "relayFile"));
-}
-
-QString BaseConfig::getCurrentName()
-{
-    QMutexLocker locker(&mutex_);
-    QFile config(baseConfigPath_);
-    if (!config.exists()) {
-        auto newName = generateRandomName();
-        nlohmann::json json;
-        json["name"] = newName.toStdString();
-        config.write(json.dump().c_str());
-        if (config.open(QIODevice::ReadWrite)) {
-            config.write(json.dump().c_str());
-            config.close();
-        }
-        return newName;
-    }
-    if (!config.open(QIODevice::ReadOnly)) {
-        return QString();
-    }
-    QString jsonStr = config.readAll();
-    nlohmann::json json = nlohmann::json::parse(jsonStr.toStdString());
-    auto name = json["name"].get<std::string>();
-    config.close();
-    return QString::fromStdString(name);
-}
-
 QString BaseConfig::generateRandomName()
 {
     static const QStringList adjectives = {
@@ -186,27 +151,44 @@ void to_json(nlohmann::json& j, const IpHistory& h)
     j = nlohmann::json{{"history", h.history}, {"current", h.current}};
 }
 
+void BaseConfig::genPath()
+{
+    auto configDir = miniPath::Join(miniPath::GetHome().second, ".config", "relayFile");
+    if (!miniPath::IsExist(configDir)) {
+        miniPath::CreateDir(configDir);
+    }
+    baseConfigPath_ = QString::fromStdString(miniPath::Join(configDir, "relayFile"));
+}
+
+QString BaseConfig::getCurrentName()
+{
+    QMutexLocker locker(&mutex_);
+
+    nlohmann::json j = loadJson();
+
+    if (j.contains("name") && !j["name"].is_null()) {
+        return QString::fromStdString(j["name"].get<std::string>());
+    }
+
+    QString newName = generateRandomName();
+    j["name"] = newName.toStdString();
+
+    if (!saveJson(j)) {
+        qWarning() << "Failed to save config with new name";
+    }
+    return newName;
+}
+
 bool BaseConfig::getIpHistory(IpHistory& out)
 {
     QMutexLocker locker(&mutex_);
 
-    QFile file(baseConfigPath_);
-    if (!file.exists()) {
+    nlohmann::json j = loadJson();
+    if (!j.contains("ipHistory") || j["ipHistory"].is_null()) {
         return false;
     }
-
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        return false;
-    }
-
-    QByteArray data = file.readAll();
-    file.close();
 
     try {
-        nlohmann::json j = nlohmann::json::parse(data.toStdString());
-        if (!j.contains("ipHistory") || j["ipHistory"].is_null()) {
-            return false;
-        }
         out = j["ipHistory"].get<IpHistory>();
         return true;
     } catch (const nlohmann::json::exception& e) {
@@ -219,26 +201,12 @@ bool BaseConfig::pushOneIp(const std::string& ip)
 {
     QMutexLocker locker(&mutex_);
 
-    QFile file(baseConfigPath_);
-    if (!file.open(QIODevice::ReadWrite | QIODevice::Text)) {
-        return false;
-    }
+    constexpr size_t MaxHistory = 10;
+    nlohmann::json j = loadJson();
 
-    nlohmann::json j;
     IpHistory history;
-    QByteArray data = file.readAll();
-
-    try {
-        if (!data.isEmpty()) {
-            j = nlohmann::json::parse(data.toStdString());
-        }
-        if (j.contains("ipHistory") && !j["ipHistory"].is_null()) {
-            history = j["ipHistory"].get<IpHistory>();
-        }
-    } catch (const nlohmann::json::exception& e) {
-        qWarning() << "Json parse error:" << e.what();
-        file.close();
-        return false;
+    if (j.contains("ipHistory") && !j["ipHistory"].is_null()) {
+        history = j["ipHistory"].get<IpHistory>();
     }
 
     if (!history.current.empty()) {
@@ -256,21 +224,15 @@ bool BaseConfig::pushOneIp(const std::string& ip)
             uniqueHistory.push_back(*it);
         }
     }
+
     std::reverse(uniqueHistory.begin(), uniqueHistory.end());
     history.history = std::move(uniqueHistory);
 
-    constexpr size_t MaxHistory = 10;
     if (history.history.size() > MaxHistory) {
         history.history.erase(history.history.begin(), history.history.end() - MaxHistory);
     }
-
     j["ipHistory"] = history;
-
-    file.resize(0);
-    file.write(QByteArray(j.dump(4).c_str()));
-    file.close();
-
-    return true;
+    return saveJson(j);
 }
 
 std::pair<int, int> BaseConfig::getWidthHeight()
@@ -285,23 +247,11 @@ std::pair<int, int> BaseConfig::getWidthHeight()
     int width = 0;
     int height = 0;
 
-    QFile file(baseConfigPath_);
-    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QByteArray data = file.readAll();
-        if (!data.isEmpty()) {
-            try {
-                auto j = nlohmann::json::parse(data.toStdString());
+    nlohmann::json j = loadJson();
 
-                if (j.contains("Width") && j.contains("Height") &&
-                    j["Width"].is_number() && j["Height"].is_number())
-                {
-                    width = j["Width"].get<int>();
-                    height = j["Height"].get<int>();
-                }
-            } catch (const nlohmann::json::exception& e) {
-                qWarning() << "Json parse error:" << e.what();
-            }
-        }
+    if (j.contains("Width") && j.contains("Height") && j["Width"].is_number() && j["Height"].is_number()) {
+        width = j["Width"].get<int>();
+        height = j["Height"].get<int>();
     }
 
     QScreen* screen = QGuiApplication::primaryScreen();
@@ -310,15 +260,15 @@ std::pair<int, int> BaseConfig::getWidthHeight()
     }
 
     const QRect geometry = screen->availableGeometry();
-    const int maxWidth  = static_cast<int>(geometry.width() * MaxScale);
+    const int maxWidth = static_cast<int>(geometry.width() * MaxScale);
     const int maxHeight = static_cast<int>(geometry.height() * MaxScale);
 
     if (width <= 0 || height <= 0) {
-        width  = static_cast<int>(geometry.width() * DefaultScale);
+        width = static_cast<int>(geometry.width() * DefaultScale);
         height = static_cast<int>(geometry.height() * DefaultScale);
     }
 
-    width  = qBound(MinWidth, width, maxWidth);
+    width = qBound(MinWidth, width, maxWidth);
     height = qBound(MinHeight, height, maxHeight);
 
     return {width, height};
@@ -327,43 +277,48 @@ std::pair<int, int> BaseConfig::getWidthHeight()
 bool BaseConfig::saveWidthHeight(int width, int height)
 {
     QMutexLocker locker(&mutex_);
-
-    QFile file(baseConfigPath_);
-    nlohmann::json j;
-
-    if (file.exists() && file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QByteArray data = file.readAll();
-        try {
-            if (!data.isEmpty()) {
-                j = nlohmann::json::parse(data.toStdString());
-            }
-        } catch (const nlohmann::json::exception& e) {
-            qWarning() << "Json parse error when loading config:" << e.what();
-            j.clear();
-        }
-        file.close();
-    }
-
+    nlohmann::json j = loadJson();
     j["Width"] = width;
     j["Height"] = height;
-
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
-        qWarning() << "Cannot open config file for writing:" << baseConfigPath_;
-        return false;
-    }
-
-    QByteArray jsonData(QString::fromStdString(j.dump(4)).toUtf8());
-    if (file.write(jsonData) == -1) {
-        qWarning() << "Failed to write config file";
-        file.close();
-        return false;
-    }
-
-    file.close();
-    return true;
+    return saveJson(j);
 }
 
 BaseConfig::BaseConfig()
 {
     genPath();
+}
+
+bool BaseConfig::saveJson(const nlohmann::json& j)
+{
+    QFile file(baseConfigPath_);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+        qWarning() << "Cannot open config file for writing";
+        return false;
+    }
+
+    QByteArray data(QString::fromStdString(j.dump(4)).toUtf8());
+    if (file.write(data) == -1) {
+        qWarning() << "Failed to write config file";
+        return false;
+    }
+
+    return true;
+}
+
+nlohmann::json BaseConfig::loadJson()
+{
+    QFile file(baseConfigPath_);
+    nlohmann::json j;
+    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        try {
+            QByteArray data = file.readAll();
+            if (!data.isEmpty()) {
+                j = nlohmann::json::parse(data.toStdString());
+            }
+        } catch (const nlohmann::json::exception& e) {
+            qWarning() << "Json parse error:" << e.what();
+            j = nlohmann::json::object();
+        }
+    }
+    return j;
 }

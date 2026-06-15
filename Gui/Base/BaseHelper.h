@@ -5,6 +5,7 @@
 #include <Net/FileSession.h>
 #include <QString>
 #include <Utils/Common.h>
+#include <nlohmann/json.hpp>
 
 #include "AskDirFile/BaseAskDF.h"
 
@@ -26,6 +27,10 @@ public:
     bool pushOneIp(const std::string& ip);
     std::pair<int, int> getWidthHeight();
     bool saveWidthHeight(int width, int height);
+
+private:
+    bool saveJson(const nlohmann::json& j);
+    nlohmann::json loadJson();
 
 private:
     void genPath();
