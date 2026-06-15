@@ -2,7 +2,9 @@
 #define COMPARISONCONTROL_H
 
 #include <QDialog>
+
 #include "OwnTableWidget.h"
+#include "Sqlite/ComparisonSql.h"
 
 namespace Ui {
 class ComparisonControl;
@@ -20,9 +22,10 @@ private:
     void initTableWidget();
 
 private:
-    ComDropTable* tableWidget_;
     QStringList headers_;
     Ui::ComparisonControl* ui;
+    ComDropTable* tableWidget_;
+    std::shared_ptr<ComparisonSql> comparisonSql_;
 };
 
 #endif   // COMPARISONCONTROL_H

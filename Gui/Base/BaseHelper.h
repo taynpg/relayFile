@@ -52,6 +52,7 @@ public:
     void setAskDfLocal(std::shared_ptr<BaseAskDF> askDfLocal);
     void setAskDfRemote(std::shared_ptr<BaseAskDF> askDfRemote);
     void setBaseConfig(std::shared_ptr<BaseConfig> baseConfig);
+    void setGlobalConfigDir(const QString& globalConfigDir);
 
     std::shared_ptr<DoubleLinker> getDoubleLinker();
     std::shared_ptr<ControlSession> getControlSession();
@@ -59,6 +60,7 @@ public:
     std::shared_ptr<BaseAskDF> getAskDfLocal();
     std::shared_ptr<BaseAskDF> getAskDfRemote();
     std::shared_ptr<BaseConfig> getBaseConfig();
+    QString getGlobalConfigDir();
 
     QString getGlobalConfigPath();
     void setGlobalConfigPath(const QString& globalConfigPath);
@@ -72,6 +74,7 @@ private:
     std::shared_ptr<FileSession> fileSession_{};
     std::shared_ptr<BaseAskDF> askDfLocal_{};
     std::shared_ptr<BaseAskDF> askDfRemote_{};
+    QString globalConfigDir_;
     QString globalConfigPath_;
 
 private:

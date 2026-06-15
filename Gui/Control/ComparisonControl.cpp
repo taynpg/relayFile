@@ -3,16 +3,20 @@
 #include <QHBoxLayout>
 #include <QHeaderView>
 
+#include "Base/BaseHelper.h"
 #include "ui_ComparisonControl.h"
 
 ComparisonControl::ComparisonControl(QWidget* parent) : QDialog(parent), ui(new Ui::ComparisonControl)
 {
     ui->setupUi(this);
     initTableWidget();
+    comparisonSql_ = std::make_shared<ComparisonSql>();
+    comparisonSql_->open(GlobalData::getInstance()->getGlobalConfigDir() + "/relayFileDb");
 }
 
 ComparisonControl::~ComparisonControl()
 {
+    comparisonSql_->close();
     delete ui;
 }
 

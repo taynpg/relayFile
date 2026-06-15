@@ -39,6 +39,18 @@ std::shared_ptr<DoubleLinker> GlobalData::getDoubleLinker()
     return doubleLinker_;
 }
 
+void GlobalData::setGlobalConfigDir(const QString& globalConfigDir)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    globalConfigDir_ = globalConfigDir;
+}
+
+QString GlobalData::getGlobalConfigDir()
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return globalConfigDir_;
+}
+
 std::shared_ptr<ControlSession> GlobalData::getControlSession()
 {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -157,6 +169,7 @@ void BaseConfig::genPath()
     if (!miniPath::IsExist(configDir)) {
         miniPath::CreateDir(configDir);
     }
+    GlobalData::getInstance()->setGlobalConfigDir(QString::fromStdString(configDir));
     baseConfigPath_ = QString::fromStdString(miniPath::Join(configDir, "relayFile"));
 }
 
