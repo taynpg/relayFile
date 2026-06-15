@@ -26,6 +26,8 @@ set(CONTROL_SOURCES
     Control/RelayTask.h Control/RelayTask.cpp Control/RelayTask.ui
     Control/LogControl.h Control/LogControl.cpp Control/LogControl.ui
     Base/MessageBoxHelper.h Base/MessageBoxHelper.cpp
+    Control/OwnTableWidget.h Control/OwnTableWidget.cpp
+    Base/InfoDrop.h Base/InfoDrop.cpp
 )
 
 set(BASE_SOURCES

@@ -41,8 +41,8 @@ void ExplorerControl::initSignals()
     connect(ui->btnEnter, &QPushButton::clicked, this, &ExplorerControl::onEnter);
     connect(ui->btnHome, &QPushButton::clicked, this, [this]() { onHome(false); });
     connect(ui->btnUp, &QPushButton::clicked, this, &ExplorerControl::onUp);
-    connect(tabWidget_, &QTableWidget::itemDoubleClicked, this, &ExplorerControl::onDoubleClick);
-    connect(tabWidget_, &QTableWidget::customContextMenuRequested, this, &ExplorerControl::onTableContextMenu);
+    connect(tableWidget_, &QTableWidget::itemDoubleClicked, this, &ExplorerControl::onDoubleClick);
+    connect(tableWidget_, &QTableWidget::customContextMenuRequested, this, &ExplorerControl::onTableContextMenu);
     connect(this, &ExplorerControl::transTaskRun, this, [this](std::shared_ptr<RelayTaskData> data) { onTransForm(data); });
 }
 
@@ -96,13 +96,13 @@ void ExplorerControl::enterPath(const QString& path)
 
 void ExplorerControl::onDoubleClick()
 {
-    auto item = tabWidget_->currentItem();
+    auto item = tableWidget_->currentItem();
     if (!item) {
         return;
     }
-    auto row = tabWidget_->row(item);
-    auto name = tabWidget_->item(row, 1)->text();
-    auto type = tabWidget_->item(row, 3)->text();
+    auto row = tableWidget_->row(item);
+    auto name = tableWidget_->item(row, 1)->text();
+    auto type = tableWidget_->item(row, 3)->text();
     if (type != GUI_FILE_TYPE_DIR) {
         qWarning() << name << "不是目录。";
         return;
@@ -137,11 +137,11 @@ void ExplorerControl::onFileListChanged(bool isSuccess, const std::vector<FileMe
     if (!isSuccess) {
         return;
     }
-    tabWidget_->clearContents();
-    tabWidget_->setRowCount(0);
+    tableWidget_->clearContents();
+    tableWidget_->setRowCount(0);
     for (int i = 0; i < fileList.size(); ++i) {
-        auto row = tabWidget_->rowCount();
-        tabWidget_->insertRow(row);
+        auto row = tableWidget_->rowCount();
+        tableWidget_->insertRow(row);
         setFileItem(fileList[i], row);
         if (i != 0 && i % 30 == 0) {
             QGuiApplication::processEvents();
@@ -165,26 +165,33 @@ void ExplorerControl::initControl()
 {
     ui->cbPath->setEditable(true);
 
-    tabWidget_ = new QTableWidget(this);
+    tableWidget_ = new ExpDropTable(this);
     headers_ << "" << "文件名称" << "最后修改时间" << "类型" << "大小";
 
-    tabWidget_->setColumnCount(headers_.size());
-    tabWidget_->setHorizontalHeaderLabels(headers_);
-    tabWidget_->setSelectionBehavior(QAbstractItemView::SelectRows);
-    tabWidget_->setContextMenuPolicy(Qt::CustomContextMenu);
+    tableWidget_->setColumnCount(headers_.size());
+    tableWidget_->setHorizontalHeaderLabels(headers_);
+    tableWidget_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    tableWidget_->setContextMenuPolicy(Qt::CustomContextMenu);
 
-    tabWidget_->setColumnWidth(0, 30);
-    tabWidget_->setColumnWidth(1, 300);
-    tabWidget_->setColumnWidth(2, 170);
-    tabWidget_->setColumnWidth(3, 70);
-    tabWidget_->setColumnWidth(4, 90);
-
-    tabWidget_->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
-    tabWidget_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Fixed);
-    tabWidget_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    tableWidget_->setColumnWidth(0, 30);
+    tableWidget_->setColumnWidth(1, 300);
+    tableWidget_->setColumnWidth(2, 170);
+    tableWidget_->setColumnWidth(3, 70);
+    tableWidget_->setColumnWidth(4, 90);
 
     auto* layout = new QHBoxLayout();
-    layout->addWidget(tabWidget_);
+    tableWidget_->setDragEnabled(true);
+    tableWidget_->setAcceptDrops(true);
+    tableWidget_->setDropIndicatorShown(true);
+    tableWidget_->setDragDropMode(QAbstractItemView::DragDrop);
+    tableWidget_->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    tableWidget_->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    tableWidget_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Fixed);
+    tableWidget_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+
+    tableWidget_->setGetOwnRoot([this]() { return currentPath_; });
+
+    layout->addWidget(tableWidget_);
     layout->setContentsMargins(0, 0, 0, 0);
     ui->widget->setLayout(layout);
 }
@@ -197,32 +204,32 @@ void ExplorerControl::setFileItem(const FileMeta& meta, int row)
     auto* iconItem = new QTableWidgetItem("");
     iconItem->setTextAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
     iconItem->setFlags(iconItem->flags() & ~Qt::ItemIsEditable);
-    tabWidget_->setItem(row, 0, iconItem);
+    tableWidget_->setItem(row, 0, iconItem);
 
     auto* nameItem = new QTableWidgetItem(QString::fromStdString(meta.name));
     nameItem->setFlags(nameItem->flags() & ~Qt::ItemIsEditable);
-    tabWidget_->setItem(row, 1, nameItem);
+    tableWidget_->setItem(row, 1, nameItem);
 
     QDateTime modifyTime = QDateTime::fromMSecsSinceEpoch(meta.lastModified);
     QString timeStr = modifyTime.toString("yyyy-MM-dd hh:mm:ss");
     auto* timeItem = new QTableWidgetItem(timeStr);
     timeItem->setFlags(timeItem->flags() & ~Qt::ItemIsEditable);
-    tabWidget_->setItem(row, 2, timeItem);
+    tableWidget_->setItem(row, 2, timeItem);
 
     auto* typeItem = new QTableWidgetItem(typeStr(meta.type));
     typeItem->setFlags(typeItem->flags() & ~Qt::ItemIsEditable);
-    tabWidget_->setItem(row, 3, typeItem);
+    tableWidget_->setItem(row, 3, typeItem);
 
     if (meta.type == FileType::FILE_TYPE_DIR) {
         auto* sizeItem = new QTableWidgetItem("");
         sizeItem->setFlags(sizeItem->flags() & ~Qt::ItemIsEditable);
         iconItem->setIcon(dirIcon);
-        tabWidget_->setItem(row, 4, sizeItem);
+        tableWidget_->setItem(row, 4, sizeItem);
     } else {
         auto* sizeItem = new QTableWidgetItem(QString::fromStdString(miniUtil::GetSizeInfo(meta.size)));
         sizeItem->setFlags(sizeItem->flags() & ~Qt::ItemIsEditable);
         iconItem->setIcon(fileIcon);
-        tabWidget_->setItem(row, 4, sizeItem);
+        tableWidget_->setItem(row, 4, sizeItem);
     }
 }
 
@@ -240,7 +247,7 @@ QString ExplorerControl::typeStr(FileType type)
 
 void ExplorerControl::onTableContextMenu(const QPoint& pos)
 {
-    auto datas = tabWidget_->selectedItems();
+    auto datas = tableWidget_->selectedItems();
     if (datas.isEmpty()) {
         return;
     }
@@ -252,7 +259,7 @@ void ExplorerControl::onTableContextMenu(const QPoint& pos)
     QAction* delAction{};
     // 超过1组选中，不显示单项菜单。
     if (datas.size() <= headers_.size()) {
-        if (auto type = tabWidget_->item(datas[0]->row(), 3); type->text() == GUI_FILE_TYPE_DIR) {
+        if (auto type = tableWidget_->item(datas[0]->row(), 3); type->text() == GUI_FILE_TYPE_DIR) {
             explorerAction = menu.addAction("在资源管理器中打开");
             menu.addAction(explorerAction);
         }
@@ -266,7 +273,7 @@ void ExplorerControl::onTableContextMenu(const QPoint& pos)
         tellInfoCall_(es);
     }
 
-    auto* selectAction = menu.exec(tabWidget_->viewport()->mapToGlobal(pos));
+    auto* selectAction = menu.exec(tableWidget_->viewport()->mapToGlobal(pos));
     if (selectAction == transAction) {
         auto transData = std::make_shared<RelayTaskData>();
         transData->localRoot = (askType_ == AskType::ASK_TYPE_LOCAL ? currentPath_ : es.currentPath_);
@@ -274,10 +281,10 @@ void ExplorerControl::onTableContextMenu(const QPoint& pos)
         transData->isUpload = (askType_ == AskType::ASK_TYPE_LOCAL);
         for (int i = 0; i < datas.size() / headers_.size(); i++) {
             auto curRow = datas[i * headers_.size()]->row();
-            auto name = tabWidget_->item(curRow, 1)->text();
+            auto name = tableWidget_->item(curRow, 1)->text();
             auto stdName = name.toStdString();
-            auto type = tabWidget_->item(curRow, 3)->text();
-            auto sizeStr = tabWidget_->item(curRow, 4)->text();
+            auto type = tableWidget_->item(curRow, 3)->text();
+            auto sizeStr = tableWidget_->item(curRow, 4)->text();
             FileItemData itemData;
             itemData.name = name;
             itemData.sizeStr = sizeStr;

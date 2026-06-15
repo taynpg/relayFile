@@ -8,6 +8,7 @@
 #include "Base/AskDirFile/BaseAskDF.h"
 #include "Base/WorkerThread.hpp"
 #include "RelayTask.h"
+#include "OwnTableWidget.h"
 
 namespace Ui {
 class ExplorerControl;
@@ -63,7 +64,7 @@ private:
 
 private:
     Ui::ExplorerControl* ui;
-    QTableWidget* tabWidget_;
+    ExpDropTable* tableWidget_;
     AskType askType_{};
     QStringList headers_{};
     std::shared_ptr<BaseAskDF> askDf_{};

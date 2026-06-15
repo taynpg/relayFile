@@ -2,6 +2,7 @@
 #define COMPARISONCONTROL_H
 
 #include <QDialog>
+#include "OwnTableWidget.h"
 
 namespace Ui {
 class ComparisonControl;
@@ -16,6 +17,11 @@ public:
     ~ComparisonControl();
 
 private:
+    void initTableWidget();
+
+private:
+    ComDropTable* tableWidget_;
+    QStringList headers_;
     Ui::ComparisonControl* ui;
 };
 
