@@ -339,7 +339,6 @@ bool BaseConfig::saveWidthHeight(int width, int height)
             }
         } catch (const nlohmann::json::exception& e) {
             qWarning() << "Json parse error when loading config:" << e.what();
-            // 即使解析失败，也继续写入新内容
             j.clear();
         }
         file.close();
