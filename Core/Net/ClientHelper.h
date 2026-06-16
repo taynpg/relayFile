@@ -53,7 +53,7 @@ public:
 public:
     bool RunTask(const std::vector<std::shared_ptr<TransItem>>& tasks);
     bool RunTaskItem(const std::shared_ptr<TransItem>& item);
-    void Interrupt();
+    void clearCurrentTaskItem();
     template <typename HandleResp> bool bRequest(FramePtr frame, HandleResp handleResp);
     template <typename HandleResp> void vRequest(FramePtr frame, HandleResp handleResp);
 
@@ -84,6 +84,13 @@ private:
 private:
     QMutex fcStateLock_;
     FileControlState fcState_{};
+
+    // curTask
+private:
+    bool isRunTaskItem_{};
+    bool curTaskIsSend_{};
+    std::string curTaskUUID_{};
+    OneFileTrans::TransStatus trState_{};
 };
 
 class CmdExecutor : public QObject

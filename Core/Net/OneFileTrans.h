@@ -76,7 +76,6 @@ private:
     QFile sendFile_;
     QFile recvFile_;
 
-    bool normalTrans_{true};
     std::uint64_t totalSize_{};
     std::uint64_t transSize_{};
     std::uint64_t curBlockIndex_{};

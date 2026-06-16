@@ -7,7 +7,6 @@
 #include "Utils/Common.h"
 #include "Utils/TimerSTD.hpp"
 
-
 DoubleLinker::DoubleLinker(QObject* parent) : QObject(parent)
 {
 }
@@ -76,6 +75,7 @@ bool DoubleLinker::RunTask(const std::vector<std::shared_ptr<TransItem>>& tasks)
 
 bool DoubleLinker::RunTaskItem(const std::shared_ptr<TransItem>& item)
 {
+    isRunTaskItem_ = true;
     Message reqMsg;
     reqMsg.uuid = Common::GetUUID().toStdString();
     reqMsg.ff = item->from;
@@ -89,29 +89,22 @@ bool DoubleLinker::RunTaskItem(const std::shared_ptr<TransItem>& item)
     requestFrame->type = item->isSend ? FrameType::kFileType_Request_Send : FrameType::kFileType_Request_Down;
 
     bool isDone = false;
-    bool isRun = true;
-    OneFileTrans::TransStatus status = OneFileTrans::TransStatus::Idle;
-
-    auto timer = std::make_shared<TimerStd>([this, &isRun, &status, item]() {
-        if (status != (item->isSend ? OneFileTrans::TransStatus::Sending : OneFileTrans::TransStatus::Receving)) {
-            isRun = false;
-        }
-    });
-
+    trState_ = OneFileTrans::TransStatus::Idle;
+    curTaskIsSend_ = item->isSend;
+    curTaskUUID_ = reqMsg.uuid;
     onSendControl(requestFrame);
-    timer->start_interval(std::chrono::seconds(5));
 
-    while (isRun) {
+    while (isRunTaskItem_) {
         QThread::msleep(1);
         QCoreApplication::processEvents();
-        if (!fileSession_->getTransStatus(status, reqMsg.uuid, item->isSend)) {
+        if (!fileSession_->getTransStatus(trState_, curTaskUUID_, curTaskIsSend_)) {
             continue;
         }
-        if (status == OneFileTrans::TransStatus::Finished) {
-            isRun = false;
+        if (trState_ == OneFileTrans::TransStatus::Finished || trState_ == OneFileTrans::TransStatus::Interrupted) {
+            isRunTaskItem_ = false;
         }
     }
-    if (status == OneFileTrans::TransStatus::Finished) {
+    if (trState_ == OneFileTrans::TransStatus::Finished) {
         isDone = true;
     }
     return isDone;
@@ -228,9 +221,10 @@ bool DoubleLinker::waitFileConnect()
     }
 }
 
-void DoubleLinker::Interrupt()
+void DoubleLinker::clearCurrentTaskItem()
 {
-    fileSession_->StopTrans();
+    fileSession_->clearTask(curTaskUUID_, curTaskIsSend_);
+    isRunTaskItem_ = false;
 }
 
 void DoubleLinker::onDoFileConnectSuccess()

@@ -32,7 +32,6 @@ bool OneFileTrans::initTransfer(TransMode mode, const FileMeta& fileMeta, const 
                                 const std::string& uuid)
 {
     QMutexLocker locker(&qMut_);
-
     tMode_ = mode;
     targetId_ = targetId;
     totalSize_ = fileMeta.size;
@@ -70,7 +69,7 @@ bool OneFileTrans::initTransfer(TransMode mode, const FileMeta& fileMeta, const 
 
 void OneFileTrans::stopTrans()
 {
-    normalTrans_ = false;
+    handleInterrupt(nullptr);
 }
 
 void OneFileTrans::setTargetControlId(const std::string& targetControlId)
@@ -161,7 +160,6 @@ FramePtr OneFileTrans::CreateFrame(FrameType type)
         msg.uuid = uuid_;
         frame->data = serializeStruct(msg);
     }
-
     return frame;
 }
 
@@ -184,13 +182,8 @@ OneFileTrans::TransStatus OneFileTrans::getTransStatus() const
 
 void OneFileTrans::onFrameReceive(FramePtr frame)
 {
-    if (!normalTrans_) {
-        handleInterrupt(frame);
-        return;
-    }
     // qDebug() << "收到消息:" << static_cast<int>(frame->type) << "，from:" << frame->from << "，to:" << frame->to
     //          << "，index:" << frame->index;
-    QMutexLocker locker(&qMut_);
     if (state_ == TransStatus::Finished || state_ == TransStatus::Interrupted) {
         qWarning() << "文件传输已结束，无法处理消息, state is:" << static_cast<int>(state_);
         return;
@@ -238,6 +231,10 @@ void OneFileTrans::onFrameReceive(FramePtr frame)
 
 bool OneFileTrans::handleInterrupt(FramePtr frame)
 {
+    QMutexLocker locker(&qMut_);
+    if (state_ == TransStatus::Finished) {
+        return true;
+    }
     if (tMode_ == TransMode::Receive && state_ == TransStatus::Receving) {
         auto f = CreateFrame(FrameType::kFileType_Request_Cancel);
         emit signalRequestSend(f);
