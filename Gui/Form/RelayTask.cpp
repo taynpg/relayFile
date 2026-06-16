@@ -63,11 +63,8 @@ void RelayTask::initControl()
 {
     ui->edFrom->setEnabled(false);
     ui->edTo->setEnabled(false);
-    ui->rbDisconnect->setEnabled(false);
-    ui->rbNormal->setEnabled(false);
     ui->pedLog->setEnabled(false);
     // ui->lbSpeed->setEnabled(false);
-    ui->rbDisconnect->setChecked(true);
     ui->btnStart->setEnabled(false);
     ui->btnRetryAll->setEnabled(false);
     ui->curProgress->setValue(0);
@@ -150,6 +147,7 @@ void RelayTask::onStartRun()
             onStartFresh(i);
             startTime_ = std::chrono::steady_clock::now();
             bool handleSuccess = handleOneLine(i);
+            doubleLinker_->clearCurrentTaskItem();
             if (!handleSuccess) {
                 allSuccess = false;
                 break;

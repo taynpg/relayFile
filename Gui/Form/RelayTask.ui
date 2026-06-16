@@ -87,27 +87,6 @@
        </property>
       </widget>
      </item>
-     <item>
-      <widget class="QLabel" name="label_7">
-       <property name="text">
-        <string>网络状态：</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QRadioButton" name="rbNormal">
-       <property name="text">
-        <string>正常</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QRadioButton" name="rbDisconnect">
-       <property name="text">
-        <string>断连</string>
-       </property>
-      </widget>
-     </item>
     </layout>
    </item>
    <item>
