@@ -28,6 +28,7 @@ private:
 private:
     void initControls();
     void initSignals();
+    void onTableContextMenu(const QPoint& pos);
 
 private:
     QStringList headers_;

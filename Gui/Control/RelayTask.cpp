@@ -232,6 +232,11 @@ void RelayTask::showEvent(QShowEvent* event)
         ui->edLocalRoot->setText(data_->localRoot);
         ui->edRemoteRoot->setText(data_->remoteRoot);
     }
+    if (data_->isUpload) {
+        setWindowTitle("上传任务");
+    } else {
+        setWindowTitle("下载任务");
+    }
     QDialog::showEvent(event);
 }
 

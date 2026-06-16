@@ -256,50 +256,73 @@ void ExplorerControl::onTableContextMenu(const QPoint& pos)
     QAction* transAction = menu.addAction("传输");
 
     QAction* explorerAction{};
-    QAction* delAction{};
+    QAction* copyPathAction{};
+    QAction* renameAction{};
+    QAction* sha256Action{};
+    QAction* extractAction{};
+    QAction* detailAction{};
+
     // 超过1组选中，不显示单项菜单。
     if (datas.size() <= headers_.size()) {
         if (auto type = tableWidget_->item(datas[0]->row(), 3); type->text() == GUI_FILE_TYPE_DIR) {
             explorerAction = menu.addAction("在资源管理器中打开");
             menu.addAction(explorerAction);
         }
-        delAction = menu.addAction("删除");
-        menu.addAction(delAction);
-    } else {
+        if (auto type = tableWidget_->item(datas[0]->row(), 3); type->text() == GUI_FILE_TYPE_FILE) {
+            sha256Action = menu.addAction("SHA256");
+            menu.addAction(sha256Action);
+            extractAction = menu.addAction("解压缩");
+            menu.addAction(extractAction);
+        }
+        copyPathAction = menu.addAction("复制全路径");
+        menu.addAction(copyPathAction);
+        renameAction = menu.addAction("重命名");
+        menu.addAction(renameAction);
+        detailAction = menu.addAction("详细信息");
+        menu.addAction(detailAction);
     }
 
+    QAction* deleteAction = menu.addAction("删除");
+    QAction* compressAction = menu.addAction("压缩");
+    QAction* mkdirDirAction = menu.addAction("新建文件夹");
+
+    auto* selectAction = menu.exec(tableWidget_->viewport()->mapToGlobal(pos));
+    if (selectAction == transAction) {
+        actionTrans(datas);
+    } else if (selectAction == explorerAction) {
+    }
+}
+
+void ExplorerControl::actionTrans(const QList<QTableWidgetItem*>& datas)
+{
     ExplorerSharedData es;
     if (tellInfoCall_) {
         tellInfoCall_(es);
     }
 
-    auto* selectAction = menu.exec(tableWidget_->viewport()->mapToGlobal(pos));
-    if (selectAction == transAction) {
-        auto transData = std::make_shared<RelayTaskData>();
-        transData->localRoot = (askType_ == AskType::ASK_TYPE_LOCAL ? currentPath_ : es.currentPath_);
-        transData->remoteRoot = (askType_ == AskType::ASK_TYPE_LOCAL ? es.currentPath_ : currentPath_);
-        transData->isUpload = (askType_ == AskType::ASK_TYPE_LOCAL);
-        for (int i = 0; i < datas.size() / headers_.size(); i++) {
-            auto curRow = datas[i * headers_.size()]->row();
-            auto name = tableWidget_->item(curRow, 1)->text();
-            auto stdName = name.toStdString();
-            auto type = tableWidget_->item(curRow, 3)->text();
-            auto sizeStr = tableWidget_->item(curRow, 4)->text();
-            FileItemData itemData;
-            itemData.name = name;
-            itemData.sizeStr = sizeStr;
-            itemData.type = (type == GUI_FILE_TYPE_DIR ? RFileType::mTypeDir : RFileType::mTypeFile);
-            auto it = std::find_if(currentMetaList_.begin(), currentMetaList_.end(),
-                                   [stdName](const FileMeta& meta) { return meta.name == stdName; });
-            if (it != currentMetaList_.end()) {
-                itemData.size = it->size;
-            }
-            transData->fileList.push_back(itemData);
+    auto transData = std::make_shared<RelayTaskData>();
+    transData->localRoot = (askType_ == AskType::ASK_TYPE_LOCAL ? currentPath_ : es.currentPath_);
+    transData->remoteRoot = (askType_ == AskType::ASK_TYPE_LOCAL ? es.currentPath_ : currentPath_);
+    transData->isUpload = (askType_ == AskType::ASK_TYPE_LOCAL);
+    for (int i = 0; i < datas.size() / headers_.size(); i++) {
+        auto curRow = datas[i * headers_.size()]->row();
+        auto name = tableWidget_->item(curRow, 1)->text();
+        auto stdName = name.toStdString();
+        auto type = tableWidget_->item(curRow, 3)->text();
+        auto sizeStr = tableWidget_->item(curRow, 4)->text();
+        FileItemData itemData;
+        itemData.name = name;
+        itemData.sizeStr = sizeStr;
+        itemData.type = (type == GUI_FILE_TYPE_DIR ? RFileType::mTypeDir : RFileType::mTypeFile);
+        auto it = std::find_if(currentMetaList_.begin(), currentMetaList_.end(),
+                               [stdName](const FileMeta& meta) { return meta.name == stdName; });
+        if (it != currentMetaList_.end()) {
+            itemData.size = it->size;
         }
-        qDebug() << "初始文件个数（含文件夹）:" << transData->fileList.size();
-        emit transTaskRun(transData);
-    } else if (selectAction == explorerAction) {
+        transData->fileList.push_back(itemData);
     }
+    qDebug() << "初始文件个数（含文件夹）:" << transData->fileList.size();
+    emit transTaskRun(transData);
 }
 
 void ExplorerControl::onTransForm(std::shared_ptr<RelayTaskData> data)

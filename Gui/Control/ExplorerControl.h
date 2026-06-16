@@ -61,6 +61,7 @@ public:
 
 private:
     void uiPathSet(const QString& path);
+    void actionTrans(const QList<QTableWidgetItem*>& datas);
 
 private:
     Ui::ExplorerControl* ui;

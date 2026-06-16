@@ -2,6 +2,7 @@
 
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QMenu>
 #include <QMessageBox>
 
 #include "Base/BaseHelper.h"
@@ -34,6 +35,7 @@ void ComparisonControl::initSignals()
     connect(ui->btnSave, &QPushButton::clicked, this, &ComparisonControl::saveConfig);
     connect(ui->btnLoad, &QPushButton::clicked, this, &ComparisonControl::loadConfig);
     connect(ui->btnDel, &QPushButton::clicked, this, &ComparisonControl::delConfig);
+    connect(tableWidget_, &QTableWidget::customContextMenuRequested, this, &ComparisonControl::onTableContextMenu);
 }
 
 void ComparisonControl::initTableWidget()
@@ -187,4 +189,44 @@ void ComparisonControl::delConfig()
     }
     ui->cbConfig->removeItem(ui->cbConfig->findText(config));
     QMessageBox::information(this, "提示", "删除成功");
+}
+
+void ComparisonControl::onTableContextMenu(const QPoint& pos)
+{
+    auto datas = tableWidget_->selectedItems();
+    if (datas.isEmpty()) {
+        return;
+    }
+
+    QMenu menu(this);
+    QAction* accessDirAction = menu.addAction("访问本地目录");
+    QAction* accessRemoteDirAction = menu.addAction("访问远程目录");
+    QAction* openDirAction = menu.addAction("打开所在目录");
+    QAction* uploadAction = menu.addAction(style()->standardIcon(QStyle::SP_ArrowUp), "上传");
+    QAction* newLineAction = menu.addAction("新行");
+    QAction* deleteAction = menu.addAction("删除");
+    QAction* downloadAction = menu.addAction(style()->standardIcon(QStyle::SP_ArrowDown), "下载");
+    auto* selectAction = menu.exec(tableWidget_->viewport()->mapToGlobal(pos));
+
+    if (selectAction == accessDirAction) {
+        return;
+    }
+    if (selectAction == accessRemoteDirAction) {
+        return;
+    }
+    if (selectAction == openDirAction) {
+        return;
+    }
+    if (selectAction == newLineAction) {
+        return;
+    }
+    if (selectAction == uploadAction) {
+        return;
+    }
+    if (selectAction == deleteAction) {
+        return;
+    }
+    if (selectAction == downloadAction) {
+        return;
+    }
 }
