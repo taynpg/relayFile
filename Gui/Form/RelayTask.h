@@ -67,7 +67,7 @@ protected:
     void onConfirmFiles();
 
     bool normalCheckFileExist();
-    void GenOtherMetaPath(const FileMeta& in, FileMeta& out, bool isSend);
+    void GenOtherMetaPath(const FileMeta& in, FileMeta& out, bool isSend, const QString& localRoot, const QString& remoteRoot);
 
 private:
     void disableControls();

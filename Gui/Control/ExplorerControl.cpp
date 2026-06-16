@@ -300,8 +300,8 @@ void ExplorerControl::actionTrans(const QList<QTableWidgetItem*>& datas)
     }
 
     auto transData = std::make_shared<RelayTaskData>();
-    transData->localRoot = (askType_ == AskType::ASK_TYPE_LOCAL ? currentPath_ : es.currentPath_);
-    transData->remoteRoot = (askType_ == AskType::ASK_TYPE_LOCAL ? es.currentPath_ : currentPath_);
+    auto localRoot = (askType_ == AskType::ASK_TYPE_LOCAL ? currentPath_ : es.currentPath_);
+    auto remoteRoot = (askType_ == AskType::ASK_TYPE_LOCAL ? es.currentPath_ : currentPath_);
     transData->isUpload = (askType_ == AskType::ASK_TYPE_LOCAL);
     for (int i = 0; i < datas.size() / headers_.size(); i++) {
         auto curRow = datas[i * headers_.size()]->row();
@@ -311,6 +311,8 @@ void ExplorerControl::actionTrans(const QList<QTableWidgetItem*>& datas)
         auto sizeStr = tableWidget_->item(curRow, 4)->text();
         FileItemData itemData;
         itemData.name = name;
+        itemData.localRoot = localRoot;
+        itemData.remoteRoot = remoteRoot;
         itemData.sizeStr = sizeStr;
         itemData.type = (type == GUI_FILE_TYPE_DIR ? RFileType::mTypeDir : RFileType::mTypeFile);
         auto it = std::find_if(currentMetaList_.begin(), currentMetaList_.end(),

@@ -25,8 +25,10 @@ struct FileMeta {
     FileType type;
     int64_t lastModified;
     std::uint16_t permission;
+    std::string localRoot;
+    std::string remoteRoot;
     template <class Archive> void serialize(Archive& ar)
     {
-        ar(dir, name, fullPath, size, sizeStr, type, lastModified, permission);
+        ar(dir, name, fullPath, size, sizeStr, type, lastModified, permission, localRoot, remoteRoot);
     }
 };

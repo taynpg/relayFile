@@ -13,6 +13,8 @@ FileMeta::FileMeta(const FileMeta& o)
     this->fullPath = o.fullPath;
     this->lastModified = o.lastModified;
     this->permission = o.permission;
+    this->localRoot = o.localRoot;
+    this->remoteRoot = o.remoteRoot;
 }
 
 FileMeta& FileMeta::operator=(const FileMeta& o)
@@ -28,6 +30,8 @@ FileMeta& FileMeta::operator=(const FileMeta& o)
     this->fullPath = o.fullPath;
     this->lastModified = o.lastModified;
     this->permission = o.permission;
+    this->localRoot = o.localRoot;
+    this->remoteRoot = o.remoteRoot;
     return *this;
 }
 
@@ -41,4 +45,6 @@ FileMeta::FileMeta(FileMeta&& s) noexcept
     this->fullPath = std::move(s.fullPath);
     this->lastModified = std::move(s.lastModified);
     this->permission = std::move(s.permission);
+    this->localRoot = std::move(s.localRoot);
+    this->remoteRoot = std::move(s.remoteRoot);
 }

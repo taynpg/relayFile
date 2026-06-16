@@ -165,11 +165,11 @@ void RelayTask::onStartRun()
     });
 }
 
-void RelayTask::GenOtherMetaPath(const FileMeta& in, FileMeta& out, bool isSend)
+void RelayTask::GenOtherMetaPath(const FileMeta& in, FileMeta& out, bool isSend, const QString& localRoot,
+                                 const QString& remoteRoot)
 {
     out = in;
-    auto fullPath = FileDir::GenOutPath(isSend ? data_->localRoot : data_->remoteRoot, in.fullPath,
-                                        isSend ? data_->remoteRoot : data_->localRoot);
+    auto fullPath = FileDir::GenOutPath(isSend ? localRoot : remoteRoot, in.fullPath, isSend ? remoteRoot : localRoot);
     out.fullPath = fullPath.toStdString();
     out.name = FileDir::GenFileName(fullPath).toStdString();
     out.dir = FileDir::GenDir(fullPath).toStdString();
@@ -228,10 +228,6 @@ void RelayTask::setData(std::shared_ptr<RelayTaskData> data)
 
 void RelayTask::showEvent(QShowEvent* event)
 {
-    if (data_) {
-        ui->edLocalRoot->setText(data_->localRoot);
-        ui->edRemoteRoot->setText(data_->remoteRoot);
-    }
     if (data_->isUpload) {
         setWindowTitle("上传任务");
     } else {
@@ -263,7 +259,7 @@ void RelayTask::onBaseCheck()
         auto name = data_->isUpload ? GUI_DIRECTION_LOCAL : GUI_DIRECTION_REMOTE;
 
         for (const auto& item : data_->fileList) {
-            auto path = FileDir::Join(data_->isUpload ? data_->localRoot : data_->remoteRoot, item.name);
+            auto path = FileDir::Join(data_->isUpload ? item.localRoot : item.remoteRoot, item.name);
             if (item.type == RFileType::mTypeDir) {
                 std::vector<FileMeta> fileList;
                 if (!askDfOwn->AskFileList(path.toStdString(), fileList, true)) {
@@ -276,7 +272,9 @@ void RelayTask::onBaseCheck()
             }
             emit signalLog(QString("检查%1文件：%2").arg(name).arg(path));
             FileMeta meta;
-            meta.dir = data_->isUpload ? data_->localRoot.toStdString() : data_->remoteRoot.toStdString();
+            meta.localRoot = item.localRoot.toStdString();
+            meta.remoteRoot = item.remoteRoot.toStdString();
+            meta.dir = data_->isUpload ? item.localRoot.toStdString() : item.remoteRoot.toStdString();
             meta.sizeStr = item.sizeStr.toStdString();
             meta.name = item.name.toStdString();
             meta.fullPath = path.toStdString();
@@ -309,7 +307,8 @@ void RelayTask::onBaseCheck()
             auto trItem = std::make_shared<TransItem>();
             trItem->isSend = data_->isUpload;
             trItem->from = item;
-            GenOtherMetaPath(item, trItem->to, data_->isUpload);
+            GenOtherMetaPath(item, trItem->to, data_->isUpload, QString::fromStdString(item.localRoot),
+                             QString::fromStdString(item.remoteRoot));
             transItems_.push_back(trItem);
         }
 

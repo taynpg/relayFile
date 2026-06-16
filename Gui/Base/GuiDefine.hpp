@@ -18,6 +18,8 @@
 #define GUI_DIRECTION_REMOTE "远端"
 
 struct FileItemData {
+    QString localRoot;
+    QString remoteRoot;
     QString name;
     QString path;
     RFileType type;
@@ -26,8 +28,6 @@ struct FileItemData {
 };
 
 struct RelayTaskData {
-    QString localRoot;
-    QString remoteRoot;
     QVector<FileItemData> fileList;
     bool isUpload{};
 };
