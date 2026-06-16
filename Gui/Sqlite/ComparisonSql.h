@@ -40,6 +40,7 @@ public:
     bool deleteItem(int id);
     bool haveItem(int id);
     bool getLatestItemId(int& id);
+    bool isNameValid(const QString& name);
 
 private:
     QString configPath_;

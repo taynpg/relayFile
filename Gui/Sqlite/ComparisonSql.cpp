@@ -1,6 +1,7 @@
 #include "ComparisonSql.h"
 
 #include <QDebug>
+#include <QRegularExpression>
 #include <QSqlError>
 #include <QSqlQuery>
 
@@ -255,4 +256,179 @@ bool ComparisonSql::tableExists(const QString& tableName)
         return false;
     }
     return query.next();
+}
+
+bool ComparisonSql::isNameValid(const QString& name)
+{
+    if (name.isEmpty()) {
+        qWarning() << "名称不能为空";
+        return false;
+    }
+
+    if (name.length() > 128) {
+        qWarning() << "名称长度不能超过128个字符";
+        return false;
+    }
+
+    if (name.startsWith("sqlite_", Qt::CaseInsensitive)) {
+        qWarning() << "名称不能以 'sqlite_' 开头";
+        return false;
+    }
+
+    if (name.contains(' ')) {
+        qWarning() << "名称不能包含空格";
+        return false;
+    }
+
+    static const QRegularExpression re("^[A-Za-z_][A-Za-z0-9_]*$");
+    if (!re.match(name).hasMatch()) {
+        qWarning() << "名称只能包含字母、数字和下划线，且不能以数字开头";
+        return false;
+    }
+
+    static const QSet<QString> keywords = {"ABORT",
+                                           "ACTION",
+                                           "ADD",
+                                           "AFTER",
+                                           "ALL",
+                                           "ALTER",
+                                           "ANALYZE",
+                                           "AND",
+                                           "AS",
+                                           "ASC",
+                                           "ATTACH",
+                                           "AUTOINCREMENT",
+                                           "BEFORE",
+                                           "BEGIN",
+                                           "BETWEEN",
+                                           "BY",
+                                           "CASCADE",
+                                           "CASE",
+                                           "CAST",
+                                           "CHECK",
+                                           "COLLATE",
+                                           "COLUMN",
+                                           "COMMIT",
+                                           "CONFLICT",
+                                           "CONSTRAINT",
+                                           "CREATE",
+                                           "CROSS",
+                                           "CURRENT",
+                                           "CURRENT_DATE",
+                                           "CURRENT_TIME",
+                                           "CURRENT_TIMESTAMP",
+                                           "DATABASE",
+                                           "DEFAULT",
+                                           "DEFERRABLE",
+                                           "DEFERRED",
+                                           "DELETE",
+                                           "DESC",
+                                           "DETACH",
+                                           "DISTINCT",
+                                           "DO",
+                                           "DROP",
+                                           "EACH",
+                                           "ELSE",
+                                           "END",
+                                           "ESCAPE",
+                                           "EXCEPT",
+                                           "EXCLUDE",
+                                           "EXCLUSIVE",
+                                           "EXISTS",
+                                           "EXPLAIN",
+                                           "FAIL",
+                                           "FILTER",
+                                           "FOLLOWING",
+                                           "FOR",
+                                           "FOREIGN",
+                                           "FROM",
+                                           "FULL",
+                                           "GLOB",
+                                           "GROUP",
+                                           "HAVING",
+                                           "IF",
+                                           "IGNORE",
+                                           "IMMEDIATE",
+                                           "IN",
+                                           "INDEX",
+                                           "INDEXED",
+                                           "INITIALLY",
+                                           "INNER",
+                                           "INSERT",
+                                           "INSTEAD",
+                                           "INTERSECT",
+                                           "INTO",
+                                           "IS",
+                                           "ISNULL",
+                                           "JOIN",
+                                           "KEY",
+                                           "LEFT",
+                                           "LIKE",
+                                           "LIMIT",
+                                           "MATCH",
+                                           "NATURAL",
+                                           "NO",
+                                           "NOT",
+                                           "NOTHING",
+                                           "NOTNULL",
+                                           "NULL",
+                                           "OF",
+                                           "OFFSET",
+                                           "ON",
+                                           "OR",
+                                           "ORDER",
+                                           "OTHERS",
+                                           "OUTER",
+                                           "OVER",
+                                           "PARTITION",
+                                           "PLAN",
+                                           "PRAGMA",
+                                           "PRECEDING",
+                                           "PRIMARY",
+                                           "QUERY",
+                                           "RAISE",
+                                           "RANGE",
+                                           "RECURSIVE",
+                                           "REFERENCES",
+                                           "REGEXP",
+                                           "REINDEX",
+                                           "RELEASE",
+                                           "RENAME",
+                                           "REPLACE",
+                                           "RESTRICT",
+                                           "RETURNING",
+                                           "RIGHT",
+                                           "ROLLBACK",
+                                           "ROW",
+                                           "ROWS",
+                                           "SAVEPOINT",
+                                           "SELECT",
+                                           "SET",
+                                           "TABLE",
+                                           "TEMP",
+                                           "TEMPORARY",
+                                           "THEN",
+                                           "TIES",
+                                           "TO",
+                                           "TRANSACTION",
+                                           "TRIGGER",
+                                           "UNBOUNDED",
+                                           "UNION",
+                                           "UNIQUE",
+                                           "UPDATE",
+                                           "USING",
+                                           "VACUUM",
+                                           "VALUES",
+                                           "VIEW",
+                                           "WHEN",
+                                           "WHERE",
+                                           "WINDOW",
+                                           "WITH",
+                                           "WITHOUT"};
+
+    if (keywords.contains(name.toUpper())) {
+        qWarning() << "名称不能是SQLite的关键字:" << name;
+        return false;
+    }
+    return true;
 }

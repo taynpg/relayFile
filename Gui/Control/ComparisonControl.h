@@ -26,6 +26,7 @@ private:
     void showEvent(QShowEvent* event) override;
 
 private:
+    void initControls();
     void initSignals();
 
 private:

@@ -12,6 +12,7 @@ ComparisonControl::ComparisonControl(QWidget* parent) : QDialog(parent), ui(new 
     ui->setupUi(this);
     initTableWidget();
     initSignals();
+    initControls();
     ui->cbConfig->setEditable(true);
     comparisonSql_ = std::make_shared<ComparisonSql>();
     comparisonSql_->open(GlobalData::getInstance()->getGlobalConfigDir() + "/relayFileDb");
@@ -23,11 +24,15 @@ ComparisonControl::~ComparisonControl()
     delete ui;
 }
 
+void ComparisonControl::initControls()
+{
+    ui->cbConfig->setMinimumWidth(150);
+}
+
 void ComparisonControl::initSignals()
 {
     connect(ui->btnSave, &QPushButton::clicked, this, &ComparisonControl::saveConfig);
     connect(ui->btnLoad, &QPushButton::clicked, this, &ComparisonControl::loadConfig);
-    connect(ui->cbConfig, &QComboBox::currentTextChanged, this, [this](const QString&) { loadConfig(false); });
     connect(ui->btnDel, &QPushButton::clicked, this, &ComparisonControl::delConfig);
 }
 
@@ -69,6 +74,12 @@ void ComparisonControl::saveConfig()
         QMessageBox::warning(this, "提示", "配置名称不能为空");
         return;
     }
+
+    if (!comparisonSql_->isNameValid(config)) {
+        QMessageBox::warning(this, "提示", "配置名称不合法，请修改后重试");
+        return;
+    }
+
     bool isSuccess = true;
     if (!comparisonSql_->tableExists(config)) {
         if (!comparisonSql_->createTable(config)) {
@@ -104,6 +115,12 @@ void ComparisonControl::saveConfig()
     }
     if (isSuccess) {
         QMessageBox::information(this, "提示", "保存成功");
+        auto tables = comparisonSql_->tables();
+        ui->cbConfig->clear();
+        ui->cbConfig->addItems(tables);
+        if (ui->cbConfig->findText(config) >= 0) {
+            ui->cbConfig->setCurrentText(config);
+        }
     } else {
         QMessageBox::warning(this, "提示", "保存失败");
     }
