@@ -26,8 +26,10 @@ bool LocalAskDF::AskHome(std::string& home)
     return true;
 }
 
-bool LocalAskDF::AskFileExist(const std::string& path, bool& existExist, std::uint64_t& fileSize)
+bool LocalAskDF::AskFileMeta(const std::string& path, FileMeta& meta)
 {
-    existExist = FileDir::IsExist(QString::fromStdString(path), fileSize);
+    RFileMeta rmeta;
+    FileDir::GetFileRFileMeta(QString::fromStdString(path), rmeta);
+    FileDir::TurnMeta(rmeta, meta);
     return true;
 }

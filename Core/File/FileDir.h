@@ -16,6 +16,7 @@ struct RFileMeta {
     quint64 fileSize;
     quint64 lastModified;
     quint16 permission;
+    uint16_t exist{};
 };
 
 class FileDir
@@ -27,6 +28,7 @@ public:
 public:
     static bool GetHome(QString& home);
     static bool GetFileList(const QString& path, QVector<RFileMeta>& fileList, bool recursive);
+    static void GetFileRFileMeta(const QString& path, RFileMeta& rmeta);
     static void TurnMeta(const RFileMeta& rmeta, FileMeta& meta);
     static QString GetErrInfo();
     static QString cdUp(const QString& path);

@@ -279,22 +279,21 @@ void RelayTask::onBaseCheck()
             meta.size = item.size;
             fileList_.push_back(meta);
         }
-        emit signalUpdateTable();
+        FileMeta tmpMeta;
         for (auto& item : fileList_) {
-            bool existExist = false;
-            std::uint64_t fileSize;
-            if (!askDfOwn->AskFileExist(item.fullPath, existExist, fileSize)) {
+            if (!askDfOwn->AskFileMeta(item.fullPath, tmpMeta)) {
                 emit signalLog(QString("%1文件文件存在性检查：%2 失败。").arg(name).arg(item.fullPath));
                 emit signalCheckUnComplete();
                 return;
             }
-            if (!existExist) {
+            if (tmpMeta.exist == 0) {
                 emit signalLog(QString("%1文件：%2 不存在。").arg(name).arg(item.fullPath));
                 emit signalCheckUnComplete();
                 return;
             }
-            item.size = fileSize;
+            item.size = tmpMeta.size;
         }
+        emit signalUpdateTable();
         emit signalLog("源端文件存在性检查完成。");
         emit signalLog("开始校验目标端文件是否已存在相同文件。");
 
@@ -314,14 +313,12 @@ void RelayTask::onBaseCheck()
 
         auto nameConfirm = data_->isUpload ? GUI_DIRECTION_REMOTE : GUI_DIRECTION_LOCAL;
         for (const auto& item : transItems_) {
-            bool existExist = false;
-            std::uint64_t fileSize;
-            if (!askDfOther->AskFileExist(item->to.fullPath, existExist, fileSize)) {
+            if (!askDfOther->AskFileMeta(item->to.fullPath, tmpMeta)) {
                 emit signalLog(QString("%1文件文件存在性检查：%2 失败。").arg(nameConfirm).arg(item->to.fullPath));
                 emit signalCheckUnComplete();
                 return;
             }
-            if (existExist) {
+            if (tmpMeta.exist != 0) {
                 emit signalLog(QString("%1文件：%2 已存在相同文件。").arg(nameConfirm).arg(item->to.fullPath));
                 needConfirmFiles_.push_back(item->to);
             }

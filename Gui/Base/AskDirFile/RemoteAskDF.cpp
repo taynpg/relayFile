@@ -74,24 +74,18 @@ bool RemoteAskDF::AskHome(std::string& home)
         FrameType::kMsgType_Ask_Home);
 }
 
-bool RemoteAskDF::AskFileExist(const std::string& path, bool& existExist, std::uint64_t& fileSize)
+bool RemoteAskDF::AskFileMeta(const std::string& path, FileMeta& meta)
 {
     Message msg;
     msg.comStr = path;
     return Request(
         msg,
-        [&existExist, &fileSize](MessagePtr ret) {
+        [&meta](MessagePtr ret) {
             if (ret == nullptr) {
                 return false;
             }
-            if (ret->msgStateCode == MessageStateCode::kMessageStateCodeSuccess) {
-                existExist = true;
-                fileSize = std::stoull(ret->comStr);
-            } else {
-                existExist = false;
-                fileSize = 0;
-            }
+            meta = ret->ff;
             return true;
         },
-        FrameType::kMsgType_Ask_FileExist);
+        FrameType::kMsgType_Ask_FileMeta);
 }

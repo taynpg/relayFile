@@ -112,6 +112,7 @@ void FileDir::TurnMeta(const RFileMeta& rmeta, FileMeta& meta)
     meta.lastModified = rmeta.lastModified;
     meta.permission = rmeta.permission;
     meta.type = rmeta.fileType == RFileType::mTypeDir ? FileType::FILE_TYPE_DIR : FileType::FILE_TYPE_FILE;
+    meta.exist = rmeta.exist;
 }
 
 QString FileDir::Join(const QString& path, const QString& name)
@@ -170,4 +171,20 @@ QString FileDir::GenOutPath(const QString& root, const QString& fullPath, const 
     QString result = outDir.filePath(relativePath);
 
     return QDir::cleanPath(result);
+}
+
+void FileDir::GetFileRFileMeta(const QString& path, RFileMeta& rmeta)
+{
+    QFileInfo info(path);
+    rmeta.dir = path;
+    if (info.exists()) {
+        rmeta.exist = 1;
+        rmeta.fileName = info.fileName();
+        rmeta.permission = info.permissions();
+        rmeta.fileType = info.isDir() ? RFileType::mTypeDir : RFileType::mTypeFile;
+        rmeta.fileSize = info.size();
+        rmeta.lastModified = info.lastModified().toMSecsSinceEpoch();
+        return;
+    }
+    rmeta.exist = 0;
 }

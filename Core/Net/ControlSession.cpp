@@ -187,19 +187,18 @@ void ControlSession::handleFrame(FramePtr frame)
         });
         break;
     }
-    case FrameType::kMsgType_Ask_FileExist: {
+    case FrameType::kMsgType_Ask_FileMeta: {
         PushOneWork();
         workerPool_->enqueue([this, worker]() {
             Message sourceMsg;
             deserializeStruct(worker->frame->data, sourceMsg);
             auto answerFrame = OneFrame::Create(worker->frame);
             Message m(sourceMsg);
-            std::uint64_t fileSize;
-            auto exist = FileDir::IsExist(QString::fromStdString(sourceMsg.comStr), fileSize);
-            m.msgStateCode = exist ? MessageStateCode::kMessageStateCodeSuccess : MessageStateCode::kMessageStateCodeFailed;
-            m.comStr = exist ? QString::number(fileSize).toStdString() : "0";
+            RFileMeta rmeta;
+            FileDir::GetFileRFileMeta(QString::fromStdString(sourceMsg.comStr), rmeta);
+            FileDir::TurnMeta(rmeta, m.ff);
             answerFrame->data = serializeStruct(m);
-            answerFrame->type = FrameType::kMsgType_Answer_FileExist;
+            answerFrame->type = FrameType::kMsgType_Answer_FileMeta;
             emit signalRequestSend(answerFrame);
             worker->isDone = true;
         });

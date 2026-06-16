@@ -11,6 +11,7 @@ FileMeta::FileMeta(const FileMeta& o)
     this->type = o.type;
     this->sizeStr = o.sizeStr;
     this->fullPath = o.fullPath;
+    this->exist = o.exist;
     this->lastModified = o.lastModified;
     this->permission = o.permission;
     this->localRoot = o.localRoot;
@@ -25,6 +26,7 @@ FileMeta& FileMeta::operator=(const FileMeta& o)
     this->dir = o.dir;
     this->name = o.name;
     this->size = o.size;
+    this->exist = o.exist;
     this->type = o.type;
     this->sizeStr = o.sizeStr;
     this->fullPath = o.fullPath;
@@ -42,6 +44,7 @@ FileMeta::FileMeta(FileMeta&& s) noexcept
     this->size = std::move(s.size);
     this->type = std::move(s.type);
     this->sizeStr = std::move(s.sizeStr);
+    this->exist = std::move(s.exist);
     this->fullPath = std::move(s.fullPath);
     this->lastModified = std::move(s.lastModified);
     this->permission = std::move(s.permission);
