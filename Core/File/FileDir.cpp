@@ -24,6 +24,16 @@ bool FileDir::IsExist(const QString& path)
     return info.exists();
 }
 
+bool FileDir::IsExist(const QString& path, std::uint64_t& fileSize)
+{
+    QFileInfo info(path);
+    if (info.exists()) {
+        fileSize = info.size();
+        return true;
+    }
+    return false;
+}
+
 QString FileDir::GetErrInfo()
 {
     return errInfo;

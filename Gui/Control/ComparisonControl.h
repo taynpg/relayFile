@@ -3,6 +3,7 @@
 
 #include <QDialog>
 
+#include "Base/GuiDefine.hpp"
 #include "OwnTableWidget.h"
 #include "Sqlite/ComparisonSql.h"
 
@@ -13,6 +14,9 @@ class ComparisonControl;
 class ComparisonControl : public QDialog
 {
     Q_OBJECT
+
+signals:
+    void transTaskRun(std::shared_ptr<RelayTaskData> data);
 
 public:
     explicit ComparisonControl(QWidget* parent = nullptr);
@@ -29,6 +33,7 @@ private:
     void initControls();
     void initSignals();
     void onTableContextMenu(const QPoint& pos);
+    void onTrans(const QList<QTableWidgetItem*>& items, bool isSend);
 
 private:
     QStringList headers_;

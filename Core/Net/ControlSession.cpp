@@ -194,7 +194,10 @@ void ControlSession::handleFrame(FramePtr frame)
             deserializeStruct(worker->frame->data, sourceMsg);
             auto answerFrame = OneFrame::Create(worker->frame);
             Message m(sourceMsg);
-            m.comStr = FileDir::IsExist(QString::fromStdString(sourceMsg.comStr)) ? "1" : "0";
+            std::uint64_t fileSize;
+            auto exist = FileDir::IsExist(QString::fromStdString(sourceMsg.comStr), fileSize);
+            m.msgStateCode = exist ? MessageStateCode::kMessageStateCodeSuccess : MessageStateCode::kMessageStateCodeFailed;
+            m.comStr = exist ? QString::number(fileSize).toStdString() : "0";
             answerFrame->data = serializeStruct(m);
             answerFrame->type = FrameType::kMsgType_Answer_FileExist;
             emit signalRequestSend(answerFrame);

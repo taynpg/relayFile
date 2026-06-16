@@ -39,4 +39,5 @@ public:
     static bool IsDir(const QString& path);
     static bool IsFile(const QString& path);
     static bool IsExist(const QString& path);
+    static bool IsExist(const QString& path, std::uint64_t& fileSize);
 };

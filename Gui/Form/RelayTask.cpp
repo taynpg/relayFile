@@ -282,9 +282,10 @@ void RelayTask::onBaseCheck()
             fileList_.push_back(meta);
         }
         emit signalUpdateTable();
-        for (const auto& item : fileList_) {
+        for (auto& item : fileList_) {
             bool existExist = false;
-            if (!askDfOwn->AskFileExist(item.fullPath, existExist)) {
+            std::uint64_t fileSize;
+            if (!askDfOwn->AskFileExist(item.fullPath, existExist, fileSize)) {
                 emit signalLog(QString("%1文件文件存在性检查：%2 失败。").arg(name).arg(item.fullPath));
                 emit signalCheckUnComplete();
                 return;
@@ -294,6 +295,7 @@ void RelayTask::onBaseCheck()
                 emit signalCheckUnComplete();
                 return;
             }
+            item.size = fileSize;
         }
         emit signalLog("源端文件存在性检查完成。");
         emit signalLog("开始校验目标端文件是否已存在相同文件。");
@@ -315,7 +317,8 @@ void RelayTask::onBaseCheck()
         auto nameConfirm = data_->isUpload ? GUI_DIRECTION_REMOTE : GUI_DIRECTION_LOCAL;
         for (const auto& item : transItems_) {
             bool existExist = false;
-            if (!askDfOther->AskFileExist(item->to.fullPath, existExist)) {
+            std::uint64_t fileSize;
+            if (!askDfOther->AskFileExist(item->to.fullPath, existExist, fileSize)) {
                 emit signalLog(QString("%1文件文件存在性检查：%2 失败。").arg(nameConfirm).arg(item->to.fullPath));
                 emit signalCheckUnComplete();
                 return;
@@ -480,7 +483,8 @@ void RelayTask::setFileItem(const FileMeta& meta, int row, int index)
     nameItem->setFlags(indexItem->flags() & ~Qt::ItemIsEditable);
     tableWidget_->setItem(row, 1, nameItem);
 
-    auto* sizeItem = new QTableWidgetItem(QString::fromStdString(meta.sizeStr));
+    auto sizeStr = miniUtil::GetSizeInfo(meta.size);
+    auto* sizeItem = new QTableWidgetItem(QString::fromStdString(sizeStr));
     sizeItem->setFlags(indexItem->flags() & ~Qt::ItemIsEditable);
     tableWidget_->setItem(row, 2, sizeItem);
 

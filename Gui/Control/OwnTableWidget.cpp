@@ -76,10 +76,12 @@ void ComDropTable::dropEvent(QDropEvent* event)
             setItemData(curRow, 3, getMarkStr(curItem.fileName, curItem.type == 0), true);
         }
         if (startCol == 4) {
-            setItemData(curRow, 4, FileDir::Join(infoDrop.from, curItem.fileName), true);
+            auto pathContent = (curItem.type == 0 ? FileDir::Join(infoDrop.from, curItem.fileName) : infoDrop.from);
+            setItemData(curRow, 4, pathContent, true);
             setItemData(curRow, 5, "", false);
         } else if (startCol == 5) {
-            setItemData(curRow, 5, FileDir::Join(infoDrop.to, curItem.fileName), true);
+            auto pathContent = (curItem.type == 0 ? FileDir::Join(infoDrop.from, curItem.fileName) : infoDrop.from);
+            setItemData(curRow, 5, pathContent, true);
             setItemData(curRow, 4, "", false);
         }
     }

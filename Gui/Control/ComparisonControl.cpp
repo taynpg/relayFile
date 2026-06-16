@@ -221,12 +221,36 @@ void ComparisonControl::onTableContextMenu(const QPoint& pos)
         return;
     }
     if (selectAction == uploadAction) {
+        onTrans(datas, true);
         return;
     }
     if (selectAction == deleteAction) {
         return;
     }
     if (selectAction == downloadAction) {
+        onTrans(datas, false);
         return;
     }
+}
+
+void ComparisonControl::onTrans(const QList<QTableWidgetItem*>& items, bool isSend)
+{
+    auto transData = std::make_shared<RelayTaskData>();
+    transData->isUpload = isSend;
+    for (int i = 0; i < items.size() / headers_.size(); i++) {
+        auto curRow = items[i * headers_.size()]->row();
+        auto name = tableWidget_->item(curRow, 1)->text();
+        auto stdName = name.toStdString();
+        auto type = tableWidget_->item(curRow, 2)->text();
+        FileItemData itemData;
+        itemData.name = name;
+        itemData.localRoot = tableWidget_->item(curRow, 4)->text();
+        itemData.remoteRoot = tableWidget_->item(curRow, 5)->text();
+        itemData.sizeStr = "";
+        itemData.type = (type == GUI_FILE_TYPE_DIR ? RFileType::mTypeDir : RFileType::mTypeFile);
+        itemData.size = 0;
+        transData->fileList.push_back(itemData);
+    }
+    qDebug() << "初始文件个数（含文件夹）:" << transData->fileList.size();
+    emit transTaskRun(transData);
 }
