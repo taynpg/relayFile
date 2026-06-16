@@ -137,7 +137,7 @@ void FileSession::handleFrame(FramePtr frame)
                                            clientCore_->getOwnClientInfo().clientId, msg.uuid);
 
         fileTrans->setTargetControlId(frame->from);
-        pushTask(fileTrans, msg, "文件任务初始化失败（Request_Send）。", FrameType::kFileType_Answer_Send, ret, true);
+        pushTask(fileTrans, msg, "文件任务初始化失败（Request_Send）。", FrameType::kFileType_Answer_Send, ret, false);
         qDebug() << QString::fromStdString(msg.from.clientId)
                  << "kFileType_Request_Send:" << QString::fromStdString(msg.ft.fullPath) << "，结果：" << ret;
         break;
@@ -148,7 +148,7 @@ void FileSession::handleFrame(FramePtr frame)
                                            clientCore_->getOwnClientInfo().clientId, msg.uuid);
 
         fileTrans->setTargetControlId(frame->from);
-        pushTask(fileTrans, msg, "文件任务初始化失败（Answer_Send）。", FrameType::kFileType_Request_Start, ret, false);
+        pushTask(fileTrans, msg, "文件任务初始化失败（Answer_Send）。", FrameType::kFileType_Request_Start, ret, true);
         qDebug() << QString::fromStdString(msg.from.clientId)
                  << "kFileType_Answer_Send:" << QString::fromStdString(msg.ff.fullPath) << "，结果：" << ret;
         break;
