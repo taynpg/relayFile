@@ -63,8 +63,6 @@ void RelayTask::initControl()
 {
     ui->edFrom->setEnabled(false);
     ui->edTo->setEnabled(false);
-    ui->edLocalRoot->setEnabled(false);
-    ui->edRemoteRoot->setEnabled(false);
     ui->rbDisconnect->setEnabled(false);
     ui->rbNormal->setEnabled(false);
     ui->pedLog->setEnabled(false);
@@ -440,6 +438,8 @@ void RelayTask::clearData()
 
 void RelayTask::onCurFileItem(const QString& from, const QString& to)
 {
+    ui->edFrom->setText(from);
+    ui->edTo->setText(to);
 }
 
 QString RelayTask::getSpeedStr(uint64_t transed)
