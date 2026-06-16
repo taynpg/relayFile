@@ -47,7 +47,7 @@ QString ComparisonSql::tableName() const
 bool ComparisonSql::createTable(const QString& tableName)
 {
     const QString sql = QString("CREATE TABLE IF NOT EXISTS %1 ("
-                                "id TEXT PRIMARY KEY, "
+                                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
                                 "name TEXT, "
                                 "type TEXT, "
                                 "mark TEXT, "
@@ -56,8 +56,8 @@ bool ComparisonSql::createTable(const QString& tableName)
                                 ")")
                             .arg(tableName);
 
-    QSqlQuery query(sql);
-    if (!query.exec()) {
+    QSqlQuery query(db_);
+    if (!query.exec(sql)) {
         qCritical() << "createTable error:" << query.lastError().text();
         return false;
     }
@@ -69,16 +69,16 @@ QVector<CompDataItem> ComparisonSql::getAll()
     QVector<CompDataItem> items;
 
     const QString sql = QString("SELECT * FROM %1").arg(tableName_);
-    QSqlQuery query(sql);
+    QSqlQuery query(db_);
 
-    if (!query.exec()) {
+    if (!query.exec(sql)) {
         qCritical() << "getAll error:" << query.lastError().text();
         return items;
     }
 
     while (query.next()) {
         CompDataItem item;
-        item.id = query.value(0).toString();
+        item.id = query.value(0).toInt();
         item.name = query.value(1).toString();
         item.type = query.value(2).toString();
         item.mark = query.value(3).toString();
@@ -89,10 +89,11 @@ QVector<CompDataItem> ComparisonSql::getAll()
     return items;
 }
 
-bool ComparisonSql::getItem(const QString& id, CompDataItem& item)
+bool ComparisonSql::getItem(int id, CompDataItem& item)
 {
     const QString sql = QString("SELECT * FROM %1 WHERE id = :id").arg(tableName_);
-    QSqlQuery query;
+
+    QSqlQuery query(db_);
     query.prepare(sql);
     query.bindValue(":id", id);
 
@@ -102,7 +103,7 @@ bool ComparisonSql::getItem(const QString& id, CompDataItem& item)
     }
 
     if (query.next()) {
-        item.id = query.value(0).toString();
+        item.id = query.value(0).toInt();
         item.name = query.value(1).toString();
         item.type = query.value(2).toString();
         item.mark = query.value(3).toString();
@@ -113,15 +114,15 @@ bool ComparisonSql::getItem(const QString& id, CompDataItem& item)
     return false;
 }
 
-bool ComparisonSql::addItem(const CompDataItem& item)
+bool ComparisonSql::addItem(CompDataItem& item)
 {
-    const QString sql = QString("INSERT INTO %1 (id, name, type, mark, localDir, remoteDir) "
-                                "VALUES (:id, :name, :type, :mark, :localDir, :remoteDir)")
+    const QString sql = QString("INSERT INTO %1 (name, type, mark, localDir, remoteDir) "
+                                "VALUES (:name, :type, :mark, :localDir, :remoteDir)")
                             .arg(tableName_);
 
-    QSqlQuery query;
+    QSqlQuery query(db_);
     query.prepare(sql);
-    query.bindValue(":id", item.id);
+
     query.bindValue(":name", item.name);
     query.bindValue(":type", item.type);
     query.bindValue(":mark", item.mark);
@@ -130,6 +131,20 @@ bool ComparisonSql::addItem(const CompDataItem& item)
 
     if (!query.exec()) {
         qCritical() << "addItem error:" << query.lastError().text();
+        return false;
+    }
+
+    item.id = query.lastInsertId().toInt();
+    return true;
+}
+
+bool ComparisonSql::dropTable(const QString& tableName)
+{
+    const QString sql = QString("DROP TABLE IF EXISTS %1").arg(tableName);
+
+    QSqlQuery query(db_);
+    if (!query.exec(sql)) {
+        qCritical() << "dropTable error:" << query.lastError().text();
         return false;
     }
     return true;
@@ -141,8 +156,9 @@ bool ComparisonSql::updateItem(const CompDataItem& item)
                                 "localDir=:localDir, remoteDir=:remoteDir WHERE id=:id")
                             .arg(tableName_);
 
-    QSqlQuery query;
+    QSqlQuery query(db_);
     query.prepare(sql);
+
     query.bindValue(":id", item.id);
     query.bindValue(":name", item.name);
     query.bindValue(":type", item.type);
@@ -157,10 +173,11 @@ bool ComparisonSql::updateItem(const CompDataItem& item)
     return true;
 }
 
-bool ComparisonSql::deleteItem(const QString& id)
+bool ComparisonSql::deleteItem(int id)
 {
     const QString sql = QString("DELETE FROM %1 WHERE id=:id").arg(tableName_);
-    QSqlQuery query;
+
+    QSqlQuery query(db_);
     query.prepare(sql);
     query.bindValue(":id", id);
 
@@ -171,10 +188,11 @@ bool ComparisonSql::deleteItem(const QString& id)
     return true;
 }
 
-bool ComparisonSql::haveItem(const QString& id)
+bool ComparisonSql::haveItem(int id)
 {
     const QString sql = QString("SELECT id FROM %1 WHERE id=:id").arg(tableName_);
-    QSqlQuery query;
+
+    QSqlQuery query(db_);
     query.prepare(sql);
     query.bindValue(":id", id);
 
@@ -185,21 +203,42 @@ bool ComparisonSql::haveItem(const QString& id)
     return query.next();
 }
 
-bool ComparisonSql::getLatestItemId(QString& id)
+bool ComparisonSql::getLatestItemId(int& id)
 {
     const QString sql = QString("SELECT MAX(id) FROM %1").arg(tableName_);
-    QSqlQuery query(sql);
 
-    if (!query.exec()) {
+    QSqlQuery query(db_);
+    if (!query.exec(sql)) {
         qCritical() << "getLatestItemId error:" << query.lastError().text();
         return false;
     }
 
     if (query.next()) {
-        id = query.value(0).toString();
+        id = query.value(0).toInt();
         return true;
     }
     return false;
+}
+
+QVector<QString> ComparisonSql::tables() const
+{
+    QVector<QString> result;
+
+    const QString sql = "SELECT name FROM sqlite_master "
+                        "WHERE type='table' "
+                        "AND name != 'sqlite_sequence' "
+                        "ORDER BY name";
+
+    QSqlQuery query(db_);
+    if (!query.exec(sql)) {
+        qCritical() << "tables error:" << query.lastError().text();
+        return result;
+    }
+
+    while (query.next()) {
+        result.append(query.value(0).toString());
+    }
+    return result;
 }
 
 bool ComparisonSql::tableExists(const QString& tableName)
@@ -207,7 +246,7 @@ bool ComparisonSql::tableExists(const QString& tableName)
     const QString sql = "SELECT name FROM sqlite_master "
                         "WHERE type='table' AND name=:tableName";
 
-    QSqlQuery query;
+    QSqlQuery query(db_);
     query.prepare(sql);
     query.bindValue(":tableName", tableName);
 
@@ -215,6 +254,5 @@ bool ComparisonSql::tableExists(const QString& tableName)
         qCritical() << "tableExists error:" << query.lastError().text();
         return false;
     }
-
     return query.next();
 }

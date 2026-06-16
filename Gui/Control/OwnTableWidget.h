@@ -16,7 +16,7 @@ protected:
     void dragMoveEvent(QDragMoveEvent* event) override;
 
 private:
-    void setItemData(int row, int col, const QString& text, bool isReplace);
+    void setItemData(int row, int col, const QString& text, bool isReplace, bool isEditable = true);
     QString getMarkStr(const QString& filePath, bool isDir);
 };
 

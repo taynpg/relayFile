@@ -20,6 +20,13 @@ public:
 
 private:
     void initTableWidget();
+    void saveConfig();
+    void loadConfig(bool notice);
+    void delConfig();
+    void showEvent(QShowEvent* event) override;
+
+private:
+    void initSignals();
 
 private:
     QStringList headers_;

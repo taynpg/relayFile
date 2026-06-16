@@ -17,7 +17,7 @@ ComDropTable::~ComDropTable()
 {
 }
 
-void ComDropTable::setItemData(int row, int col, const QString& text, bool isReplace)
+void ComDropTable::setItemData(int row, int col, const QString& text, bool isReplace, bool isEditable)
 {
     auto* curItem = this->item(row, col);
     if (curItem) {
@@ -26,6 +26,9 @@ void ComDropTable::setItemData(int row, int col, const QString& text, bool isRep
         }
     } else {
         QTableWidgetItem* item = new QTableWidgetItem(text);
+        if (!isEditable) {
+            item->setFlags(item->flags() & ~Qt::ItemIsEditable);
+        }
         setItem(row, col, item);
     }
 }
@@ -60,21 +63,24 @@ void ComDropTable::dropEvent(QDropEvent* event)
         if (curRow >= rowCount()) {
             insertRow(rowCount());
         }
+        setItemData(curRow, 0, "", false, false);
         const auto& curItem = infoDrop.items[i];
         if (curItem.type == 0) {
             setItemData(curRow, 1, curItem.fileName, false);
-            setItemData(curRow, 2, "Dir", false);
+            setItemData(curRow, 2, "Dir", false, false);
             setItemData(curRow, 3, "Dir", false);
 
         } else {
             setItemData(curRow, 1, curItem.fileName, true);
-            setItemData(curRow, 2, "File", true);
+            setItemData(curRow, 2, "File", true, false);
             setItemData(curRow, 3, getMarkStr(curItem.fileName, curItem.type == 0), true);
         }
         if (startCol == 4) {
             setItemData(curRow, 4, FileDir::Join(infoDrop.from, curItem.fileName), true);
+            setItemData(curRow, 5, "", false);
         } else if (startCol == 5) {
             setItemData(curRow, 5, FileDir::Join(infoDrop.to, curItem.fileName), true);
+            setItemData(curRow, 4, "", false);
         }
     }
     event->acceptProposedAction();

@@ -1,10 +1,11 @@
 #pragma once
 
 #include <QSqlDatabase>
+#include <QString>
 #include <QVector>
 
 struct CompDataItem {
-    QString id;
+    int id;
     QString name;
     QString type;
     QString mark;
@@ -22,19 +23,23 @@ public:
     bool open(const QString& dbPath);
     void close();
 
+    // 表管理
     bool createTable(const QString& tableName);
     void setTableName(const QString& tableName);
     QString tableName() const;
     bool tableExists(const QString& tableName);
+    bool dropTable(const QString& tableName);
+    QVector<QString> tables() const;
 
 public:
+    // CRUD
     QVector<CompDataItem> getAll();
-    bool getItem(const QString& id, CompDataItem& item);
-    bool addItem(const CompDataItem& item);
+    bool getItem(int id, CompDataItem& item);
+    bool addItem(CompDataItem& item);
     bool updateItem(const CompDataItem& item);
-    bool deleteItem(const QString& id);
-    bool haveItem(const QString& id);
-    bool getLatestItemId(QString& id);
+    bool deleteItem(int id);
+    bool haveItem(int id);
+    bool getLatestItemId(int& id);
 
 private:
     QString configPath_;
