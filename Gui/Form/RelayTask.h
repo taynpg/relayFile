@@ -8,30 +8,8 @@
 #include <QTableWidget>
 
 #include "Base/AskDirFile/BaseAskDF.h"
+#include "Base/GuiDefine.hpp"
 #include "Base/WorkerThread.hpp"
-
-struct FileItemData {
-    QString name;
-    QString path;
-    RFileType type;
-    std::uint64_t size{};
-    QString sizeStr{};
-};
-
-struct RelayTaskData {
-    QString localRoot;
-    QString remoteRoot;
-    QVector<FileItemData> fileList;
-    bool isUpload{};
-};
-
-enum class RelayTaskStatus {
-    Init,
-    Checking,
-    Transing,
-    TransComplete,
-    TransFail,
-};
 
 namespace Ui {
 class RelayTask;

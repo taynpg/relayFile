@@ -23,7 +23,7 @@ set(CONTROL_SOURCES
     Control/ComparisonControl.h Control/ComparisonControl.cpp Control/ComparisonControl.ui
     Control/ConnectorControl.h Control/ConnectorControl.cpp Control/ConnectorControl.ui
     Control/ExplorerControl.h Control/ExplorerControl.cpp Control/ExplorerControl.ui
-    Control/RelayTask.h Control/RelayTask.cpp Control/RelayTask.ui
+    Form/RelayTask.h Form/RelayTask.cpp Form/RelayTask.ui
     Control/LogControl.h Control/LogControl.cpp Control/LogControl.ui
     Base/MessageBoxHelper.h Base/MessageBoxHelper.cpp
     Control/OwnTableWidget.h Control/OwnTableWidget.cpp

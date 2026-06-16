@@ -43,7 +43,6 @@ void ExplorerControl::initSignals()
     connect(ui->btnUp, &QPushButton::clicked, this, &ExplorerControl::onUp);
     connect(tableWidget_, &QTableWidget::itemDoubleClicked, this, &ExplorerControl::onDoubleClick);
     connect(tableWidget_, &QTableWidget::customContextMenuRequested, this, &ExplorerControl::onTableContextMenu);
-    connect(this, &ExplorerControl::transTaskRun, this, [this](std::shared_ptr<RelayTaskData> data) { onTransForm(data); });
 }
 
 std::shared_ptr<BaseAskDF> ExplorerControl::getAskDF()
@@ -323,13 +322,6 @@ void ExplorerControl::actionTrans(const QList<QTableWidgetItem*>& datas)
     }
     qDebug() << "初始文件个数（含文件夹）:" << transData->fileList.size();
     emit transTaskRun(transData);
-}
-
-void ExplorerControl::onTransForm(std::shared_ptr<RelayTaskData> data)
-{
-    auto* transForm = new RelayTask(this);
-    transForm->setData(data);
-    transForm->exec();
 }
 
 void ExplorerControl::setTellInfoCall(std::function<void(ExplorerSharedData& es)> call)

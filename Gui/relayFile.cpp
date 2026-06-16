@@ -1,6 +1,7 @@
 #include "relayFile.h"
 
 #include <QCloseEvent>
+#include <QMessageBox>
 #include <QScreen>
 #include <QSplitter>
 #include <QVBoxLayout>
@@ -99,6 +100,11 @@ void relayFile::initControls()
             [this]() { remoteExplorerControl_->onHome(true); });
     localExplorerControl_->setTellInfoCall([this](ExplorerSharedData& es) { remoteExplorerControl_->tellInfo(es); });
     remoteExplorerControl_->setTellInfoCall([this](ExplorerSharedData& es) { localExplorerControl_->tellInfo(es); });
+
+    connect(localExplorerControl_, &ExplorerControl::transTaskRun, this,
+            [this](std::shared_ptr<RelayTaskData> data) { onTransTaskRun(data); });
+    connect(remoteExplorerControl_, &ExplorerControl::transTaskRun, this,
+            [this](std::shared_ptr<RelayTaskData> data) { onTransTaskRun(data); });
 }
 
 void relayFile::ControlMsgHander(QtMsgType type, const QMessageLogContext& context, const QString& msg)
@@ -157,4 +163,22 @@ void relayFile::initLayout()
     QVBoxLayout* layout = new QVBoxLayout();
     layout->addWidget(splitter);
     setLayout(layout);
+}
+
+void relayFile::onTransTaskRun(std::shared_ptr<RelayTaskData> data)
+{
+    // 先检查是否已经连接了服务器和选择了对方ID
+    auto controlSession = GlobalData::getInstance()->getControlSession();
+    if (!controlSession->getClientCore()->isConnected()) {
+        QMessageBox::warning(this, "提示", "请先连接服务器");
+        return;
+    }
+    if (controlSession->getOtherInfo().clientId.empty()) {
+        QMessageBox::warning(this, "提示", "请先选择通信对象");
+        return;
+    }
+
+    RelayTask* relayTask = new RelayTask(this);
+    relayTask->setData(data);
+    relayTask->show();
 }

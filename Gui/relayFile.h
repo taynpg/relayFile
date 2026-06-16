@@ -8,7 +8,7 @@
 #include "Control/ConnectorControl.h"
 #include "Control/ExplorerControl.h"
 #include "Control/LogControl.h"
-#include "Control/RelayTask.h"
+#include "Form/RelayTask.h"
 #include "Net/ClientCore.h"
 
 QT_BEGIN_NAMESPACE
@@ -40,13 +40,16 @@ private:
     void initAfter();
 
 private:
+    void onTransTaskRun(std::shared_ptr<RelayTaskData> data);
+
+private:
     ConnectorControl* connectorControl_{};
     ExplorerControl* localExplorerControl_{};
     ExplorerControl* remoteExplorerControl_{};
     ComparisonControl* comparisonControl_{};
     LogControl* logControl_{};
     QTabWidget* tabWidget_{};
-    
+
     std::shared_ptr<BaseConfig> baseConfig_{};
     std::shared_ptr<DoubleLinker> doubleLinker_{};
     Ui::relayFile* ui;

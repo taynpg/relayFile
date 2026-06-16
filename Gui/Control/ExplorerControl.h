@@ -6,8 +6,8 @@
 #include <QTableWidget>
 
 #include "Base/AskDirFile/BaseAskDF.h"
+#include "Base/GuiDefine.hpp"
 #include "Base/WorkerThread.hpp"
-#include "RelayTask.h"
 #include "OwnTableWidget.h"
 
 namespace Ui {
@@ -57,7 +57,6 @@ public:
     void onDoubleClick();
     void enterPath(const QString& path);
     void onTableContextMenu(const QPoint& pos);
-    void onTransForm(std::shared_ptr<RelayTaskData> data);
 
 private:
     void uiPathSet(const QString& path);

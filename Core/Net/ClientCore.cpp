@@ -24,7 +24,13 @@ void ClientCore::instance()
 void ClientCore::initSignals()
 {
     connect(tcp_, &QTcpSocket::readyRead, this, &ClientCore::onReadyRead);
-    connect(tcp_, &QTcpSocket::disconnected, this, [this]() { emit signalDisconnected(); });
+    connect(tcp_, &QTcpSocket::disconnected, this, [this]() {
+        oInfo_.clientId.clear();
+        oInfo_.clientName.clear();
+        mInfo_.clientId.clear();
+        mInfo_.clientName.clear();
+        emit signalDisconnected();
+    });
 }
 
 void ClientCore::disconnectFromServer()
