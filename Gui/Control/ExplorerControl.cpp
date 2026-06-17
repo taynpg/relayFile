@@ -130,7 +130,7 @@ void ExplorerControl::uiPathSet(const QString& path)
 void ExplorerControl::uiPathSet(const QString& path, const std::vector<std::string>& drivers)
 {
     ui->cbPath->addItem(path);
-    for (auto driver : drivers) {
+    for (const auto& driver : drivers) {
         ui->cbPath->addItem(QString::fromStdString(driver));
     }
     ui->cbPath->setCurrentText(path);
