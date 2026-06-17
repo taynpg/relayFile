@@ -8,6 +8,7 @@
 #include "Base/AskDirFile/BaseAskDF.h"
 #include "Base/GuiDefine.hpp"
 #include "Base/WorkerThread.hpp"
+#include "Form/WaitDialog.h"
 #include "OwnTableWidget.h"
 
 namespace Ui {
@@ -64,10 +65,12 @@ public:
 private:
     void onRename(int row);
     void onSHA256(int row);
+    void onDelete(const std::vector<int>& rows);
 
 private:
     void uiPathSet(const QString& path);
     void actionTrans(const QList<QTableWidgetItem*>& datas);
+    WaitDialog* newWaitDialog();
 
 private:
     Ui::ExplorerControl* ui;

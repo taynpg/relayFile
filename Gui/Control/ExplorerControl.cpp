@@ -12,7 +12,6 @@
 
 #include "Base/GuiDefine.hpp"
 #include "Base/MessageBoxHelper.h"
-#include "Form/WaitDialog.h"
 #include "ui_ExplorerControl.h"
 
 ExplorerControl::ExplorerControl(QWidget* parent) : QDialog(parent), ui(new Ui::ExplorerControl)
@@ -319,6 +318,14 @@ void ExplorerControl::onTableContextMenu(const QPoint& pos)
         onSHA256(datas[1]->row());
         return;
     }
+    if (selectAction == deleteAction) {
+        std::vector<int> rows;
+        for (int i = 0; i < datas.size() / headers_.size(); i++) {
+            rows.push_back(datas[i * headers_.size()]->row());
+        }
+        onDelete(rows);
+        return;
+    }
 }
 
 void ExplorerControl::actionTrans(const QList<QTableWidgetItem*>& datas)
@@ -365,6 +372,15 @@ void ExplorerControl::tellInfo(ExplorerSharedData& es)
     es.currentPath_ = currentPath_;
 }
 
+WaitDialog* ExplorerControl::newWaitDialog()
+{
+    WaitDialog* waitDialog = new WaitDialog(this);
+    connect(this, &ExplorerControl::signalWaitQuit, waitDialog, &WaitDialog::Quit);
+    connect(this, &ExplorerControl::signalWaitQuitMsg, waitDialog, &WaitDialog::QuitWithNotify);
+    waitDialog->setAttribute(Qt::WA_DeleteOnClose);
+    return waitDialog;
+}
+
 void ExplorerControl::onRename(int row)
 {
     auto oldName = tableWidget_->item(row, 1)->text();
@@ -375,10 +391,7 @@ void ExplorerControl::onRename(int row)
     auto oldPath = FileDir::Join(currentPath_, oldName);
     auto newPath = FileDir::Join(currentPath_, newName);
 
-    WaitDialog* waitDialog = new WaitDialog(this);
-    connect(this, &ExplorerControl::signalWaitQuit, waitDialog, &WaitDialog::Quit);
-    connect(this, &ExplorerControl::signalWaitQuitMsg, waitDialog, &WaitDialog::QuitWithNotify);
-
+    WaitDialog* waitDialog = newWaitDialog();
     workerThread_->invoke([this, oldPath, newPath, waitDialog, row, newName]() {
         auto ret = askDf_->AskRename(oldPath.toStdString(), newPath.toStdString());
         if (ret) {
@@ -396,10 +409,7 @@ void ExplorerControl::onSHA256(int row)
     auto fileName = tableWidget_->item(row, 1)->text();
     auto filePath = FileDir::Join(currentPath_, fileName);
 
-    WaitDialog* waitDialog = new WaitDialog(this);
-    connect(this, &ExplorerControl::signalWaitQuit, waitDialog, &WaitDialog::Quit);
-    connect(this, &ExplorerControl::signalWaitQuitMsg, waitDialog, &WaitDialog::QuitWithNotify);
-
+    WaitDialog* waitDialog = newWaitDialog();
     workerThread_->invoke([this, filePath, waitDialog, row]() {
         std::string out;
         auto ret = askDf_->AskSha256(filePath.toStdString(), out);
@@ -409,6 +419,51 @@ void ExplorerControl::onSHA256(int row)
             qInfo() << filePath << ",SHA256:" << qStr;
         } else {
             emit signalWaitQuitMsg("文件SHA256计算失败");
+        }
+    });
+    waitDialog->exec();
+}
+
+void ExplorerControl::onDelete(const std::vector<int>& rows)
+{
+    std::vector<int> copyRows = rows;
+    // 排序，确保从后往前删除，避免索引变化
+    std::sort(copyRows.begin(), copyRows.end(), std::greater<int>());
+
+    std::vector<std::string> fileList;
+    for (auto row : copyRows) {
+        fileList.push_back(FileDir::Join(currentPath_, tableWidget_->item(row, 1)->text()).toStdString());
+    }
+    WaitDialog* waitDialog = newWaitDialog();
+    workerThread_->invoke([this, fileList, waitDialog, copyRows]() {
+        std::vector<std::string> failedFiles;
+        auto ret = askDf_->AskDelete(fileList, failedFiles);
+        if (ret) {
+            // 更新删除成功的部分
+            std::vector<QString> failedNames;
+            failedNames.reserve(failedFiles.size());
+            std::transform(failedFiles.begin(), failedFiles.end(), std::back_inserter(failedNames), [](const std::string& s) {
+                auto qp = QString::fromStdString(s);
+                return FileDir::GenFileName(qp);
+            });
+
+            for (auto row : copyRows) {
+                auto curName = tableWidget_->item(row, 1)->text();
+                if (std::find(failedNames.begin(), failedNames.end(), curName) == failedNames.end()) {
+                    tableWidget_->removeRow(row);
+                    qInfo() << "删除成功:" << FileDir::Join(currentPath_, curName);
+                }
+            }
+
+            if (failedFiles.empty()) {
+                emit signalWaitQuit();
+            } else {
+                auto notifyMsg =
+                    QString::fromStdString(failedFiles[0]) + "等" + QString::number(failedFiles.size()) + "个文件删除失败。";
+                emit signalWaitQuitMsg(notifyMsg);
+            }
+        } else {
+            emit signalWaitQuitMsg("文件删除失败");
         }
     });
     waitDialog->exec();
