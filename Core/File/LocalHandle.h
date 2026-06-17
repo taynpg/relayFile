@@ -6,6 +6,8 @@
 #include <vector>
 
 #include "Protocol/FileMeta.h"
+#define MINIZ_NO_ZLIB_APIS
+#include "miniz.h"
 
 class LocalHandle
 {
@@ -43,4 +45,5 @@ public:
 private:
     static bool ensureDir(const QString& dir);
     static QString calcZipPath(const QString& root, const QString& file);
+    bool addToZip(mz_zip_archive& zip, const QString& rootPath, const QString& filePath);
 };

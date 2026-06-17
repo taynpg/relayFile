@@ -1,15 +1,13 @@
 #include "LocalHandle.h"
 
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
 
 #include "FileDir.h"
 #include "Utils/Common.h"
 #include "Utils/miniUtil.h"
-
-#define MINIZ_NO_ZLIB_APIS
-#include "miniz.h"
 
 bool LocalHandle::AskFileList(const std::string& path, std::vector<FileMeta>& fileList, bool recursive)
 {
@@ -109,14 +107,39 @@ bool ZipHandle::ensureDir(const QString& dir)
 
 QString ZipHandle::calcZipPath(const QString& root, const QString& file)
 {
-    QFileInfo fi(root);
-    QString baseName = fi.fileName();
-    QString relative = file.mid(root.length());
+    QDir rootDir(root);
+    QString rel = rootDir.relativeFilePath(file);
+    return rel.replace("\\", "/");
+}
 
-    if (relative.startsWith('/') || relative.startsWith('\\'))
-        relative.remove(0, 1);
+bool ZipHandle::addToZip(mz_zip_archive& zip, const QString& rootPath, const QString& filePath)
+{
+    QFileInfo fi(filePath);
 
-    return QDir(baseName).filePath(relative).replace("\\", "/");
+    if (fi.isDir()) {
+        QString zipDir = calcZipPath(rootPath, filePath) + "/";
+        mz_zip_writer_add_mem(&zip, zipDir.toUtf8().constData(), nullptr, 0, 0);
+
+        QDirIterator it(filePath, QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot | QDir::Hidden, QDirIterator::Subdirectories);
+
+        while (it.hasNext()) {
+            if (!addToZip(zip, rootPath, it.next())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly)) {
+        qWarning() << "Failed to open:" << filePath;
+        return false;
+    }
+
+    QByteArray data = file.readAll();
+    QString zipPath = calcZipPath(rootPath, filePath);
+
+    return mz_zip_writer_add_mem(&zip, zipPath.toUtf8().constData(), data.constData(), data.size(), MZ_DEFAULT_COMPRESSION);
 }
 
 bool ZipHandle::Archive(const QStringList& inputPaths, const QString& archivePath)
@@ -129,38 +152,13 @@ bool ZipHandle::Archive(const QStringList& inputPaths, const QString& archivePat
 
     for (const QString& input : inputPaths) {
         QFileInfo fi(input);
-
         if (!fi.exists()) {
+            qWarning() << "Input not exists:" << input;
             mz_zip_writer_end(&zip);
             return false;
         }
 
-        if (fi.isDir()) {
-            QDir dir(input);
-
-            QStringList files = dir.entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot | QDir::Hidden, QDir::Name);
-
-            for (const QString& f : files) {
-                QString child = dir.filePath(f);
-                if (!Archive({child}, archivePath)) {
-                    mz_zip_writer_end(&zip);
-                    return false;
-                }
-            }
-            continue;
-        }
-
-        QString zipPath = calcZipPath(fi.absolutePath(), fi.absoluteFilePath());
-
-        QFile file(input);
-        if (!file.open(QIODevice::ReadOnly)) {
-            mz_zip_writer_end(&zip);
-            return false;
-        }
-
-        QByteArray data = file.readAll();
-
-        if (!mz_zip_writer_add_mem(&zip, zipPath.toUtf8().constData(), data.constData(), data.size(), MZ_DEFAULT_COMPRESSION)) {
+        if (!addToZip(zip, fi.isDir() ? input : fi.absolutePath(), input)) {
             mz_zip_writer_end(&zip);
             return false;
         }
@@ -201,7 +199,6 @@ bool ZipHandle::UnArchive(const QString& archivePath, const QString& extractPath
 
         size_t size = 0;
         void* data = mz_zip_reader_extract_to_heap(&zip, i, &size, 0);
-
         if (!data) {
             mz_zip_reader_end(&zip);
             return false;
