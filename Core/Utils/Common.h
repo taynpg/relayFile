@@ -11,4 +11,5 @@ private:
 
 public:
     static QString GetUUID();
+    static QString GenSha256(const QString& str, bool isFile);
 };

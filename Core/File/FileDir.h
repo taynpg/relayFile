@@ -42,4 +42,7 @@ public:
     static bool IsFile(const QString& path);
     static bool IsExist(const QString& path);
     static bool IsExist(const QString& path, std::uint64_t& fileSize);
+    static bool Delete(const QString& path);
+    static bool CreateDir(const QString& path);
+    static bool Rename(const QString& oldName, const QString& newName);
 };

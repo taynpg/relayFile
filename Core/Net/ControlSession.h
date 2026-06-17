@@ -8,9 +8,9 @@
 
 #include "ClientCore.h"
 #include "Protocol/Protocol.h"
+#include "Utils/Common.h"
 #include "Utils/ThreadPoolSTD.hpp"
 #include "Utils/TimerPoolSTD.hpp"
-#include "Utils/Common.h"
 
 // 我定义了一个叫 function_traits的模板，但我暂时不说它长什么样。
 // 它现在是一个 不完整类型（incomplete type）。
@@ -88,6 +88,8 @@ public slots:
 private:
     void initSignals();
     void clearWorker();
+    void dispatchMessage(FramePtr frame, FrameType answerType,
+                         std::function<void(const Message& sourceMsg, Message& ansMsg)> handler);
 
 private:
     ClientCore* clientCore_{};

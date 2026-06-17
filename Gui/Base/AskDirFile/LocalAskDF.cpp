@@ -1,35 +1,47 @@
 #include "LocalAskDF.h"
 
-#include <File/FileDir.h>
-#include <Utils/miniUtil.h>
+#include <File/LocalHandle.h>
 
 bool LocalAskDF::AskFileList(const std::string& path, std::vector<FileMeta>& fileList, bool recursive)
 {
-    QVector<RFileMeta> result;
-    if (!FileDir::GetFileList(QString::fromStdString(path), result, recursive)) {
-        return false;
-    }
-    for (const auto& rmeta : result) {
-        FileMeta meta;
-        FileDir::TurnMeta(rmeta, meta);
-        fileList.push_back(meta);
-    }
-    return true;
+    return LocalHandle::AskFileList(path, fileList, recursive);
 }
 bool LocalAskDF::AskHome(std::string& home)
 {
-    QString homeStr;
-    if (!FileDir::GetHome(homeStr)) {
-        return false;
-    }
-    home = homeStr.toStdString();
-    return true;
+    return LocalHandle::AskHome(home);
 }
 
 bool LocalAskDF::AskFileMeta(const std::string& path, FileMeta& meta)
 {
-    RFileMeta rmeta;
-    FileDir::GetFileRFileMeta(QString::fromStdString(path), rmeta);
-    FileDir::TurnMeta(rmeta, meta);
-    return true;
+    return LocalHandle::AskFileMeta(path, meta);
+}
+
+bool LocalAskDF::AskDelete(const std::vector<std::string>& fileList, std::vector<std::string>& failedList)
+{
+    return LocalHandle::AskDelete(fileList, failedList);
+}
+
+bool LocalAskDF::AskSha256(const std::string& path, std::string& sha256)
+{
+    return LocalHandle::AskSha256(path, sha256);
+}
+
+bool LocalAskDF::AskRename(const std::string& oldName, const std::string& newName)
+{
+    return LocalHandle::AskRename(oldName, newName);
+}
+
+bool LocalAskDF::AskCreateDir(const std::string& path)
+{
+    return LocalHandle::AskCreateDir(path);
+}
+
+bool LocalAskDF::AskArchive(const std::vector<FileMeta>& fileList, const std::string& archivePath)
+{
+    return LocalHandle::AskArchive(fileList, archivePath);
+}
+
+bool LocalAskDF::AskUnArchive(const std::string& archivePath, const std::string& extractPath)
+{
+    return LocalHandle::AskUnArchive(archivePath, extractPath);
 }

@@ -89,3 +89,98 @@ bool RemoteAskDF::AskFileMeta(const std::string& path, FileMeta& meta)
         },
         FrameType::kMsgType_Ask_FileMeta);
 }
+
+bool RemoteAskDF::AskDelete(const std::vector<std::string>& fileList, std::vector<std::string>& failedList)
+{
+    Message msg;
+    msg.strVec = fileList;
+    return Request(
+        msg,
+        [&failedList](MessagePtr ret) {
+            if (ret == nullptr) {
+                return false;
+            }
+            failedList = ret->strVec;
+            return true;
+        },
+        FrameType::kMsgType_Ask_Delete);
+}
+
+bool RemoteAskDF::AskSha256(const std::string& path, std::string& sha256)
+{
+    Message msg;
+    msg.comStr = path;
+    return Request(
+        msg,
+        [&sha256](MessagePtr ret) {
+            if (ret == nullptr) {
+                return false;
+            }
+            sha256 = ret->comStr;
+            return true;
+        },
+        FrameType::kMsgType_Ask_Sha256);
+}
+
+bool RemoteAskDF::AskRename(const std::string& oldName, const std::string& newName)
+{
+    Message msg;
+    msg.ff.fullPath = oldName;
+    msg.ft.fullPath = newName;
+    return Request(
+        msg,
+        [](MessagePtr ret) {
+            if (ret == nullptr) {
+                return false;
+            }
+            return ret->mark == 1;
+        },
+        FrameType::kMsgType_Ask_Rename);
+}
+
+bool RemoteAskDF::AskCreateDir(const std::string& path)
+{
+    Message msg;
+    msg.comStr = path;
+    return Request(
+        msg,
+        [](MessagePtr ret) {
+            if (ret == nullptr) {
+                return false;
+            }
+            return ret->mark == 1;
+        },
+        FrameType::kMsgType_Ask_CreateDir);
+}
+
+bool RemoteAskDF::AskArchive(const std::vector<FileMeta>& fileList, const std::string& archivePath)
+{
+    Message msg;
+    msg.mapData[""] = fileList;
+    msg.comStr = archivePath;
+    return Request(
+        msg,
+        [](MessagePtr ret) {
+            if (ret == nullptr) {
+                return false;
+            }
+            return ret->mark == 1;
+        },
+        FrameType::kMsgType_Ask_Archive);
+}
+
+bool RemoteAskDF::AskUnArchive(const std::string& archivePath, const std::string& extractPath)
+{
+    Message msg;
+    msg.ff.fullPath = archivePath;
+    msg.ft.fullPath = extractPath;
+    return Request(
+        msg,
+        [](MessagePtr ret) {
+            if (ret == nullptr) {
+                return false;
+            }
+            return ret->mark == 1;
+        },
+        FrameType::kMsgType_Ask_UnArchive);
+}

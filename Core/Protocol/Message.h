@@ -45,11 +45,12 @@ struct Message {
     FileMeta ff;
     FileMeta ft;
     std::vector<ClientInfo> clientList;
+    std::vector<std::string> strVec;
     std::unordered_map<std::string, std::vector<FileMeta>> mapData;
 
     template <class Archive> void serialize(Archive& ar)
     {
-        ar(mark, comStr, errMsg, transId, uuid, from, to, msgStateCode, ff, ft, clientList, mapData);
+        ar(mark, comStr, errMsg, transId, uuid, from, to, msgStateCode, ff, ft, clientList, strVec, mapData);
     }
 
     static std::shared_ptr<Message> Create();

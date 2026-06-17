@@ -3,22 +3,9 @@
 #include <QDebug>
 
 #include "CoreDefine.hpp"
-#include "File/FileDir.h"
+#include "File/LocalHandle.h"
 #include "Protocol/Message.h"
 #include "Protocol/Serialize.hpp"
-
-#define PushOneWork()                                                                                                            \
-    auto worker = ControlSession::TaskWorker::CreateWorker(frame);                                                               \
-    {                                                                                                                            \
-        QMutexLocker locker(&responseWaitLock_);                                                                                 \
-        if (!responseWaitWorker_.contains(worker->frame->sessionId)) {                                                           \
-            responseWaitWorker_.insert(worker->frame->sessionId, worker);                                                        \
-        } else {                                                                                                                 \
-            qWarning() << "PushOneWork:" << QString::fromStdString(worker->frame->from) << "，会话ID已存在。"                    \
-                       << worker->frame->sessionId;                                                                              \
-            return;                                                                                                              \
-        }                                                                                                                        \
-    }
 
 ControlSession::ControlSession(QObject* parent)
     : QObject(parent), workerPool_(std::make_shared<ThreadPool>(3)), timerPoolStd_(std::make_shared<TimerPoolStd>(3))
@@ -132,6 +119,35 @@ ClientInfo ControlSession::getOwnInfo()
     return clientCore_->mInfo_;
 }
 
+void ControlSession::dispatchMessage(FramePtr frame, FrameType answerType,
+                                     std::function<void(const Message& sourceMsg, Message& ansMsg)> handler)
+{
+    auto worker = ControlSession::TaskWorker::CreateWorker(frame);
+    {
+        QMutexLocker locker(&responseWaitLock_);
+        if (!responseWaitWorker_.contains(worker->frame->sessionId)) {
+            responseWaitWorker_.insert(worker->frame->sessionId, worker);
+        } else {
+            qWarning() << "PushOneWork:" << QString::fromStdString(worker->frame->from) << "，会话ID已存在。"
+                       << worker->frame->sessionId;
+            return;
+        }
+    }
+    workerPool_->enqueue([this, worker, answerType, handler]() {
+        Message sourceMsg;
+        deserializeStruct(worker->frame->data, sourceMsg);
+        auto answerFrame = OneFrame::Create(worker->frame);
+        Message m(sourceMsg);
+
+        handler(sourceMsg, m);
+
+        answerFrame->data = serializeStruct(m);
+        answerFrame->type = answerType;
+        emit signalRequestSend(answerFrame);
+        worker->isDone = true;
+    });
+}
+
 void ControlSession::handleFrame(FramePtr frame)
 {
     MessagePtr answerMsg = Message::Create();
@@ -149,58 +165,57 @@ void ControlSession::handleFrame(FramePtr frame)
         break;
     }
     case FrameType::kMsgType_Ask_Home: {
-        PushOneWork();
-        workerPool_->enqueue([this, worker]() {
-            QString home;
-            FileDir::GetHome(home);
-            auto answerFrame = OneFrame::Create(worker->frame);
-            Message m;
-            m.comStr = home.toStdString();
-            answerFrame->data = serializeStruct(m);
-            answerFrame->type = FrameType::kMsgType_Answer_Home;
-            emit signalRequestSend(answerFrame);
-            worker->isDone = true;
-        });
+        dispatchMessage(frame, FrameType::kMsgType_Answer_Home,
+                        [](const Message& sourceMsg, Message& ansMsg) { LocalHandle::AskHome(ansMsg.comStr); });
         break;
     }
     case FrameType::kMsgType_Ask_FileList: {
-        PushOneWork();
-        workerPool_->enqueue([this, worker]() {
-            Message sourceMsg;
-            deserializeStruct(worker->frame->data, sourceMsg);
-            QVector<RFileMeta> result;
-            FileDir::GetFileList(QString::fromStdString(sourceMsg.comStr), result, sourceMsg.mark == 1);
-            auto answerFrame = OneFrame::Create(worker->frame);
-            Message m(sourceMsg);
-            std::vector<FileMeta> stdMeta;
-            stdMeta.reserve(result.size());
-            for (const auto& item : result) {
-                FileMeta meta;
-                FileDir::TurnMeta(item, meta);
-                stdMeta.push_back(meta);
-            }
-            m.mapData[""] = stdMeta;
-            answerFrame->data = serializeStruct(m);
-            answerFrame->type = FrameType::kMsgType_Answer_FileList;
-            emit signalRequestSend(answerFrame);
-            worker->isDone = true;
+        dispatchMessage(frame, FrameType::kMsgType_Answer_FileList, [](const Message& sourceMsg, Message& ansMsg) {
+            ansMsg.mapData[""] = std::vector<FileMeta>();
+            auto& stdMeta = ansMsg.mapData[""];
+            LocalHandle::AskFileList(sourceMsg.comStr, stdMeta, sourceMsg.mark == 1);
         });
         break;
     }
     case FrameType::kMsgType_Ask_FileMeta: {
-        PushOneWork();
-        workerPool_->enqueue([this, worker]() {
-            Message sourceMsg;
-            deserializeStruct(worker->frame->data, sourceMsg);
-            auto answerFrame = OneFrame::Create(worker->frame);
-            Message m(sourceMsg);
-            RFileMeta rmeta;
-            FileDir::GetFileRFileMeta(QString::fromStdString(sourceMsg.comStr), rmeta);
-            FileDir::TurnMeta(rmeta, m.ff);
-            answerFrame->data = serializeStruct(m);
-            answerFrame->type = FrameType::kMsgType_Answer_FileMeta;
-            emit signalRequestSend(answerFrame);
-            worker->isDone = true;
+        dispatchMessage(frame, FrameType::kMsgType_Answer_FileMeta,
+                        [](const Message& sourceMsg, Message& ansMsg) { LocalHandle::AskFileMeta(sourceMsg.comStr, ansMsg.ff); });
+        break;
+    }
+    case FrameType::kMsgType_Ask_Delete: {
+        dispatchMessage(frame, FrameType::kMsgType_Answer_Delete, [](const Message& sourceMsg, Message& ansMsg) {
+            LocalHandle::AskDelete(sourceMsg.strVec, ansMsg.strVec);
+        });
+        break;
+    }
+    case FrameType::kMsgType_Ask_Rename: {
+        dispatchMessage(frame, FrameType::kMsgType_Answer_Rename, [](const Message& sourceMsg, Message& ansMsg) {
+            ansMsg.mark = LocalHandle::AskRename(sourceMsg.ff.fullPath, sourceMsg.ft.fullPath);
+        });
+        break;
+    }
+    case FrameType::kMsgType_Ask_CreateDir: {
+        dispatchMessage(frame, FrameType::kMsgType_Answer_CreateDir, [](const Message& sourceMsg, Message& ansMsg) {
+            ansMsg.mark = LocalHandle::AskCreateDir(sourceMsg.comStr);
+        });
+        break;
+    }
+    case FrameType::kMsgType_Ask_Sha256: {
+        dispatchMessage(frame, FrameType::kMsgType_Answer_Sha256, [](const Message& sourceMsg, Message& ansMsg) {
+            LocalHandle::AskSha256(sourceMsg.comStr, ansMsg.comStr);
+        });
+        break;
+    }
+    case FrameType::kMsgType_Ask_Archive: {
+        dispatchMessage(frame, FrameType::kMsgType_Answer_Archive, [](const Message& sourceMsg, Message& ansMsg) {
+            const auto& fileList = sourceMsg.mapData.at("");
+            ansMsg.mark = LocalHandle::AskArchive(fileList, sourceMsg.comStr);
+        });
+        break;
+    }
+    case FrameType::kMsgType_Ask_UnArchive: {
+        dispatchMessage(frame, FrameType::kMsgType_Answer_UnArchive, [](const Message& sourceMsg, Message& ansMsg) {
+            ansMsg.mark = LocalHandle::AskUnArchive(sourceMsg.ff.fullPath, sourceMsg.ft.fullPath);
         });
         break;
     }

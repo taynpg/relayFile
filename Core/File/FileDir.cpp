@@ -34,6 +34,15 @@ bool FileDir::IsExist(const QString& path, std::uint64_t& fileSize)
     return false;
 }
 
+bool FileDir::Delete(const QString& path)
+{
+    if (IsDir(path)) {
+        QDir dir(path);
+        return dir.rmdir(path);
+    }
+    return QFile::remove(path);
+}
+
 QString FileDir::GetErrInfo()
 {
     return errInfo;
@@ -187,4 +196,19 @@ void FileDir::GetFileRFileMeta(const QString& path, RFileMeta& rmeta)
         return;
     }
     rmeta.exist = 0;
+}
+
+bool FileDir::CreateDir(const QString& path)
+{
+    QDir dir;
+    if (dir.exists(path)) {
+        return true;
+    }
+    return dir.mkpath(path);
+}
+
+bool FileDir::Rename(const QString& oldName, const QString& newName)
+{
+    QFile file(oldName);
+    return file.rename(newName);
 }
