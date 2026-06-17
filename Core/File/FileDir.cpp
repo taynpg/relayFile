@@ -36,10 +36,17 @@ bool FileDir::IsExist(const QString& path, std::uint64_t& fileSize)
 
 bool FileDir::Delete(const QString& path)
 {
-    if (IsDir(path)) {
-        QDir dir(path);
-        return dir.rmdir(path);
+    QFileInfo fi(path);
+
+    if (!fi.exists()) {
+        return false;
     }
+
+    if (fi.isDir()) {
+        QDir dir(path);
+        return dir.removeRecursively();
+    }
+
     return QFile::remove(path);
 }
 

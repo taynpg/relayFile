@@ -615,8 +615,13 @@ void ExplorerControl::onUnArchive(int row)
     if (!MessageBoxHelper::questionYesNo(this, "确认", "是否解压选中行？")) {
         return;
     }
+
+    auto sourceName = tableWidget_->item(row, 1)->text();
+    QString autoOutDir;
+    FileDir::GetFileNameNoExt(sourceName, autoOutDir);
+
     QString unarchiveName;
-    if (!MessageBoxHelper::getTextInput(this, "解压文件", "请输入解压目录", unarchiveName)) {
+    if (!MessageBoxHelper::getTextInput(this, "解压文件", "请输入解压目录", unarchiveName, autoOutDir)) {
         return;
     }
     auto outDir = FileDir::Join(currentPath_, unarchiveName);
