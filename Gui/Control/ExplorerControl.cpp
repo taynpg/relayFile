@@ -274,7 +274,8 @@ void ExplorerControl::onTableContextMenu(const QPoint& pos)
 
     // 超过1组选中，不显示单项菜单。
     if (datas.size() <= headers_.size()) {
-        if (auto type = tableWidget_->item(datas[0]->row(), 3); type->text() == GUI_FILE_TYPE_DIR) {
+        if (auto type = tableWidget_->item(datas[0]->row(), 3);
+            type->text() == GUI_FILE_TYPE_DIR && askType_ == AskType::ASK_TYPE_LOCAL) {
             explorerAction = menu.addAction("在资源管理器中打开");
             menu.addAction(explorerAction);
         }
