@@ -294,8 +294,12 @@ void ComparisonControl::onTrans(const QList<QTableWidgetItem*>& items, bool isSe
         auto type = tableWidget_->item(curRow, 2)->text();
         FileItemData itemData;
         itemData.name = name;
-        itemData.localRoot = tableWidget_->item(curRow, 4)->text();
-        itemData.remoteRoot = tableWidget_->item(curRow, 5)->text();
+        itemData.localRoot = tableWidget_->item(curRow, 4)->text().trimmed();
+        itemData.remoteRoot = tableWidget_->item(curRow, 5)->text().trimmed();
+        if (itemData.localRoot.isEmpty() || itemData.remoteRoot.isEmpty()) {
+            QMessageBox::warning(this, "提示", "本地目录或远程目录不能为空");
+            return;
+        }
         itemData.sizeStr = "";
         itemData.type = (type == GUI_FILE_TYPE_DIR ? RFileType::mTypeDir : RFileType::mTypeFile);
         itemData.size = 0;
