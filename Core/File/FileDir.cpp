@@ -113,7 +113,7 @@ bool FileDir::GetHome(QString& home)
 
 void FileDir::TurnMeta(const RFileMeta& rmeta, FileMeta& meta)
 {
-    meta.fullPath = rmeta.dir.toStdString();
+    meta.fullPath = Join(rmeta.dir, rmeta.fileName).toStdString();
     meta.dir = rmeta.dir.toStdString();
     meta.name = rmeta.fileName.toStdString();
     meta.size = rmeta.fileSize;
@@ -148,6 +148,13 @@ QString FileDir::GenFileName(const QString& fullPath)
 {
     QFileInfo fileInfo(fullPath);
     return fileInfo.fileName();
+}
+
+bool FileDir::GetFileNameNoExt(const QString& path, QString& fileName)
+{
+    QFileInfo fileInfo(path);
+    fileName = fileInfo.baseName();
+    return true;
 }
 
 QString FileDir::GenOutPath(const QString& root, const std::string& fullPath, const QString& outRoot)

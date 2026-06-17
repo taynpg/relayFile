@@ -345,6 +345,18 @@ void ExplorerControl::onTableContextMenu(const QPoint& pos)
         onShowFileMetaInfo(datas[1]->row());
         return;
     }
+    if (selectAction == compressAction) {
+        std::vector<int> rows;
+        for (int i = 0; i < datas.size() / headers_.size(); i++) {
+            rows.push_back(datas[i * headers_.size()]->row());
+        }
+        onArchive(rows);
+        return;
+    }
+    if (selectAction == extractAction) {
+        onUnArchive(datas[1]->row());
+        return;
+    }
 }
 
 void ExplorerControl::actionTrans(const QList<QTableWidgetItem*>& datas)
@@ -503,13 +515,13 @@ void ExplorerControl::onNewDir(int row)
         auto ret = askDf_->AskCreateDir(FileDir::Join(currentPath_, newName).toStdString());
         if (ret) {
             emit signalWaitQuit();
-            QMetaObject::invokeMethod(this, [this, row, newName]() {
-                FileMeta meta;
-                if (askDf_->AskFileMeta(FileDir::Join(currentPath_, newName).toStdString(), meta)) {
+            FileMeta meta;
+            if (askDf_->AskFileMeta(FileDir::Join(currentPath_, newName).toStdString(), meta)) {
+                QMetaObject::invokeMethod(this, [this, row, meta]() {
                     tableWidget_->insertRow(row + 1);
                     setFileItem(meta, row + 1);
-                }
-            });
+                });
+            }
         } else {
             emit signalWaitQuitMsg("新建文件夹" + newName + "失败，请检查文件夹名是否已存在或者是否有权限新建。");
         }
@@ -540,4 +552,98 @@ void ExplorerControl::onShowFileMeta(const FileMeta& meta)
     info->setAttribute(Qt::WA_DeleteOnClose);
     info->setMeta(meta);
     info->exec();
+}
+
+void ExplorerControl::onArchive(const std::vector<int>& rows)
+{
+    if (rows.empty()) {
+        return;
+    }
+    if (!MessageBoxHelper::questionYesNo(this, "确认", "是否压缩选中行？")) {
+        return;
+    }
+    QString archiveName;
+    if (!MessageBoxHelper::getTextInput(this, "压缩文件", "请输入压缩文件名(自动后缀zip)", archiveName)) {
+        return;
+    }
+    archiveName += ".zip";
+    std::vector<FileMeta> metaList;
+    int maxRow = *std::max_element(rows.begin(), rows.end());
+    for (auto row : rows) {
+        auto fileName = tableWidget_->item(row, 1)->text();
+        auto type = tableWidget_->item(row, 3)->text();
+        FileMeta meta;
+        meta.type = (type == GUI_FILE_TYPE_DIR ? FileType::FILE_TYPE_DIR : FileType::FILE_TYPE_FILE);
+        meta.fullPath = FileDir::Join(currentPath_, fileName).toStdString();
+        metaList.push_back(meta);
+    }
+    WaitDialog* waitDialog = newWaitDialog();
+    workerThread_->invoke([this, waitDialog, metaList, archiveName, maxRow]() {
+        auto archivePath = FileDir::Join(currentPath_, archiveName).toStdString();
+        qInfo() << "压缩文件:" << QString::fromStdString(archivePath);
+        if (askDf_->AskArchive(metaList, archivePath)) {
+            FileMeta meta;
+            if (askDf_->AskFileMeta(archivePath, meta)) {
+                QMetaObject::invokeMethod(this, [this, maxRow, meta]() {
+                    tableWidget_->insertRow(maxRow + 1);
+                    setFileItem(meta, maxRow + 1);
+                });
+            }
+            emit signalWaitQuitMsg("文件压缩成功");
+        } else {
+            emit signalWaitQuitMsg("文件压缩失败");
+        }
+    });
+    waitDialog->exec();
+}
+
+void ExplorerControl::onUnArchive(int row)
+{
+    if (!MessageBoxHelper::questionYesNo(this, "确认", "是否解压选中行？")) {
+        return;
+    }
+    QString unarchiveName;
+    if (!MessageBoxHelper::getTextInput(this, "解压文件", "请输入解压目录", unarchiveName)) {
+        return;
+    }
+    auto outDir = FileDir::Join(currentPath_, unarchiveName);
+
+    FileMeta outDirMeta;
+    if (!askDf_->AskFileMeta(outDir.toStdString(), outDirMeta)) {
+        QMessageBox::warning(this, "警告", "检测解压目录失败。");
+        return;
+    }
+    bool isCreateDir = false;
+    if (outDirMeta.exist == 0) {
+        if (!askDf_->AskCreateDir(outDir.toStdString())) {
+            QMessageBox::warning(this, "警告", "创建解压目录失败。");
+            return;
+        }
+        isCreateDir = true;
+    } else {
+        if (!MessageBoxHelper::questionYesNo(this, "确认", "解压目录已存在，是否继续？")) {
+            return;
+        }
+    }
+
+    auto fileName = tableWidget_->item(row, 1)->text();
+    auto filePath = FileDir::Join(currentPath_, fileName);
+    WaitDialog* waitDialog = newWaitDialog();
+    workerThread_->invoke([this, waitDialog, row, filePath, outDir, isCreateDir]() {
+        if (askDf_->AskUnArchive(filePath.toStdString(), outDir.toStdString())) {
+            emit signalWaitQuit();
+            if (isCreateDir) {
+                FileMeta newDirMeta;
+                if (askDf_->AskFileMeta(outDir.toStdString(), newDirMeta)) {
+                    QMetaObject::invokeMethod(this, [this, row, newDirMeta]() {
+                        tableWidget_->insertRow(row + 1);
+                        setFileItem(newDirMeta, row + 1);
+                    });
+                }
+            }
+        } else {
+            emit signalWaitQuitMsg("文件解压失败");
+        }
+    });
+    waitDialog->exec();
 }

@@ -29,6 +29,7 @@ file(GLOB_RECURSE SOURCE_FILES
     "*.cpp"
     "*.h"
     "*.hpp"
+    "*.c"
 )
 
 include_directories(${CMAKE_CURRENT_LIST_DIR} ${THIRD_PATH})

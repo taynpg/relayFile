@@ -69,6 +69,8 @@ private:
     void onDelete(const std::vector<int>& rows);
     void onNewDir(int row);
     void onShowFileMetaInfo(int row);
+    void onArchive(const std::vector<int>& rows);
+    void onUnArchive(int row);
 
 private:
     void uiPathSet(const QString& path);

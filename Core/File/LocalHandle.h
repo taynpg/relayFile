@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QString>
+#include <QStringList>
 #include <string>
 #include <vector>
 
@@ -22,4 +24,23 @@ public:
     static bool AskArchive(const std::vector<FileMeta>& fileList, const std::string& archivePath);
     static bool AskUnArchive(const std::string& archivePath, const std::string& extractPath);
     static bool AskHomeAndDriver(std::vector<std::string>& drivers, std::string& home);
+};
+
+struct ArchiveItem {
+    QString absPath;
+    bool isDir{false};
+};
+
+class ZipHandle
+{
+public:
+    ZipHandle() = default;
+    ~ZipHandle() = default;
+
+    bool Archive(const QStringList& inputPaths, const QString& archivePath);
+    bool UnArchive(const QString& archivePath, const QString& extractPath);
+
+private:
+    static bool ensureDir(const QString& dir);
+    static QString calcZipPath(const QString& root, const QString& file);
 };
