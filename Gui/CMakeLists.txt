@@ -28,6 +28,7 @@ set(CONTROL_SOURCES
     Base/MessageBoxHelper.h Base/MessageBoxHelper.cpp
     Control/OwnTableWidget.h Control/OwnTableWidget.cpp
     Base/InfoDrop.h Base/InfoDrop.cpp
+    Form/WaitDialog.h Form/WaitDialog.cpp
 )
 
 set(BASE_SOURCES

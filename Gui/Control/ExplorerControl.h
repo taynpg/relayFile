@@ -29,6 +29,8 @@ public:
 signals:
     void transTaskRun(std::shared_ptr<RelayTaskData> data);
     void fileListChanged(bool isSuccess, const std::vector<FileMeta>& fileList);
+    void signalWaitQuit();
+    void signalWaitQuitMsg(const QString& msg);
 
 public slots:
     void onFileListChanged(bool isSuccess, const std::vector<FileMeta>& fileList);
@@ -58,6 +60,10 @@ public:
     void enterPath(const QString& path);
     void onTableContextMenu(const QPoint& pos);
     void onEnterPath(const QString& path);
+
+private:
+    void onRename(int row);
+    void onSHA256(int row);
 
 private:
     void uiPathSet(const QString& path);

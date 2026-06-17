@@ -234,6 +234,9 @@ void ComparisonControl::onTableContextMenu(const QPoint& pos)
     }
 
     auto* selectAction = menu.exec(tableWidget_->viewport()->mapToGlobal(pos));
+    if (selectAction == nullptr) {
+        return;
+    }
 
     if (selectAction == accessDirAction) {
         emit signalExplorerLocal(datas[4]->text());

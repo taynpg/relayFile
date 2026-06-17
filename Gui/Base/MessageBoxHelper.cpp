@@ -1,5 +1,6 @@
 #include "MessageBoxHelper.h"
 
+#include <QInputDialog>
 #include <QMessageBox>
 #include <QPushButton>
 
@@ -64,4 +65,26 @@ bool MessageBoxHelper::questionYesNo(QWidget* parent, const QString& title, cons
 
     msgBox.exec();
     return msgBox.clickedButton() == yesBtn;
+}
+
+bool MessageBoxHelper::getTextInput(QWidget* parent, const QString& title, const QString& label, QString& outText,
+                                    const QString& defaultValue)
+{
+    QInputDialog dialog(parent);
+    dialog.setWindowTitle(title);
+    dialog.setLabelText(label);
+    dialog.setOkButtonText("确定");
+    dialog.setCancelButtonText("取消");
+    dialog.setTextValue(defaultValue);
+
+    auto size = dialog.minimumSizeHint();
+    size.setWidth(size.width() + 200);
+    dialog.setFixedSize(size);
+
+    if (dialog.exec() != QDialog::Accepted) {
+        return false;
+    }
+
+    outText = dialog.textValue().trimmed();
+    return !outText.isEmpty();
 }

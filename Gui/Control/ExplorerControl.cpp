@@ -1,13 +1,18 @@
 #include "ExplorerControl.h"
 
 #include <File/FileDir.h>
+#include <QClipboard>
 #include <QDateTime>
+#include <QDesktopServices>
 #include <QHeaderView>
 #include <QMenu>
 #include <QTableWidgetItem>
+#include <QUrl>
 #include <Utils/miniUtil.h>
 
 #include "Base/GuiDefine.hpp"
+#include "Base/MessageBoxHelper.h"
+#include "Form/WaitDialog.h"
 #include "ui_ExplorerControl.h"
 
 ExplorerControl::ExplorerControl(QWidget* parent) : QDialog(parent), ui(new Ui::ExplorerControl)
@@ -287,9 +292,31 @@ void ExplorerControl::onTableContextMenu(const QPoint& pos)
     QAction* mkdirDirAction = menu.addAction("新建文件夹");
 
     auto* selectAction = menu.exec(tableWidget_->viewport()->mapToGlobal(pos));
+    if (selectAction == nullptr) {
+        return;
+    }
+
     if (selectAction == transAction) {
         actionTrans(datas);
-    } else if (selectAction == explorerAction) {
+        return;
+    }
+    if (selectAction == explorerAction) {
+        QDesktopServices::openUrl(QUrl::fromLocalFile(currentPath_));
+        return;
+    }
+    if (selectAction == copyPathAction) {
+        QString path = currentPath_;
+        path = FileDir::Join(currentPath_, datas[1]->text());
+        QApplication::clipboard()->setText(path);
+        return;
+    }
+    if (selectAction == renameAction) {
+        onRename(datas[1]->row());
+        return;
+    }
+    if (selectAction == sha256Action) {
+        onSHA256(datas[1]->row());
+        return;
     }
 }
 
@@ -335,4 +362,53 @@ void ExplorerControl::setTellInfoCall(std::function<void(ExplorerSharedData& es)
 void ExplorerControl::tellInfo(ExplorerSharedData& es)
 {
     es.currentPath_ = currentPath_;
+}
+
+void ExplorerControl::onRename(int row)
+{
+    auto oldName = tableWidget_->item(row, 1)->text();
+    QString newName;
+    if (!MessageBoxHelper::getTextInput(this, "重命名", "请输入新文件名", newName, oldName)) {
+        return;
+    }
+    auto oldPath = FileDir::Join(currentPath_, oldName);
+    auto newPath = FileDir::Join(currentPath_, newName);
+
+    WaitDialog* waitDialog = new WaitDialog(this);
+    connect(this, &ExplorerControl::signalWaitQuit, waitDialog, &WaitDialog::Quit);
+    connect(this, &ExplorerControl::signalWaitQuitMsg, waitDialog, &WaitDialog::QuitWithNotify);
+
+    workerThread_->invoke([this, oldPath, newPath, waitDialog, row, newName]() {
+        auto ret = askDf_->AskRename(oldPath.toStdString(), newPath.toStdString());
+        if (ret) {
+            emit signalWaitQuit();
+            QMetaObject::invokeMethod(this, [this, row, newName]() { tableWidget_->item(row, 1)->setText(newName); });
+        } else {
+            emit signalWaitQuitMsg("文件重命名失败");
+        }
+    });
+    waitDialog->exec();
+}
+
+void ExplorerControl::onSHA256(int row)
+{
+    auto fileName = tableWidget_->item(row, 1)->text();
+    auto filePath = FileDir::Join(currentPath_, fileName);
+
+    WaitDialog* waitDialog = new WaitDialog(this);
+    connect(this, &ExplorerControl::signalWaitQuit, waitDialog, &WaitDialog::Quit);
+    connect(this, &ExplorerControl::signalWaitQuitMsg, waitDialog, &WaitDialog::QuitWithNotify);
+
+    workerThread_->invoke([this, filePath, waitDialog, row]() {
+        std::string out;
+        auto ret = askDf_->AskSha256(filePath.toStdString(), out);
+        auto qStr = QString::fromStdString(out);
+        if (ret) {
+            emit signalWaitQuitMsg(filePath + "\n" + qStr + " ");
+            qInfo() << filePath << ",SHA256:" << qStr;
+        } else {
+            emit signalWaitQuitMsg("文件SHA256计算失败");
+        }
+    });
+    waitDialog->exec();
 }
