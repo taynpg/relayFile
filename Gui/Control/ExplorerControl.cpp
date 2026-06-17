@@ -577,10 +577,23 @@ void ExplorerControl::onArchive(const std::vector<int>& rows)
         meta.fullPath = FileDir::Join(currentPath_, fileName).toStdString();
         metaList.push_back(meta);
     }
+
+    auto qArchivePath = FileDir::Join(currentPath_, archiveName);
+    FileMeta checkMeta;
+    if (!askDf_->AskFileMeta(qArchivePath.toStdString(), checkMeta)) {
+        QMessageBox::warning(this, "警告", "检测压缩文件失败。");
+        return;
+    }
+    if (checkMeta.exist == 1) {
+        if (!MessageBoxHelper::questionYesNo(this, "警告", "压缩文件已存在，是否继续？")) {
+            return;
+        }
+    }
+
     WaitDialog* waitDialog = newWaitDialog();
-    workerThread_->invoke([this, waitDialog, metaList, archiveName, maxRow]() {
-        auto archivePath = FileDir::Join(currentPath_, archiveName).toStdString();
-        qInfo() << "压缩文件:" << QString::fromStdString(archivePath);
+    workerThread_->invoke([this, waitDialog, metaList, archiveName, maxRow, qArchivePath]() {
+        auto archivePath = qArchivePath.toStdString();
+        qInfo() << "压缩文件:" << archivePath;
         if (askDf_->AskArchive(metaList, archivePath)) {
             FileMeta meta;
             if (askDf_->AskFileMeta(archivePath, meta)) {
