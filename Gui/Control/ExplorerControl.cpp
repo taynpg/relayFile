@@ -326,6 +326,10 @@ void ExplorerControl::onTableContextMenu(const QPoint& pos)
         onDelete(rows);
         return;
     }
+    if (selectAction == mkdirDirAction) {
+        onNewDir(datas[1]->row());
+        return;
+    }
 }
 
 void ExplorerControl::actionTrans(const QList<QTableWidgetItem*>& datas)
@@ -464,6 +468,32 @@ void ExplorerControl::onDelete(const std::vector<int>& rows)
             }
         } else {
             emit signalWaitQuitMsg("文件删除失败");
+        }
+    });
+    waitDialog->exec();
+}
+
+void ExplorerControl::onNewDir(int row)
+{
+    QString newName;
+    if (!MessageBoxHelper::getTextInput(this, "新建文件夹", "请输入新文件夹名", newName)) {
+        return;
+    }
+    WaitDialog* waitDialog = newWaitDialog();
+    workerThread_->invoke([this, newName, waitDialog, row]() {
+        std::string out;
+        auto ret = askDf_->AskCreateDir(FileDir::Join(currentPath_, newName).toStdString());
+        if (ret) {
+            emit signalWaitQuit();
+            QMetaObject::invokeMethod(this, [this, row, newName]() {
+                FileMeta meta;
+                if (askDf_->AskFileMeta(FileDir::Join(currentPath_, newName).toStdString(), meta)) {
+                    tableWidget_->insertRow(row + 1);
+                    setFileItem(meta, row + 1);
+                }
+            });
+        } else {
+            emit signalWaitQuitMsg("新建文件夹" + newName + "失败，请检查文件夹名是否已存在或者是否有权限新建。");
         }
     });
     waitDialog->exec();

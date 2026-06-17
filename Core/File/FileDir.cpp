@@ -202,7 +202,7 @@ bool FileDir::CreateDir(const QString& path)
 {
     QDir dir;
     if (dir.exists(path)) {
-        return true;
+        return false;
     }
     return dir.mkpath(path);
 }

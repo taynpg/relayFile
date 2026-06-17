@@ -66,6 +66,7 @@ private:
     void onRename(int row);
     void onSHA256(int row);
     void onDelete(const std::vector<int>& rows);
+    void onNewDir(int row);
 
 private:
     void uiPathSet(const QString& path);
