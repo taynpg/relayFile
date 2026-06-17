@@ -57,6 +57,7 @@ public:
     void onDoubleClick();
     void enterPath(const QString& path);
     void onTableContextMenu(const QPoint& pos);
+    void onEnterPath(const QString& path);
 
 private:
     void uiPathSet(const QString& path);

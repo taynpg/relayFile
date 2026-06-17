@@ -1,11 +1,14 @@
 #include "ComparisonControl.h"
 
+#include <QDesktopServices>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QMenu>
 #include <QMessageBox>
+#include <QUrl>
 
 #include "Base/BaseHelper.h"
+#include "Base/MessageBoxHelper.h"
 #include "ui_ComparisonControl.h"
 
 ComparisonControl::ComparisonControl(QWidget* parent) : QDialog(parent), ui(new Ui::ComparisonControl)
@@ -115,6 +118,15 @@ void ComparisonControl::saveConfig()
             }
         }
     }
+    if (!delIds_.empty()) {
+        for (const auto& id : delIds_) {
+            if (!comparisonSql_->deleteItem(id)) {
+                qCritical() << "删除id" << id << "失败:" << config;
+                isSuccess = false;
+                break;
+            }
+        }
+    }
     if (isSuccess) {
         QMessageBox::information(this, "提示", "保存成功");
         auto tables = comparisonSql_->tables();
@@ -123,6 +135,7 @@ void ComparisonControl::saveConfig()
         if (ui->cbConfig->findText(config) >= 0) {
             ui->cbConfig->setCurrentText(config);
         }
+        delIds_.clear();
     } else {
         QMessageBox::warning(this, "提示", "保存失败");
     }
@@ -130,6 +143,7 @@ void ComparisonControl::saveConfig()
 
 void ComparisonControl::loadConfig(bool notice)
 {
+    delIds_.clear();
     tableWidget_->clearContents();
     tableWidget_->setRowCount(0);
     auto config = ui->cbConfig->currentText().trimmed();
@@ -142,19 +156,23 @@ void ComparisonControl::loadConfig(bool notice)
     comparisonSql_->setTableName(config);
     auto items = comparisonSql_->getAll();
     for (auto& item : items) {
-        auto row = tableWidget_->rowCount();
-        tableWidget_->insertRow(row);
-        auto* itemId = new QTableWidgetItem(QString::number(item.id));
-        itemId->setFlags(itemId->flags() & ~Qt::ItemIsEditable);
-        tableWidget_->setItem(row, 0, itemId);
-        tableWidget_->setItem(row, 1, new QTableWidgetItem(item.name));
-        auto* typeItem = new QTableWidgetItem(item.type);
-        typeItem->setFlags(typeItem->flags() & ~Qt::ItemIsEditable);
-        tableWidget_->setItem(row, 2, typeItem);
-        tableWidget_->setItem(row, 3, new QTableWidgetItem(item.mark));
-        tableWidget_->setItem(row, 4, new QTableWidgetItem(item.localDir));
-        tableWidget_->setItem(row, 5, new QTableWidgetItem(item.remoteDir));
+        insertRow(item.id, item.name, item.type, item.mark, item.localDir, item.remoteDir);
     }
+}
+
+void ComparisonControl::insertRow(int id, const QString& name, const QString& type, const QString& mark, const QString& localDir,
+                                  const QString& remoteDir)
+{
+    auto row = tableWidget_->rowCount();
+    tableWidget_->insertRow(row);
+    tableWidget_->setItem(row, 0, new QTableWidgetItem(id < 0 ? "" : QString::number(id)));
+    tableWidget_->setItem(row, 1, new QTableWidgetItem(name));
+    auto* typeItem = new QTableWidgetItem(type);
+    typeItem->setFlags(typeItem->flags() & ~Qt::ItemIsEditable);
+    tableWidget_->setItem(row, 2, typeItem);
+    tableWidget_->setItem(row, 3, new QTableWidgetItem(mark));
+    tableWidget_->setItem(row, 4, new QTableWidgetItem(localDir));
+    tableWidget_->setItem(row, 5, new QTableWidgetItem(remoteDir));
 }
 
 void ComparisonControl::showEvent(QShowEvent* event)
@@ -170,6 +188,7 @@ void ComparisonControl::showEvent(QShowEvent* event)
 
 void ComparisonControl::delConfig()
 {
+    delIds_.clear();
     auto config = ui->cbConfig->currentText().trimmed();
     if (config.isEmpty()) {
         QMessageBox::warning(this, "提示", "配置名称不能为空");
@@ -199,25 +218,41 @@ void ComparisonControl::onTableContextMenu(const QPoint& pos)
     }
 
     QMenu menu(this);
-    QAction* accessDirAction = menu.addAction("访问本地目录");
-    QAction* accessRemoteDirAction = menu.addAction("访问远程目录");
-    QAction* openDirAction = menu.addAction("打开所在目录");
+    QAction* accessDirAction{};
+    QAction* accessRemoteDirAction{};
+    QAction* openDirAction{};
     QAction* uploadAction = menu.addAction(style()->standardIcon(QStyle::SP_ArrowUp), "上传");
     QAction* newLineAction = menu.addAction("新行");
     QAction* deleteAction = menu.addAction("删除");
     QAction* downloadAction = menu.addAction(style()->standardIcon(QStyle::SP_ArrowDown), "下载");
+
+    // 有的菜单项单行选中时才显示
+    if (datas.size() / headers_.size() == 1) {
+        accessDirAction = menu.addAction("访问本地目录");
+        accessRemoteDirAction = menu.addAction("访问远程目录");
+        openDirAction = menu.addAction("打开本地所在目录");
+    }
+
     auto* selectAction = menu.exec(tableWidget_->viewport()->mapToGlobal(pos));
 
     if (selectAction == accessDirAction) {
+        emit signalExplorerLocal(datas[4]->text());
         return;
     }
     if (selectAction == accessRemoteDirAction) {
+        emit signalExplorerRemote(datas[5]->text());
         return;
     }
     if (selectAction == openDirAction) {
+        auto path = datas[4]->text().trimmed();
+        if (path.isEmpty()) {
+            return;
+        }
+        QDesktopServices::openUrl(QUrl::fromLocalFile(path));
         return;
     }
     if (selectAction == newLineAction) {
+        insertRow(-1, "", "", "", "", "");
         return;
     }
     if (selectAction == uploadAction) {
@@ -225,6 +260,18 @@ void ComparisonControl::onTableContextMenu(const QPoint& pos)
         return;
     }
     if (selectAction == deleteAction) {
+        if (!MessageBoxHelper::questionYesNo(this, "确认", "是否删除选中行？")) {
+            return;
+        }
+        // 倒着删除
+        for (int i = datas.size() / headers_.size() - 1; i >= 0; --i) {
+            auto row = datas[i * headers_.size()]->row();
+            auto idText = tableWidget_->item(row, 0)->text();
+            if (!idText.isEmpty()) {
+                delIds_.push_back(idText.toInt());
+            }
+            tableWidget_->removeRow(row);
+        }
         return;
     }
     if (selectAction == downloadAction) {

@@ -107,6 +107,10 @@ void relayFile::initControls()
             [this](std::shared_ptr<RelayTaskData> data) { onTransTaskRun(data); });
     connect(comparisonControl_, &ComparisonControl::transTaskRun, this,
             [this](std::shared_ptr<RelayTaskData> data) { onTransTaskRun(data); });
+    connect(comparisonControl_, &ComparisonControl::signalExplorerLocal, localExplorerControl_,
+            [this](const QString& path) { localExplorerControl_->onEnterPath(path); });
+    connect(comparisonControl_, &ComparisonControl::signalExplorerRemote, remoteExplorerControl_,
+            [this](const QString& path) { remoteExplorerControl_->onEnterPath(path); });
 }
 
 void relayFile::ControlMsgHander(QtMsgType type, const QMessageLogContext& context, const QString& msg)

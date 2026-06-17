@@ -17,6 +17,8 @@ class ComparisonControl : public QDialog
 
 signals:
     void transTaskRun(std::shared_ptr<RelayTaskData> data);
+    void signalExplorerLocal(const QString& path);
+    void signalExplorerRemote(const QString& path);
 
 public:
     explicit ComparisonControl(QWidget* parent = nullptr);
@@ -28,6 +30,8 @@ private:
     void loadConfig(bool notice);
     void delConfig();
     void showEvent(QShowEvent* event) override;
+    void insertRow(int id, const QString& name, const QString& type, const QString& mark, const QString& localDir,
+                   const QString& remoteDir);
 
 private:
     void initControls();
@@ -39,6 +43,7 @@ private:
     QStringList headers_;
     Ui::ComparisonControl* ui;
     ComDropTable* tableWidget_;
+    std::vector<int> delIds_{};
     std::shared_ptr<ComparisonSql> comparisonSql_;
 };
 

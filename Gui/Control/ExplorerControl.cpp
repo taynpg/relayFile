@@ -77,6 +77,12 @@ void ExplorerControl::onEnter()
     enterPath(path);
 }
 
+void ExplorerControl::onEnterPath(const QString& path)
+{
+    ui->cbPath->setCurrentText(path);
+    enterPath(path);
+}
+
 void ExplorerControl::enterPath(const QString& path)
 {
     workerThread_->invoke([this, path]() {
@@ -269,16 +275,11 @@ void ExplorerControl::onTableContextMenu(const QPoint& pos)
         }
         if (auto type = tableWidget_->item(datas[0]->row(), 3); type->text() == GUI_FILE_TYPE_FILE) {
             sha256Action = menu.addAction("SHA256");
-            menu.addAction(sha256Action);
             extractAction = menu.addAction("解压缩");
-            menu.addAction(extractAction);
         }
         copyPathAction = menu.addAction("复制全路径");
-        menu.addAction(copyPathAction);
         renameAction = menu.addAction("重命名");
-        menu.addAction(renameAction);
         detailAction = menu.addAction("详细信息");
-        menu.addAction(detailAction);
     }
 
     QAction* deleteAction = menu.addAction("删除");
