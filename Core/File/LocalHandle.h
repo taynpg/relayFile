@@ -21,4 +21,5 @@ public:
     static bool AskCreateDir(const std::string& path);
     static bool AskArchive(const std::vector<FileMeta>& fileList, const std::string& archivePath);
     static bool AskUnArchive(const std::string& archivePath, const std::string& extractPath);
+    static bool AskHomeAndDriver(std::vector<std::string>& drivers, std::string& home);
 };

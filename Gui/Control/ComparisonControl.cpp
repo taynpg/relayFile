@@ -377,7 +377,7 @@ bool ComparisonControl::isNameValid(const QString& name)
 void ComparisonControl::onNewConfig()
 {
     QString newName;
-    if (!MessageBoxHelper::getTextInput(this, "重命名", "请输入新配置名", newName)) {
+    if (!MessageBoxHelper::getTextInput(this, "新建配置", "请输入新配置名", newName)) {
         return;
     }
     if (!isNameValid(newName)) {
@@ -424,7 +424,7 @@ void ComparisonControl::onCopyConfig()
         return;
     }
     QString newName;
-    if (!MessageBoxHelper::getTextInput(this, "重命名", "请输入复制配置名", newName)) {
+    if (!MessageBoxHelper::getTextInput(this, "复制配置", "请输入复制配置名", newName)) {
         return;
     }
     if (!isNameValid(newName)) {

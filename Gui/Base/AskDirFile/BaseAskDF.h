@@ -19,6 +19,7 @@ public:
 public:
     virtual bool AskFileList(const std::string& path, std::vector<FileMeta>& fileList, bool recursive = false) = 0;
     virtual bool AskHome(std::string& home) = 0;
+    virtual bool AskHomeAndDriver(std::vector<std::string>& drivers, std::string& home) = 0;
     virtual bool AskFileMeta(const std::string& path, FileMeta& meta) = 0;
     virtual bool AskDelete(const std::vector<std::string>& fileList, std::vector<std::string>& failedList) = 0;
     virtual bool AskSha256(const std::string& path, std::string& sha256) = 0;

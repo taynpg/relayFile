@@ -45,3 +45,8 @@ bool LocalAskDF::AskUnArchive(const std::string& archivePath, const std::string&
 {
     return LocalHandle::AskUnArchive(archivePath, extractPath);
 }
+
+bool LocalAskDF::AskHomeAndDriver(std::vector<std::string>& drivers, std::string& home)
+{
+    return LocalHandle::AskHomeAndDriver(drivers, home);
+}

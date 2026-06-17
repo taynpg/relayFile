@@ -219,6 +219,12 @@ void ControlSession::handleFrame(FramePtr frame)
         });
         break;
     }
+    case FrameType::kMsgType_Ask_HomeAndDriver: {
+        dispatchMessage(frame, FrameType::kMsgType_Answer_HomeAndDriver, [](const Message& sourceMsg, Message& ansMsg) {
+            ansMsg.mark = LocalHandle::AskHomeAndDriver(ansMsg.strVec, ansMsg.comStr);
+        });
+        break;
+    }
     default: {
         QMutexLocker locker(&requestWaitLock_);
         if (auto it = requestWaitFrame_.find(frame->sessionId); it != requestWaitFrame_.end()) {

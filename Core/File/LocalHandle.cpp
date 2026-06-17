@@ -72,3 +72,16 @@ bool LocalHandle::AskUnArchive(const std::string& archivePath, const std::string
 {
     return false;
 }
+
+bool LocalHandle::AskHomeAndDriver(std::vector<std::string>& drivers, std::string& home)
+{
+    if (!AskHome(home)) {
+        return false;
+    }
+    auto ds = Common::GetLocalDrivers();
+    drivers.clear();
+    for (const auto& driver : ds) {
+        drivers.push_back(driver.toStdString());
+    }
+    return true;
+}

@@ -2,6 +2,7 @@
 
 #include <QCryptographicHash>
 #include <QFile>
+#include <QStorageInfo>
 #include <QUuid>
 
 QString Common::GetUUID()
@@ -27,4 +28,16 @@ QString Common::GenSha256(const QString& str, bool isFile)
         hash.addData(str.toUtf8());
     }
     return QString(hash.result().toHex());
+}
+
+QVector<QString> Common::GetLocalDrivers()
+{
+    QVector<QString> drivers;
+    auto mountedVolumes = QStorageInfo::mountedVolumes();
+    for (const auto& driver : mountedVolumes) {
+        if (driver.isValid() && driver.isReady()) {
+            drivers.push_back(driver.rootPath());
+        }
+    }
+    return drivers;
 }

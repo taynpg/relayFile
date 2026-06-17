@@ -72,6 +72,7 @@ private:
 
 private:
     void uiPathSet(const QString& path);
+    void uiPathSet(const QString& path, const std::vector<std::string>& drivers);
     void actionTrans(const QList<QTableWidgetItem*>& datas);
     WaitDialog* newWaitDialog();
 

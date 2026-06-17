@@ -18,4 +18,5 @@ public:
     bool AskCreateDir(const std::string& path) override;
     bool AskArchive(const std::vector<FileMeta>& fileList, const std::string& archivePath) override;
     bool AskUnArchive(const std::string& archivePath, const std::string& extractPath) override;
+    bool AskHomeAndDriver(std::vector<std::string>& drivers, std::string& home) override;
 };

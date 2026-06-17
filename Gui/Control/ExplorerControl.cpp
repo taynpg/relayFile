@@ -127,15 +127,25 @@ void ExplorerControl::uiPathSet(const QString& path)
     ui->cbPath->setCurrentText(path);
 }
 
+void ExplorerControl::uiPathSet(const QString& path, const std::vector<std::string>& drivers)
+{
+    ui->cbPath->addItem(path);
+    for (auto driver : drivers) {
+        ui->cbPath->addItem(QString::fromStdString(driver));
+    }
+    ui->cbPath->setCurrentText(path);
+}
+
 void ExplorerControl::onHome(bool autoEnter)
 {
     workerThread_->invoke([this, autoEnter]() {
         std::string home{};
-        if (!askDf_->AskHome(home)) {
+        std::vector<std::string> drivers{};
+        if (!askDf_->AskHomeAndDriver(drivers, home)) {
             qWarning() << "获取家目录失败。";
             return;
         }
-        uiPathSet(QString::fromStdString(home));
+        uiPathSet(QString::fromStdString(home), drivers);
         if (autoEnter) {
             onEnter();
         }

@@ -184,3 +184,19 @@ bool RemoteAskDF::AskUnArchive(const std::string& archivePath, const std::string
         },
         FrameType::kMsgType_Ask_UnArchive);
 }
+
+bool RemoteAskDF::AskHomeAndDriver(std::vector<std::string>& drivers, std::string& home)
+{
+    Message msg;
+    return Request(
+        msg,
+        [&drivers, &home](MessagePtr ret) {
+            if (ret == nullptr) {
+                return false;
+            }
+            drivers = ret->strVec;
+            home = ret->comStr;
+            return true;
+        },
+        FrameType::kMsgType_Ask_HomeAndDriver);
+}
