@@ -33,6 +33,7 @@ private:
     void showEvent(QShowEvent* event) override;
     void insertRow(int id, const QString& name, const QString& type, const QString& mark, const QString& localDir,
                    const QString& remoteDir);
+    bool isNameValid(const QString& name);
 
 private:
     void initControls();
@@ -43,6 +44,7 @@ private:
     void onRefreshMark();
     void onListContextMenu(const QPoint& pos);
     void onListItemChanged();
+    void onCopyConfig();
 
 private:
     QStringList headers_;

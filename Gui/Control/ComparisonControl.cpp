@@ -97,6 +97,7 @@ void ComparisonControl::initSignals()
     });
     connect(tableWidget_, &QTableWidget::customContextMenuRequested, this, &ComparisonControl::onTableContextMenu);
     connect(ui->btnNew, &QPushButton::clicked, this, &ComparisonControl::onNewConfig);
+    connect(ui->btnCopy, &QPushButton::clicked, this, &ComparisonControl::onCopyConfig);
 }
 
 void ComparisonControl::initTableWidget()
@@ -364,14 +365,22 @@ void ComparisonControl::onTrans(const QList<QTableWidgetItem*>& items, bool isSe
     emit transTaskRun(transData);
 }
 
+bool ComparisonControl::isNameValid(const QString& name)
+{
+    if (!comparisonSql_->isNameValid(name)) {
+        QMessageBox::warning(this, "提示", "配置名称不合法，请修改后重试");
+        return false;
+    }
+    return true;
+}
+
 void ComparisonControl::onNewConfig()
 {
     QString newName;
     if (!MessageBoxHelper::getTextInput(this, "重命名", "请输入新配置名", newName)) {
         return;
     }
-    if (!comparisonSql_->isNameValid(newName)) {
-        QMessageBox::warning(this, "提示", "配置名称不合法，请修改后重试");
+    if (!isNameValid(newName)) {
         return;
     }
 
@@ -405,4 +414,37 @@ void ComparisonControl::onRefreshMark()
         item->setCheckState(Qt::Checked);
     }
     autoChange_ = false;
+}
+
+void ComparisonControl::onCopyConfig()
+{
+    auto oldConfig = ui->cbConfig->currentText();
+    if (oldConfig.isEmpty()) {
+        QMessageBox::warning(this, "提示", "请选择要复制的配置");
+        return;
+    }
+    QString newName;
+    if (!MessageBoxHelper::getTextInput(this, "重命名", "请输入复制配置名", newName)) {
+        return;
+    }
+    if (!isNameValid(newName)) {
+        return;
+    }
+    if (comparisonSql_->tableExists(newName)) {
+        QMessageBox::warning(this, "提示", "配置已存在");
+        return;
+    }
+    if (!comparisonSql_->createTable(newName)) {
+        QMessageBox::warning(this, "提示", "创建表失败");
+        return;
+    }
+    comparisonSql_->setTableName(oldConfig);
+    auto items = comparisonSql_->getAll();
+    comparisonSql_->setTableName(newName);
+    for (auto& item : items) {
+        item.id = 0;
+        comparisonSql_->addItem(item);
+    }
+    ui->cbConfig->addItem(newName);
+    QMessageBox::information(this, "提示", "复制成功");
 }
