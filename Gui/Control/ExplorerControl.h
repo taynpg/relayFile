@@ -61,12 +61,14 @@ public:
     void enterPath(const QString& path);
     void onTableContextMenu(const QPoint& pos);
     void onEnterPath(const QString& path);
+    void onShowFileMeta(const FileMeta& meta);
 
 private:
     void onRename(int row);
     void onSHA256(int row);
     void onDelete(const std::vector<int>& rows);
     void onNewDir(int row);
+    void onShowFileMetaInfo(int row);
 
 private:
     void uiPathSet(const QString& path);

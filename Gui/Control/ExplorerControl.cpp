@@ -12,6 +12,7 @@
 
 #include "Base/GuiDefine.hpp"
 #include "Base/MessageBoxHelper.h"
+#include "Form/FileMetaInfo.h"
 #include "ui_ExplorerControl.h"
 
 ExplorerControl::ExplorerControl(QWidget* parent) : QDialog(parent), ui(new Ui::ExplorerControl)
@@ -287,7 +288,7 @@ void ExplorerControl::onTableContextMenu(const QPoint& pos)
         detailAction = menu.addAction("详细信息");
     }
 
-    QAction* deleteAction = menu.addAction("删除");
+    QAction* deleteAction = menu.addAction(style()->standardIcon(QStyle::SP_DesktopIcon),"删除");
     QAction* compressAction = menu.addAction("压缩");
     QAction* mkdirDirAction = menu.addAction("新建文件夹");
 
@@ -328,6 +329,10 @@ void ExplorerControl::onTableContextMenu(const QPoint& pos)
     }
     if (selectAction == mkdirDirAction) {
         onNewDir(datas[1]->row());
+        return;
+    }
+    if (selectAction == detailAction) {
+        onShowFileMetaInfo(datas[1]->row());
         return;
     }
 }
@@ -430,6 +435,9 @@ void ExplorerControl::onSHA256(int row)
 
 void ExplorerControl::onDelete(const std::vector<int>& rows)
 {
+    if (!MessageBoxHelper::questionYesNo(this, "确认", "是否删除选中行？")) {
+        return;
+    }
     std::vector<int> copyRows = rows;
     // 排序，确保从后往前删除，避免索引变化
     std::sort(copyRows.begin(), copyRows.end(), std::greater<int>());
@@ -497,4 +505,29 @@ void ExplorerControl::onNewDir(int row)
         }
     });
     waitDialog->exec();
+}
+
+void ExplorerControl::onShowFileMetaInfo(int row)
+{
+    auto fileName = tableWidget_->item(row, 1)->text();
+    auto filePath = FileDir::Join(currentPath_, fileName);
+    WaitDialog* waitDialog = newWaitDialog();
+    workerThread_->invoke([this, waitDialog, row, filePath]() {
+        FileMeta meta;
+        if (askDf_->AskFileMeta(filePath.toStdString(), meta)) {
+            emit signalWaitQuit();
+            QMetaObject::invokeMethod(this, [this, meta]() { onShowFileMeta(meta); });
+        } else {
+            emit signalWaitQuitMsg("文件元数据获取失败");
+        }
+    });
+    waitDialog->exec();
+}
+
+void ExplorerControl::onShowFileMeta(const FileMeta& meta)
+{
+    FileMetaInfo* info = new FileMetaInfo(this);
+    info->setAttribute(Qt::WA_DeleteOnClose);
+    info->setMeta(meta);
+    info->exec();
 }

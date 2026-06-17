@@ -29,6 +29,7 @@ set(CONTROL_SOURCES
     Control/OwnTableWidget.h Control/OwnTableWidget.cpp
     Base/InfoDrop.h Base/InfoDrop.cpp
     Form/WaitDialog.h Form/WaitDialog.cpp
+    Form/FileMetaInfo.h Form/FileMetaInfo.cpp Form/FileMetaInfo.ui
 )
 
 set(BASE_SOURCES
@@ -45,7 +46,8 @@ set(RESOURCE_SOURCES
 )
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-add_executable(relayFileGui ${PROJECT_SOURCES} ${CONTROL_SOURCES} ${BASE_SOURCES} ${RESOURCE_SOURCES})
+add_executable(relayFileGui ${PROJECT_SOURCES} ${CONTROL_SOURCES} ${BASE_SOURCES} ${RESOURCE_SOURCES}
+    Form/FileMetaInfo.h Form/FileMetaInfo.cpp Form/FileMetaInfo.ui)
 target_link_libraries(relayFileGui PRIVATE relayFileCore 
     Qt${QT_VERSION_MAJOR}::Widgets 
     Qt${QT_VERSION_MAJOR}::Network 

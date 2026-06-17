@@ -185,9 +185,9 @@ QString FileDir::GenOutPath(const QString& root, const QString& fullPath, const 
 void FileDir::GetFileRFileMeta(const QString& path, RFileMeta& rmeta)
 {
     QFileInfo info(path);
-    rmeta.dir = path;
     if (info.exists()) {
         rmeta.exist = 1;
+        rmeta.dir = GenDir(path);
         rmeta.fileName = info.fileName();
         rmeta.permission = info.permissions();
         rmeta.fileType = info.isDir() ? RFileType::mTypeDir : RFileType::mTypeFile;
