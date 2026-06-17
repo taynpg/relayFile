@@ -2,6 +2,7 @@
 #define COMPARISONCONTROL_H
 
 #include <QDialog>
+#include <QListWidgetItem>
 
 #include "Base/GuiDefine.hpp"
 #include "OwnTableWidget.h"
@@ -38,12 +39,18 @@ private:
     void initSignals();
     void onTableContextMenu(const QPoint& pos);
     void onTrans(const QList<QTableWidgetItem*>& items, bool isSend);
+    void onNewConfig();
+    void onRefreshMark();
+    void onListContextMenu(const QPoint& pos);
+    void onListItemChanged();
 
 private:
     QStringList headers_;
     Ui::ComparisonControl* ui;
     ComDropTable* tableWidget_;
     std::vector<int> delIds_{};
+    QVector<CompDataItem> curItems_;
+    bool autoChange_{};
     std::shared_ptr<ComparisonSql> comparisonSql_;
 };
 

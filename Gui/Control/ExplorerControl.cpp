@@ -263,7 +263,7 @@ void ExplorerControl::onTableContextMenu(const QPoint& pos)
     }
 
     QMenu menu(this);
-    QAction* transAction = menu.addAction("传输");
+    QAction* transAction = menu.addAction(style()->standardIcon(QStyle::SP_FileDialogStart), "传输");
 
     QAction* explorerAction{};
     QAction* copyPathAction{};
@@ -276,7 +276,7 @@ void ExplorerControl::onTableContextMenu(const QPoint& pos)
     if (datas.size() <= headers_.size()) {
         if (auto type = tableWidget_->item(datas[0]->row(), 3);
             type->text() == GUI_FILE_TYPE_DIR && askType_ == AskType::ASK_TYPE_LOCAL) {
-            explorerAction = menu.addAction("在资源管理器中打开");
+            explorerAction = menu.addAction(style()->standardIcon(QStyle::SP_DesktopIcon), "在资源管理器中打开");
             menu.addAction(explorerAction);
         }
         if (auto type = tableWidget_->item(datas[0]->row(), 3); type->text() == GUI_FILE_TYPE_FILE) {
@@ -288,7 +288,7 @@ void ExplorerControl::onTableContextMenu(const QPoint& pos)
         detailAction = menu.addAction("详细信息");
     }
 
-    QAction* deleteAction = menu.addAction(style()->standardIcon(QStyle::SP_DesktopIcon),"删除");
+    QAction* deleteAction = menu.addAction(style()->standardIcon(QStyle::SP_DesktopIcon), "删除");
     QAction* compressAction = menu.addAction("压缩");
     QAction* mkdirDirAction = menu.addAction("新建文件夹");
 
