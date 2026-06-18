@@ -1,7 +1,7 @@
 #include "WaitDialog.h"
 
 #include <QMessageBox>
-#include <QVBoxLayout>
+#include <QHBoxLayout>
 
 WaitDialog::WaitDialog(QWidget* parent) : QDialog(parent)
 {
@@ -10,7 +10,7 @@ WaitDialog::WaitDialog(QWidget* parent) : QDialog(parent)
 
     setFixedSize(260, 100);
 
-    auto* layout = new QVBoxLayout(this);
+    auto* layout = new QHBoxLayout(this);
 
     progressBar = new QProgressBar(this);
     progressBar->setRange(0, 0);

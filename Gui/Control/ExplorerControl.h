@@ -35,6 +35,7 @@ signals:
     void fileListChanged(bool isSuccess, const std::vector<FileMeta>& fileList);
     void signalStartWaitForm();
     void signalWaitQuit();
+    void signalShowNotice(const QString& msg);
     void signalWaitQuitMsg(const QString& msg);
     void signalShouldConfirm(const QString& title, const QString& text);
 
@@ -77,6 +78,7 @@ private:
     void onArchive(const std::vector<int>& rows);
     void onUnArchive(int row);
     void onShowWaitDialog();
+    void onShowNotice(const QString& msg);
     void onConfirm(const QString& title, const QString& text);
 
 private:
@@ -104,6 +106,7 @@ private:
     QMutex askMut_;
     WaitDialog* waitDialog_;
     QWaitCondition confirmCond_;
+    std::atomic<bool> isTaskRunning_{};
     bool isConfirmRun_{false};
     bool confirmResult_{false};
 };
