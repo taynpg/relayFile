@@ -16,14 +16,14 @@
 #include "ui_ExplorerControl.h"
 
 #define QUIT_ATOMIC(name)                                                                                                        \
-    isTaskRunning_.store(true);                                                                                                  \
+    name.store(true);                                                                                                            \
     std::vector<std::function<void()>> exitActions;                                                                              \
     std::shared_ptr<void> recv(nullptr, [this, &exitActions](void*) {                                                            \
         emit signalWaitQuit();                                                                                                   \
         for (auto& action : exitActions) {                                                                                       \
             action();                                                                                                            \
         }                                                                                                                        \
-        isTaskRunning_.store(false);                                                                                             \
+        name.store(false);                                                                                                       \
     });
 
 ExplorerControl::ExplorerControl(QWidget* parent) : QDialog(parent), ui(new Ui::ExplorerControl)
