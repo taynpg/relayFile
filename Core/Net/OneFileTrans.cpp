@@ -237,10 +237,12 @@ bool OneFileTrans::handleInterrupt(FramePtr frame)
     }
     if (tMode_ == TransMode::Receive && state_ == TransStatus::Receving) {
         auto f = CreateFrame(FrameType::kFileType_Request_Cancel);
+        f->to = targetControlId_;
         emit signalRequestSend(f);
     }
     if (tMode_ == TransMode::Send && state_ == TransStatus::Sending) {
         auto f = CreateFrame(FrameType::kFileType_Request_Cancel);
+        f->to = targetControlId_;
         emit signalRequestSend(f);
     }
     state_ = TransStatus::Interrupted;
