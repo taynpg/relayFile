@@ -28,18 +28,11 @@ public:
     static bool AskHomeAndDriver(std::vector<std::string>& drivers, std::string& home);
 };
 
-struct ArchiveItem {
-    QString absPath;
-    bool isDir{false};
-};
-
 class ZipHandle
 {
 public:
     ZipHandle() = default;
-    ~ZipHandle() = default;
-
-    bool Archive(const QStringList& inputPaths, const QString& archivePath);
+    bool Archive(const QString& rootPath, const QStringList& inputPaths, const QString& archivePath);
     bool UnArchive(const QString& archivePath, const QString& extractPath);
 
 private:

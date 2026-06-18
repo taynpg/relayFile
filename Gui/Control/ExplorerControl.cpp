@@ -627,7 +627,7 @@ void ExplorerControl::onArchive(const std::vector<int>& rows)
             }
         }
         auto archivePath = qArchivePath.toStdString();
-        qInfo() << "压缩文件:" << archivePath;
+        qInfo() << "压缩文件:" << qArchivePath;
         if (askDf_->AskArchive(metaList, archivePath)) {
             FileMeta meta;
             if (askDf_->AskFileMeta(archivePath, meta)) {
