@@ -11,6 +11,7 @@ public:
     explicit WaitDialog(QWidget* parent = nullptr);
 
     bool isCancelled() const;
+    void Reset();
 
 signals:
     void cancelRequested();

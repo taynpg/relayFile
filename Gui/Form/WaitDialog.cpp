@@ -39,6 +39,11 @@ void WaitDialog::Quit()
     close();
 }
 
+void WaitDialog::Reset()
+{
+    cancelled = false;
+}
+
 void WaitDialog::QuitWithNotify(const QString& msg)
 {
     if (cancelled) {

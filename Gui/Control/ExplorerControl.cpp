@@ -17,6 +17,7 @@
 
 #define QUIT_ATOMIC(name)                                                                                                        \
     name.store(true);                                                                                                            \
+    emit signalStartWaitForm();                                                                                                  \
     std::vector<std::function<void()>> exitActions;                                                                              \
     std::shared_ptr<void> recv(nullptr, [this, &exitActions](void*) {                                                            \
         emit signalWaitQuit();                                                                                                   \
@@ -437,6 +438,7 @@ void ExplorerControl::onShowWaitDialog()
     if (!isTaskRunning_.load()) {
         return;
     }
+    waitDialog_->Reset();
     waitDialog_->exec();
 }
 
@@ -450,7 +452,6 @@ void ExplorerControl::onRename(int row)
     auto oldPath = FileDir::Join(currentPath_, oldName);
     auto newPath = FileDir::Join(currentPath_, newName);
 
-    emit signalStartWaitForm();
     workerThread_->invoke([this, oldPath, newPath, row, newName]() {
         QUIT_ATOMIC(isTaskRunning_);
         auto ret = askDf_->AskRename(oldPath.toStdString(), newPath.toStdString());
@@ -467,7 +468,6 @@ void ExplorerControl::onSHA256(int row)
     auto fileName = tableWidget_->item(row, 1)->text();
     auto filePath = FileDir::Join(currentPath_, fileName);
 
-    emit signalStartWaitForm();
     workerThread_->invoke([this, filePath, row]() {
         QUIT_ATOMIC(isTaskRunning_);
         std::string out;
@@ -497,7 +497,7 @@ void ExplorerControl::onDelete(const std::vector<int>& rows)
     for (auto row : copyRows) {
         fileList.push_back(FileDir::Join(currentPath_, tableWidget_->item(row, 1)->text()).toStdString());
     }
-    emit signalStartWaitForm();
+
     workerThread_->invoke([this, fileList, copyRows]() {
         QUIT_ATOMIC(isTaskRunning_);
         std::vector<std::string> failedFiles;
@@ -537,7 +537,7 @@ void ExplorerControl::onNewDir(int row)
     if (!MessageBoxHelper::getTextInput(this, "新建文件夹", "请输入新文件夹名", newName)) {
         return;
     }
-    emit signalStartWaitForm();
+
     workerThread_->invoke([this, newName, row]() {
         QUIT_ATOMIC(isTaskRunning_);
         std::string out;
@@ -562,7 +562,7 @@ void ExplorerControl::onShowFileMetaInfo(int row)
 {
     auto fileName = tableWidget_->item(row, 1)->text();
     auto filePath = FileDir::Join(currentPath_, fileName);
-    emit signalStartWaitForm();
+
     workerThread_->invoke([this, row, filePath]() {
         QUIT_ATOMIC(isTaskRunning_);
         FileMeta meta;
@@ -606,7 +606,7 @@ void ExplorerControl::onArchive(const std::vector<int>& rows)
         meta.fullPath = FileDir::Join(currentPath_, fileName).toStdString();
         metaList.push_back(meta);
     }
-    emit signalStartWaitForm();
+
     workerThread_->invoke([this, metaList, archiveName, maxRow]() {
         QUIT_ATOMIC(isTaskRunning_);
         auto qArchivePath = FileDir::Join(currentPath_, archiveName);
@@ -658,7 +658,7 @@ void ExplorerControl::onUnArchive(int row)
         return;
     }
     auto outDir = FileDir::Join(currentPath_, unarchiveName);
-    emit signalStartWaitForm();
+
     workerThread_->invoke([this, outDir, row]() {
         QUIT_ATOMIC(isTaskRunning_);
         FileMeta outDirMeta;
