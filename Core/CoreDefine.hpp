@@ -1,6 +1,6 @@
 #pragma once
 
-constexpr int defWaitCmdTimeout = 5000;
+constexpr int defWaitCmdTimeout = 30000;
 constexpr int defClearWorkerTimeout = 5000;
 constexpr int defSendTimeout = 5000;
 constexpr int defConsoleMessageStart = 0;
