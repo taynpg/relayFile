@@ -48,6 +48,8 @@ void ExplorerControl::initSignals()
     connect(ui->btnUp, &QPushButton::clicked, this, &ExplorerControl::onUp);
     connect(tableWidget_, &QTableWidget::itemDoubleClicked, this, &ExplorerControl::onDoubleClick);
     connect(tableWidget_, &QTableWidget::customContextMenuRequested, this, &ExplorerControl::onTableContextMenu);
+    connect(this, &ExplorerControl::signalShouldConfirm, this, &ExplorerControl::onConfirm);
+    connect(this, &ExplorerControl::signalStartWaitForm, this, &ExplorerControl::onShowWaitDialog);
 }
 
 std::shared_ptr<BaseAskDF> ExplorerControl::getAskDF()
@@ -184,6 +186,7 @@ void ExplorerControl::onUp()
 void ExplorerControl::initControl()
 {
     ui->cbPath->setEditable(true);
+    waitDialog_ = newWaitDialog();
 
     tableWidget_ = new ExpDropTable(this);
     headers_ << "" << "文件名称" << "最后修改时间" << "类型" << "大小";
@@ -405,11 +408,16 @@ void ExplorerControl::tellInfo(ExplorerSharedData& es)
 
 WaitDialog* ExplorerControl::newWaitDialog()
 {
-    WaitDialog* waitDialog = new WaitDialog(this);
-    connect(this, &ExplorerControl::signalWaitQuit, waitDialog, &WaitDialog::Quit);
-    connect(this, &ExplorerControl::signalWaitQuitMsg, waitDialog, &WaitDialog::QuitWithNotify);
-    waitDialog->setAttribute(Qt::WA_DeleteOnClose);
-    return waitDialog;
+    auto* dl = new WaitDialog(this);
+    connect(this, &ExplorerControl::signalWaitQuit, dl, &WaitDialog::Quit);
+    connect(this, &ExplorerControl::signalWaitQuitMsg, dl, &WaitDialog::QuitWithNotify);
+    // dl->setAttribute(Qt::WA_DeleteOnClose);
+    return dl;
+}
+
+void ExplorerControl::onShowWaitDialog()
+{
+    waitDialog_->exec();
 }
 
 void ExplorerControl::onRename(int row)
@@ -422,8 +430,8 @@ void ExplorerControl::onRename(int row)
     auto oldPath = FileDir::Join(currentPath_, oldName);
     auto newPath = FileDir::Join(currentPath_, newName);
 
-    WaitDialog* waitDialog = newWaitDialog();
-    workerThread_->invoke([this, oldPath, newPath, waitDialog, row, newName]() {
+    emit signalStartWaitForm();
+    workerThread_->invoke([this, oldPath, newPath, row, newName]() {
         auto ret = askDf_->AskRename(oldPath.toStdString(), newPath.toStdString());
         if (ret) {
             emit signalWaitQuit();
@@ -432,7 +440,6 @@ void ExplorerControl::onRename(int row)
             emit signalWaitQuitMsg("文件重命名失败");
         }
     });
-    waitDialog->exec();
 }
 
 void ExplorerControl::onSHA256(int row)
@@ -440,8 +447,8 @@ void ExplorerControl::onSHA256(int row)
     auto fileName = tableWidget_->item(row, 1)->text();
     auto filePath = FileDir::Join(currentPath_, fileName);
 
-    WaitDialog* waitDialog = newWaitDialog();
-    workerThread_->invoke([this, filePath, waitDialog, row]() {
+    emit signalStartWaitForm();
+    workerThread_->invoke([this, filePath, row]() {
         std::string out;
         auto ret = askDf_->AskSha256(filePath.toStdString(), out);
         auto qStr = QString::fromStdString(out);
@@ -452,7 +459,6 @@ void ExplorerControl::onSHA256(int row)
             emit signalWaitQuitMsg("文件SHA256计算失败");
         }
     });
-    waitDialog->exec();
 }
 
 void ExplorerControl::onDelete(const std::vector<int>& rows)
@@ -468,8 +474,8 @@ void ExplorerControl::onDelete(const std::vector<int>& rows)
     for (auto row : copyRows) {
         fileList.push_back(FileDir::Join(currentPath_, tableWidget_->item(row, 1)->text()).toStdString());
     }
-    WaitDialog* waitDialog = newWaitDialog();
-    workerThread_->invoke([this, fileList, waitDialog, copyRows]() {
+    emit signalStartWaitForm();
+    workerThread_->invoke([this, fileList, copyRows]() {
         std::vector<std::string> failedFiles;
         auto ret = askDf_->AskDelete(fileList, failedFiles);
         if (ret) {
@@ -500,7 +506,6 @@ void ExplorerControl::onDelete(const std::vector<int>& rows)
             emit signalWaitQuitMsg("文件删除失败");
         }
     });
-    waitDialog->exec();
 }
 
 void ExplorerControl::onNewDir(int row)
@@ -509,8 +514,8 @@ void ExplorerControl::onNewDir(int row)
     if (!MessageBoxHelper::getTextInput(this, "新建文件夹", "请输入新文件夹名", newName)) {
         return;
     }
-    WaitDialog* waitDialog = newWaitDialog();
-    workerThread_->invoke([this, newName, waitDialog, row]() {
+    emit signalStartWaitForm();
+    workerThread_->invoke([this, newName, row]() {
         std::string out;
         auto ret = askDf_->AskCreateDir(FileDir::Join(currentPath_, newName).toStdString());
         if (ret) {
@@ -526,15 +531,14 @@ void ExplorerControl::onNewDir(int row)
             emit signalWaitQuitMsg("新建文件夹" + newName + "失败，请检查文件夹名是否已存在或者是否有权限新建。");
         }
     });
-    waitDialog->exec();
 }
 
 void ExplorerControl::onShowFileMetaInfo(int row)
 {
     auto fileName = tableWidget_->item(row, 1)->text();
     auto filePath = FileDir::Join(currentPath_, fileName);
-    WaitDialog* waitDialog = newWaitDialog();
-    workerThread_->invoke([this, waitDialog, row, filePath]() {
+    emit signalStartWaitForm();
+    workerThread_->invoke([this, row, filePath]() {
         FileMeta meta;
         if (askDf_->AskFileMeta(filePath.toStdString(), meta)) {
             emit signalWaitQuit();
@@ -543,7 +547,6 @@ void ExplorerControl::onShowFileMetaInfo(int row)
             emit signalWaitQuitMsg("文件元数据获取失败");
         }
     });
-    waitDialog->exec();
 }
 
 void ExplorerControl::onShowFileMeta(const FileMeta& meta)
@@ -578,20 +581,27 @@ void ExplorerControl::onArchive(const std::vector<int>& rows)
         metaList.push_back(meta);
     }
 
-    auto qArchivePath = FileDir::Join(currentPath_, archiveName);
-    FileMeta checkMeta;
-    if (!askDf_->AskFileMeta(qArchivePath.toStdString(), checkMeta)) {
-        QMessageBox::warning(this, "警告", "检测压缩文件失败。");
-        return;
-    }
-    if (checkMeta.exist == 1) {
-        if (!MessageBoxHelper::questionYesNo(this, "警告", "压缩文件已存在，是否继续？")) {
+    workerThread_->invoke([this, metaList, archiveName, maxRow]() {
+        auto qArchivePath = FileDir::Join(currentPath_, archiveName);
+        FileMeta checkMeta;
+        if (!askDf_->AskFileMeta(qArchivePath.toStdString(), checkMeta)) {
+            QMessageBox::warning(this, "警告", "检测压缩文件失败。");
             return;
         }
-    }
 
-    WaitDialog* waitDialog = newWaitDialog();
-    workerThread_->invoke([this, waitDialog, metaList, archiveName, maxRow, qArchivePath]() {
+        if (checkMeta.exist == 1) {
+            emit signalShouldConfirm("警告", "压缩文件已存在，是否继续？");
+            isConfirmRun_ = true;
+            QMutexLocker locker(&askMut_);
+            while (isConfirmRun_) {
+                confirmCond_.wait(&askMut_);
+            }
+            if (!confirmResult_) {
+                return;
+            }
+        }
+
+        emit signalStartWaitForm();
         auto archivePath = qArchivePath.toStdString();
         qInfo() << "压缩文件:" << archivePath;
         if (askDf_->AskArchive(metaList, archivePath)) {
@@ -607,7 +617,6 @@ void ExplorerControl::onArchive(const std::vector<int>& rows)
             emit signalWaitQuitMsg("文件压缩失败");
         }
     });
-    waitDialog->exec();
 }
 
 void ExplorerControl::onUnArchive(int row)
@@ -626,42 +635,56 @@ void ExplorerControl::onUnArchive(int row)
     }
     auto outDir = FileDir::Join(currentPath_, unarchiveName);
 
-    FileMeta outDirMeta;
-    if (!askDf_->AskFileMeta(outDir.toStdString(), outDirMeta)) {
-        QMessageBox::warning(this, "警告", "检测解压目录失败。");
-        return;
-    }
-    bool isCreateDir = false;
-    if (outDirMeta.exist == 0) {
-        if (!askDf_->AskCreateDir(outDir.toStdString())) {
-            QMessageBox::warning(this, "警告", "创建解压目录失败。");
+    workerThread_->invoke([this, outDir, row]() {
+        FileMeta outDirMeta;
+        if (!askDf_->AskFileMeta(outDir.toStdString(), outDirMeta)) {
+            QMessageBox::warning(this, "警告", "检测解压目录失败。");
             return;
         }
-        isCreateDir = true;
-    } else {
-        if (!MessageBoxHelper::questionYesNo(this, "确认", "解压目录已存在，是否继续？")) {
-            return;
-        }
-    }
-
-    auto fileName = tableWidget_->item(row, 1)->text();
-    auto filePath = FileDir::Join(currentPath_, fileName);
-    WaitDialog* waitDialog = newWaitDialog();
-    workerThread_->invoke([this, waitDialog, row, filePath, outDir, isCreateDir]() {
-        if (askDf_->AskUnArchive(filePath.toStdString(), outDir.toStdString())) {
-            emit signalWaitQuit();
-            if (isCreateDir) {
-                FileMeta newDirMeta;
-                if (askDf_->AskFileMeta(outDir.toStdString(), newDirMeta)) {
-                    QMetaObject::invokeMethod(this, [this, row, newDirMeta]() {
-                        tableWidget_->insertRow(row + 1);
-                        setFileItem(newDirMeta, row + 1);
-                    });
-                }
+        bool isCreateDir = false;
+        if (outDirMeta.exist == 0) {
+            if (!askDf_->AskCreateDir(outDir.toStdString())) {
+                QMessageBox::warning(this, "警告", "创建解压目录失败。");
+                return;
             }
+            isCreateDir = true;
         } else {
-            emit signalWaitQuitMsg("文件解压失败");
+            // if (!MessageBoxHelper::questionYesNo(this, "确认", "解压目录已存在，是否继续？")) {
+            //     return;
+            // }
+            emit signalShouldConfirm("确认", "解压目录已存在，是否继续？");
+            isConfirmRun_ = true;
+            QMutexLocker locker(&askMut_);
+            while (isConfirmRun_) {
+                confirmCond_.wait(&askMut_);
+            }
+            if (!confirmResult_) {
+                return;
+            }
+            emit signalStartWaitForm();
+            auto fileName = tableWidget_->item(row, 1)->text();
+            auto filePath = FileDir::Join(currentPath_, fileName);
+            if (askDf_->AskUnArchive(filePath.toStdString(), outDir.toStdString())) {
+                emit signalWaitQuit();
+                if (isCreateDir) {
+                    FileMeta newDirMeta;
+                    if (askDf_->AskFileMeta(outDir.toStdString(), newDirMeta)) {
+                        QMetaObject::invokeMethod(this, [this, row, newDirMeta]() {
+                            tableWidget_->insertRow(row + 1);
+                            setFileItem(newDirMeta, row + 1);
+                        });
+                    }
+                }
+            } else {
+                emit signalWaitQuitMsg("文件解压失败");
+            }
         }
     });
-    waitDialog->exec();
+}
+
+void ExplorerControl::onConfirm(const QString& title, const QString& text)
+{
+    confirmResult_ = MessageBoxHelper::questionYesNo(this, title, text);
+    isConfirmRun_ = false;
+    confirmCond_.wakeOne();
 }

@@ -3,10 +3,13 @@
 
 #include <Protocol/FileMeta.h>
 #include <QDialog>
+#include <QMutex>
 #include <QTableWidget>
+#include <QWaitCondition>
 
 #include "Base/AskDirFile/BaseAskDF.h"
 #include "Base/GuiDefine.hpp"
+#include "Base/MessageBoxHelper.h"
 #include "Base/WorkerThread.hpp"
 #include "Form/WaitDialog.h"
 #include "OwnTableWidget.h"
@@ -30,8 +33,10 @@ public:
 signals:
     void transTaskRun(std::shared_ptr<RelayTaskData> data);
     void fileListChanged(bool isSuccess, const std::vector<FileMeta>& fileList);
+    void signalStartWaitForm();
     void signalWaitQuit();
     void signalWaitQuitMsg(const QString& msg);
+    void signalShouldConfirm(const QString& title, const QString& text);
 
 public slots:
     void onFileListChanged(bool isSuccess, const std::vector<FileMeta>& fileList);
@@ -71,6 +76,8 @@ private:
     void onShowFileMetaInfo(int row);
     void onArchive(const std::vector<int>& rows);
     void onUnArchive(int row);
+    void onShowWaitDialog();
+    void onConfirm(const QString& title, const QString& text);
 
 private:
     void uiPathSet(const QString& path);
@@ -92,6 +99,13 @@ private:
     std::vector<FileMeta> currentMetaList_;
     std::vector<FileMeta> fileMetaList_;
     std::function<void(ExplorerSharedData& es)> tellInfoCall_;
+
+private:
+    QMutex askMut_;
+    WaitDialog* waitDialog_;
+    QWaitCondition confirmCond_;
+    bool isConfirmRun_{false};
+    bool confirmResult_{false};
 };
 
 #endif   // EXPLORERCONTROL_H
