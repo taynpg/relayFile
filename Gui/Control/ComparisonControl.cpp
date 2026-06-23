@@ -211,9 +211,9 @@ void ComparisonControl::loadConfig(bool notice)
     }
     comparisonSql_->setTableName(config);
     curItems_ = comparisonSql_->getAll();
-    for (auto& item : curItems_) {
-        insertRow(item.id, item.name, item.type, item.mark, item.localDir, item.remoteDir);
-    }
+    // for (auto& item : curItems_) {
+    //     insertRow(item.id, item.name, item.type, item.mark, item.localDir, item.remoteDir);
+    // }
     onRefreshMark();
 }
 
@@ -411,7 +411,7 @@ void ComparisonControl::onRefreshMark()
     for (const QString& mark : marks) {
         QListWidgetItem* item = new QListWidgetItem(mark, ui->listWidget);
         item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
-        item->setCheckState(Qt::Checked);
+        item->setCheckState(Qt::Unchecked);
     }
     autoChange_ = false;
 }
