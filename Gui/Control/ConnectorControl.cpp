@@ -34,6 +34,7 @@ void ConnectorControl::initUI()
 
 void ConnectorControl::initLoadIp()
 {
+    ui->cbIp->clear();
     IpHistory history;
     if (baseConfig_->getIpHistory(history)) {
         auto curip = history.current;
