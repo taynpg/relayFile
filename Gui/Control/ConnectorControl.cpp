@@ -61,6 +61,7 @@ void ConnectorControl::initTable()
     tableWidget->setColumnWidth(0, 150);
     tableWidget->setColumnWidth(1, 150);
 
+    tableWidget->setSelectionBehavior(QAbstractItemView::SelectRows);
     tableWidget->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
     tableWidget->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Fixed);
     tableWidget->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
