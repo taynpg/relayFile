@@ -80,6 +80,7 @@ void ServerCore::onRead()
 
     auto* cli = socket->property("INFO").value<ClientInfo*>();
     auto data = socket->readAll();
+
     cli->buffer.Append(data.data(), data.size());
     while (true) {
         auto frame = Protocol::UnPack(cli->buffer);
@@ -96,29 +97,50 @@ void ServerCore::onRead()
 
 void ServerCore::onMonitorHeart()
 {
-    std::vector<std::pair<std::string, std::string>> removeIds;
+    struct RemoveInfo {
+        std::string id;
+        std::string transId;
+        QTcpSocket* socketTmp{};
+        QTcpSocket* socketControl{};
+        QTcpSocket* socketFile{};
+    };
+    std::vector<RemoveInfo> removeIds;
+    {
+        QWriteLocker locker(&tempLock_);
+        for (auto& cli : tempMap_) {
+            if (cli->connectTime < (QDateTime::currentMSecsSinceEpoch() / 1000 - 5)) {
+                qWarning() << "客户端" << cli->id << "超时未发送心跳包";
+                removeIds.push_back({cli->id.toStdString(), cli->transId.toStdString(), cli->socket, nullptr, nullptr});
+            }
+        }
+    }
     {
         QWriteLocker locker(&rwLock_);
-        // 超过5秒未发送心跳包的客户端
         for (auto& cli : clientMap_) {
             if (cli->connectTime < (QDateTime::currentMSecsSinceEpoch() / 1000 - 5)) {
                 qWarning() << "客户端" << cli->id << "超时未发送心跳包";
-                cli->socket->disconnectFromHost();
-                removeIds.push_back({cli->id.toStdString(), cli->transId.toStdString()});
+                removeIds.push_back({cli->id.toStdString(), cli->transId.toStdString(), cli->socket, nullptr});
             }
-        }
-        for (auto& id : removeIds) {
-            clientMap_.remove(id.first);
         }
     }
     {
         QWriteLocker locker(&transLock_);
-        for (auto& id : removeIds) {
-            if (transMap_.contains(id.second)) {
-                auto cli = transMap_[id.second];
-                cli->socket->disconnectFromHost();
-                transMap_.remove(id.second);
+        for (auto& info : removeIds) {
+            if (transMap_.contains(info.transId)) {
+                auto cli = transMap_[info.transId];
+                info.socketFile = cli->socket;
             }
+        }
+    }
+    for (auto& info : removeIds) {
+        if (info.socketTmp) {
+            info.socketTmp->disconnectFromHost();
+        }
+        if (info.socketControl) {
+            info.socketControl->disconnectFromHost();
+        }
+        if (info.socketFile) {
+            info.socketFile->disconnectFromHost();
         }
     }
 }
@@ -270,10 +292,6 @@ void ServerCore::onClearClient()
     if (!cli) {
         return;
     }
-    // qWarning() << "客户端连接关闭：" << cli->id;
-    socket->disconnectFromHost();
-    socket->close();
-
     bool isRemove = false;
     {
         QWriteLocker locker(&rwLock_);

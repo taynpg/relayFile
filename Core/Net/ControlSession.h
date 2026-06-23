@@ -84,6 +84,7 @@ public:
 
 public slots:
     void AskOwnID(const QString& name);
+    void onCancelWaitMsg();
 
 private:
     void initSignals();

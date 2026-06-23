@@ -64,6 +64,7 @@ void DoubleLinker::SetFileSession(std::shared_ptr<FileSession> session)
             [this](std::uint64_t transed, std::uint64_t total) { emit signalCurFileProgress(transed, total); });
     connect(fileSession_.get(), &FileSession::signalCurFile, this,
             [this](const QString& from, const QString& to) { emit signalCurFileItem(from, to); });
+    connect(this, &DoubleLinker::signalCancelWaitMsg, controlSession_.get(), &ControlSession::onCancelWaitMsg);
 }
 
 void DoubleLinker::onTellHeart()
@@ -183,6 +184,11 @@ void DoubleLinker::onDeliverControl(FramePtr frame)
     } else {
         onDeliverFile(frame);
     }
+}
+
+void DoubleLinker::onCancelWaitMsg()
+{
+    emit signalCancelWaitMsg();
 }
 
 void DoubleLinker::onDeliverFile(FramePtr frame)

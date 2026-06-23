@@ -41,6 +41,7 @@ signals:
     void signalSendControl(FramePtr frame);
     void signalSendFile(FramePtr frame);
     void signalAskFileID();
+    void signalCancelWaitMsg();
 
 signals:
     void signalCurFileItem(const QString& from, const QString& to);
@@ -77,6 +78,7 @@ public slots:
     void onDeliverControl(FramePtr frame);
     void onDeliverFile(FramePtr frame);
     void onTellHeart();
+    void onCancelWaitMsg();
 
 private:
     std::shared_ptr<ControlSession> controlSession_{};

@@ -28,6 +28,7 @@ RelayTask::~RelayTask()
 
 void RelayTask::Quit()
 {
+    emit signalCancelWaitMsg();
     workerThread_->stop();
     workerThread_->quit();
 }
@@ -109,6 +110,7 @@ void RelayTask::initSignals()
     connect(speedTimer_, &QTimer::timeout, this, &RelayTask::onRefreshSpeed);
     connect(this, &RelayTask::signalNeedConfirmFiles, this, &RelayTask::onConfirmFiles);
     connect(this, &RelayTask::signalTransing, this, &RelayTask::onTransing);
+    connect(this, &RelayTask::signalCancelWaitMsg, doubleLinker_.get(), &DoubleLinker::onCancelWaitMsg);
 }
 
 void RelayTask::onTransComplete()

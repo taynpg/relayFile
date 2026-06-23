@@ -109,6 +109,30 @@ template <typename Callback> bool ControlSession::SendCall(FramePtr frame, Callb
     return true;
 }
 
+void ControlSession::onCancelWaitMsg()
+{
+    QMutexLocker locker(&requestWaitLock_);
+    for (auto it = requestWaitFrame_.begin(); it != requestWaitFrame_.end(); it++) {
+        auto& waiter = *it.value();
+        switch (waiter.callType) {
+        case CallType::CT_Message: {
+            MessagePtr msg = nullptr;
+            waiter.call(msg);
+            break;
+        }
+        case CallType::CT_Frame: {
+            FramePtr f = nullptr;
+            waiter.call(f);
+            break;
+        }
+        default:
+            break;
+        }
+        timerPoolStd_->stop(waiter.timerId);
+        requestWaitFrame_.erase(it);
+    }
+}
+
 ClientInfo ControlSession::getOtherInfo()
 {
     return clientCore_->oInfo_;
