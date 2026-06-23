@@ -9,6 +9,9 @@
 
 DoubleLinker::DoubleLinker(QObject* parent) : QObject(parent)
 {
+    heartTimer_ = new QTimer(this);
+    connect(heartTimer_, &QTimer::timeout, this, &DoubleLinker::onTellHeart);
+    heartTimer_->start(3000);
 }
 
 DoubleLinker::~DoubleLinker()
@@ -61,6 +64,20 @@ void DoubleLinker::SetFileSession(std::shared_ptr<FileSession> session)
             [this](std::uint64_t transed, std::uint64_t total) { emit signalCurFileProgress(transed, total); });
     connect(fileSession_.get(), &FileSession::signalCurFile, this,
             [this](const QString& from, const QString& to) { emit signalCurFileItem(from, to); });
+}
+
+void DoubleLinker::onTellHeart()
+{
+    if (!controlSession_->getClientCore()->isConnected()) {
+        return;
+    }
+    Message heartMsg;
+    heartMsg.comStr = fileSession_->getClientCore()->getOwnClientInfo().clientId;
+    auto f = OneFrame::Create();
+    f->data = serializeStruct(heartMsg);
+    f->type = FrameType::kMsgType_Ask_Heart;
+
+    emit signalSendControl(f);
 }
 
 bool DoubleLinker::RunTask(const std::vector<std::shared_ptr<TransItem>>& tasks)
@@ -123,6 +140,7 @@ std::shared_ptr<FileSession> DoubleLinker::GetFileSession() const
 void DoubleLinker::Quit()
 {
     controlSession_->Quit();
+    heartTimer_->stop();
     fileSession_->Quit();
 }
 

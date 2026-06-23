@@ -7,11 +7,16 @@
 
 ServerCore::ServerCore(QObject* parent) : QTcpServer(parent)
 {
+    monitorTimer_ = new QTimer(this);
+    monitorTimer_->setInterval(5000);
+    connect(monitorTimer_, &QTimer::timeout, this, &ServerCore::onMonitorHeart);
+    monitorTimer_->start();
     connect(this, &QTcpServer::newConnection, this, &ServerCore::onNewConnection);
 }
 
 ServerCore::~ServerCore()
 {
+    monitorTimer_->stop();
 }
 
 bool ServerCore::startListen(quint16 port)
@@ -81,8 +86,52 @@ void ServerCore::onRead()
         if (frame == nullptr) {
             break;
         }
+        if (frame->type == FrameType::kMsgType_Ask_Heart) {
+            onUseHeart(cli, frame);
+            continue;
+        }
         useFrame(frame, socket, cli);
     }
+}
+
+void ServerCore::onMonitorHeart()
+{
+    std::vector<std::pair<std::string, std::string>> removeIds;
+    {
+        QWriteLocker locker(&rwLock_);
+        // 超过5秒未发送心跳包的客户端
+        for (auto& cli : clientMap_) {
+            if (cli->connectTime < (QDateTime::currentMSecsSinceEpoch() / 1000 - 5)) {
+                qWarning() << "客户端" << cli->id << "超时未发送心跳包";
+                cli->socket->disconnectFromHost();
+                removeIds.push_back({cli->id.toStdString(), cli->transId.toStdString()});
+            }
+        }
+        for (auto& id : removeIds) {
+            clientMap_.remove(id.first);
+        }
+    }
+    {
+        QWriteLocker locker(&transLock_);
+        for (auto& id : removeIds) {
+            if (transMap_.contains(id.second)) {
+                auto cli = transMap_[id.second];
+                cli->socket->disconnectFromHost();
+                transMap_.remove(id.second);
+            }
+        }
+    }
+}
+
+void ServerCore::onUseHeart(ClientInfo* cli, FramePtr frame)
+{
+    if (!cli) {
+        return;
+    }
+    Message heartMsg;
+    deserializeStruct(frame->data, heartMsg);
+    cli->transId = QString::fromStdString(heartMsg.comStr);
+    cli->connectTime = QDateTime::currentMSecsSinceEpoch() / 1000;
 }
 
 void ServerCore::useFrame(FramePtr frame, QTcpSocket* socket, ClientInfo* cli)

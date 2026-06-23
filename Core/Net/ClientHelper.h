@@ -76,6 +76,7 @@ public slots:
     void onSendFile(FramePtr frame);
     void onDeliverControl(FramePtr frame);
     void onDeliverFile(FramePtr frame);
+    void onTellHeart();
 
 private:
     std::shared_ptr<ControlSession> controlSession_{};
@@ -90,6 +91,7 @@ private:
     bool isRunTaskItem_{};
     bool curTaskIsSend_{};
     std::string curTaskUUID_{};
+    QTimer* heartTimer_{};
     OneFileTrans::TransStatus trState_{};
 };
 

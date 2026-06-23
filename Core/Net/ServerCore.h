@@ -30,12 +30,15 @@ private:
         QString uuid;
         qint64 connectTime;
         miniBuffer buffer;
+        QString transId;
     };
 
 private slots:
     void onRead();
     void onNewConnection();
     void onClearClient();
+    void onUseHeart(ClientInfo* cli, FramePtr frame);
+    void onMonitorHeart();
 
 private:
     void GetClientList(Message& msg);

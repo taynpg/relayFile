@@ -14,9 +14,8 @@ int main(int argc, char* argv[])
     OwnLogger ownLogger;
     qInstallMessageHandler(ownLogger.ConsoleMsgHander);
 
-    auto server = std::make_shared<ServerCore>();
-
     QCoreApplication app(argc, argv);
+    auto server = std::make_shared<ServerCore>();
 
     if (!server->startListen(9008)) {
         qCritical() << "relayFileServer启动失败，端口:" << 9008;
