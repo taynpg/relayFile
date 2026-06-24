@@ -8,7 +8,7 @@
 #include <QWaitCondition>
 
 #include "Base/AskDirFile/BaseAskDF.h"
-#include "Base/GuiDefine.hpp"
+#include "Base/GuiDefine.h"
 #include "Base/MessageBoxHelper.h"
 #include "Base/WorkerThread.hpp"
 #include "Form/WaitDialog.h"

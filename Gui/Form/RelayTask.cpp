@@ -5,7 +5,7 @@
 #include <Utils/Common.h>
 
 #include "Base/BaseHelper.h"
-#include "Base/GuiDefine.hpp"
+#include "Base/GuiDefine.h"
 #include "Base/MessageBoxHelper.h"
 #include "Protocol/Serialize.hpp"
 #include "ui_RelayTask.h"
@@ -257,7 +257,16 @@ void RelayTask::onBaseCheck()
         std::shared_ptr<BaseAskDF> askDfOther = data_->isUpload ? askRemoteDf_ : askLocalDf_;
         auto name = data_->isUpload ? GUI_DIRECTION_LOCAL : GUI_DIRECTION_REMOTE;
 
+        QString qLocalRoot;
+        QString qRemoteRoot;
+
         for (const auto& item : data_->fileList) {
+            if (qLocalRoot.isEmpty()) {
+                qLocalRoot = item.localRoot;
+            }
+            if (qRemoteRoot.isEmpty()) {
+                qRemoteRoot = item.remoteRoot;
+            }
             auto path = FileDir::Join(data_->isUpload ? item.localRoot : item.remoteRoot, item.name);
             if (item.type == RFileType::mTypeDir) {
                 std::vector<FileMeta> fileList;
@@ -307,8 +316,8 @@ void RelayTask::onBaseCheck()
             auto trItem = std::make_shared<TransItem>();
             trItem->isSend = data_->isUpload;
             trItem->from = item;
-            GenOtherMetaPath(item, trItem->to, data_->isUpload, QString::fromStdString(item.localRoot),
-                             QString::fromStdString(item.remoteRoot));
+            GenOtherMetaPath(item, trItem->to, data_->isUpload, qLocalRoot,
+                             qRemoteRoot);
             transItems_.push_back(trItem);
         }
 

@@ -18,6 +18,10 @@
 #define GUI_DIRECTION_REMOTE "远端"
 
 struct FileItemData {
+    FileItemData() = default;
+    FileItemData(const FileItemData& o);
+    FileItemData& operator=(const FileItemData& o);
+    FileItemData(FileItemData&& o) noexcept;
     QString localRoot;
     QString remoteRoot;
     QString name;

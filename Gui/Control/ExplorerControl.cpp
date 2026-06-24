@@ -10,7 +10,7 @@
 #include <QUrl>
 #include <Utils/miniUtil.h>
 
-#include "Base/GuiDefine.hpp"
+#include "Base/GuiDefine.h"
 #include "Base/MessageBoxHelper.h"
 #include "Form/FileMetaInfo.h"
 #include "ui_ExplorerControl.h"

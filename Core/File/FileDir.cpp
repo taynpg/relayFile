@@ -86,7 +86,7 @@ bool FileDir::GetFileList(const QString& path, QVector<RFileMeta>& fileList, boo
         for (const auto& entry : entries) {
 
             RFileMeta info;
-            info.dir = entry.absoluteFilePath();
+            info.dir = entry.isDir() ? entry.absoluteFilePath() : entry.path();
             info.fileName = entry.fileName();
             info.permission = entry.permissions();
 

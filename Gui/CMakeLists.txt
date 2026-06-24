@@ -39,6 +39,7 @@ set(BASE_SOURCES
     Base/AskDirFile/LocalAskDF.h Base/AskDirFile/LocalAskDF.cpp
     Base/AskDirFile/RemoteAskDF.h Base/AskDirFile/RemoteAskDF.cpp
     Sqlite/ComparisonSql.h Sqlite/ComparisonSql.cpp
+    Base/GuiDefine.h Base/GuiDefine.cpp
 )
 
 set(RESOURCE_SOURCES

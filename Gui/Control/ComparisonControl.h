@@ -4,7 +4,7 @@
 #include <QDialog>
 #include <QListWidgetItem>
 
-#include "Base/GuiDefine.hpp"
+#include "Base/GuiDefine.h"
 #include "OwnTableWidget.h"
 #include "Sqlite/ComparisonSql.h"
 
