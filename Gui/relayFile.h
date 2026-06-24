@@ -25,6 +25,9 @@ public:
     relayFile(QWidget* parent = nullptr);
     ~relayFile();
 
+signals:
+    void signalCancelWaitMsg();
+
 public:
     void Quit();
 

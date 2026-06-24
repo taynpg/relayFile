@@ -29,6 +29,7 @@ relayFile::relayFile(QWidget* parent) : QWidget(parent), ui(new Ui::relayFile)
     doubleLinker_->SetFileSession(fileSession);
     GlobalData::getInstance()->setDoubleLinker(doubleLinker_);
     GlobalData::getInstance()->setBaseConfig(baseConfig_);
+    connect(this, &relayFile::signalCancelWaitMsg, doubleLinker_.get(), &DoubleLinker::onCancelWaitMsg);
 
     Logger logger;
     logger.setInfo("log/relayFileGUI.log", "relayFileGUI");
@@ -63,6 +64,7 @@ relayFile::~relayFile()
 
 void relayFile::Quit()
 {
+    emit signalCancelWaitMsg();
     doubleLinker_->Quit();
     localExplorerControl_->Quit();
     remoteExplorerControl_->Quit();
