@@ -1,5 +1,7 @@
 #include "OneFileTrans.h"
 
+#include <File/FileDir.h>
+
 #include "Protocol/Serialize.hpp"
 
 OneFileTrans::OneFileTrans(QObject* parent) : QObject(parent)
@@ -50,14 +52,14 @@ bool OneFileTrans::initTransfer(TransMode mode, const FileMeta& fileMeta, const 
 
     if (tMode_ == TransMode::Send) {
         sendFile_.setFileName(filePath_);
-        if (!sendFile_.open(QIODevice::ReadOnly)) {
+        if (!FileDir::EnsureDir(FileDir::GenDir(filePath_)) || !sendFile_.open(QIODevice::ReadOnly)) {
             qWarning() << "打开发送文件失败:" << filePath_ << sendFile_.errorString();
             return false;
         }
         state_ = TransStatus::Sending;
     } else {
         recvFile_.setFileName(filePath_);
-        if (!recvFile_.open(QIODevice::WriteOnly)) {
+        if (!FileDir::EnsureDir(FileDir::GenDir(filePath_)) || !recvFile_.open(QIODevice::WriteOnly)) {
             qWarning() << "打开接收文件失败:" << filePath_ << recvFile_.errorString();
             return false;
         }

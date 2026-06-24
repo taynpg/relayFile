@@ -221,6 +221,15 @@ bool FileDir::CreateDir(const QString& path)
     return dir.mkpath(path);
 }
 
+bool FileDir::EnsureDir(const QString& path)
+{
+    QDir dir;
+    if (dir.exists(path)) {
+        return true;
+    }
+    return dir.mkpath(path);
+}
+
 bool FileDir::Rename(const QString& oldName, const QString& newName)
 {
     QFile file(oldName);
