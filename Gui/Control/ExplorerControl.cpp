@@ -290,39 +290,44 @@ QString ExplorerControl::typeStr(FileType type)
 void ExplorerControl::onTableContextMenu(const QPoint& pos)
 {
     auto datas = tableWidget_->selectedItems();
-    if (datas.isEmpty()) {
-        return;
-    }
 
     QMenu menu(this);
-    QAction* transAction = menu.addAction(style()->standardIcon(QStyle::SP_FileDialogStart), "传输");
-
     QAction* explorerAction{};
     QAction* copyPathAction{};
     QAction* renameAction{};
     QAction* sha256Action{};
     QAction* extractAction{};
     QAction* detailAction{};
+    QAction* transAction{};
+    QAction* deleteAction{};
+    QAction* compressAction{};
+    QAction* mkdirDirAction{};
 
-    // 超过1组选中，不显示单项菜单。
-    if (datas.size() <= headers_.size()) {
-        if (auto type = tableWidget_->item(datas[0]->row(), 3);
-            type->text() == GUI_FILE_TYPE_DIR && askType_ == AskType::ASK_TYPE_LOCAL) {
-            explorerAction = menu.addAction(style()->standardIcon(QStyle::SP_DesktopIcon), "在资源管理器中打开");
-            menu.addAction(explorerAction);
-        }
-        if (auto type = tableWidget_->item(datas[0]->row(), 3); type->text() == GUI_FILE_TYPE_FILE) {
-            sha256Action = menu.addAction("SHA256");
-            extractAction = menu.addAction("解压缩");
-        }
-        copyPathAction = menu.addAction("复制全路径");
-        renameAction = menu.addAction("重命名");
-        detailAction = menu.addAction("详细信息");
+    if (askType_ == AskType::ASK_TYPE_LOCAL && datas.size() <= headers_.size()) {
+        explorerAction = new QAction(style()->standardIcon(QStyle::SP_DirIcon), "在资源管理器中打开");
     }
 
-    QAction* deleteAction = menu.addAction(style()->standardIcon(QStyle::SP_DesktopIcon), "删除");
-    QAction* compressAction = menu.addAction("压缩");
-    QAction* mkdirDirAction = menu.addAction("新建文件夹");
+    if (!datas.isEmpty()) {
+        transAction = menu.addAction(style()->standardIcon(QStyle::SP_FileDialogStart), "传输");
+
+        // 超过1组选中，不显示单项菜单。
+        if (datas.size() <= headers_.size()) {
+            if (auto type = tableWidget_->item(datas[0]->row(), 3); type->text() == GUI_FILE_TYPE_FILE) {
+                sha256Action = menu.addAction("SHA256");
+                extractAction = menu.addAction("解压缩");
+            }
+            copyPathAction = menu.addAction(style()->standardIcon(QStyle::SP_CommandLink), "复制全路径");
+            renameAction = menu.addAction(style()->standardIcon(QStyle::SP_FileLinkIcon), "重命名");
+            detailAction = menu.addAction("详细信息");
+        }
+
+        deleteAction = menu.addAction(style()->standardIcon(QStyle::SP_TrashIcon), "删除");
+        compressAction = menu.addAction("压缩");
+        mkdirDirAction = menu.addAction(style()->standardIcon(QStyle::SP_DirOpenIcon), "新建文件夹");
+        menu.addAction(explorerAction);
+    } else {
+        menu.addAction(explorerAction);
+    }
 
     auto* selectAction = menu.exec(tableWidget_->viewport()->mapToGlobal(pos));
     if (selectAction == nullptr) {
@@ -334,7 +339,15 @@ void ExplorerControl::onTableContextMenu(const QPoint& pos)
         return;
     }
     if (selectAction == explorerAction) {
-        QDesktopServices::openUrl(QUrl::fromLocalFile(currentPath_));
+        if (datas.size() < 1) {
+            QDesktopServices::openUrl(QUrl::fromLocalFile(currentPath_));
+            return;
+        } else if (auto type = tableWidget_->item(datas[0]->row(), 3); type->text() == GUI_FILE_TYPE_FILE) {
+            QDesktopServices::openUrl(QUrl::fromLocalFile(currentPath_));
+        } else if (auto type = tableWidget_->item(datas[0]->row(), 3); type->text() == GUI_FILE_TYPE_DIR) {
+            auto path = FileDir::Join(currentPath_, datas[1]->text());
+            QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+        }
         return;
     }
     if (selectAction == copyPathAction) {

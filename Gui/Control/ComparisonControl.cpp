@@ -293,14 +293,14 @@ void ComparisonControl::onTableContextMenu(const QPoint& pos)
     QAction* openDirAction{};
     QAction* uploadAction = menu.addAction(style()->standardIcon(QStyle::SP_ArrowUp), "上传");
     QAction* newLineAction = menu.addAction("新行");
-    QAction* deleteAction = menu.addAction("删除");
+    QAction* deleteAction = menu.addAction(style()->standardIcon(QStyle::SP_TrashIcon), "删除");
     QAction* downloadAction = menu.addAction(style()->standardIcon(QStyle::SP_ArrowDown), "下载");
 
     // 有的菜单项单行选中时才显示
     if (datas.size() / headers_.size() == 1) {
-        accessDirAction = menu.addAction(style()->standardIcon(QStyle::SP_DesktopIcon), "访问本地目录");
-        accessRemoteDirAction = menu.addAction(style()->standardIcon(QStyle::SP_DesktopIcon), "访问远程目录");
-        openDirAction = menu.addAction("打开本地所在目录");
+        accessDirAction = menu.addAction(style()->standardIcon(QStyle::SP_DirLinkIcon), "访问本地目录");
+        accessRemoteDirAction = menu.addAction(style()->standardIcon(QStyle::SP_DriveNetIcon), "访问远程目录");
+        openDirAction = menu.addAction(style()->standardIcon(QStyle::SP_DirIcon), "打开本地所在目录");
     }
 
     auto* selectAction = menu.exec(tableWidget_->viewport()->mapToGlobal(pos));
