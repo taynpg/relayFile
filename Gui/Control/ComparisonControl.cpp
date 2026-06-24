@@ -98,6 +98,7 @@ void ComparisonControl::initSignals()
     connect(tableWidget_, &QTableWidget::customContextMenuRequested, this, &ComparisonControl::onTableContextMenu);
     connect(ui->btnNew, &QPushButton::clicked, this, &ComparisonControl::onNewConfig);
     connect(ui->btnCopy, &QPushButton::clicked, this, &ComparisonControl::onCopyConfig);
+    connect(ui->listWidget, &QListWidget::itemDoubleClicked, this, &ComparisonControl::onListDoubleClick);
 }
 
 void ComparisonControl::initTableWidget()
@@ -215,6 +216,18 @@ void ComparisonControl::loadConfig(bool notice)
     //     insertRow(item.id, item.name, item.type, item.mark, item.localDir, item.remoteDir);
     // }
     onRefreshMark();
+}
+
+void ComparisonControl::onListDoubleClick(QListWidgetItem* item)
+{
+    if (item == nullptr) {
+        return;
+    }
+    if (item->checkState() == Qt::Checked) {
+        item->setCheckState(Qt::Unchecked);
+    } else {
+        item->setCheckState(Qt::Checked);
+    }
 }
 
 void ComparisonControl::insertRow(int id, const QString& name, const QString& type, const QString& mark, const QString& localDir,

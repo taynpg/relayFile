@@ -44,6 +44,7 @@ private:
     void onRefreshMark();
     void onListContextMenu(const QPoint& pos);
     void onListItemChanged();
+    void onListDoubleClick(QListWidgetItem* item);
     void onCopyConfig();
 
 private:
