@@ -102,6 +102,7 @@ void relayFile::initControls()
             [this]() { remoteExplorerControl_->onHome(true); });
     localExplorerControl_->setTellInfoCall([this](ExplorerSharedData& es) { remoteExplorerControl_->tellInfo(es); });
     remoteExplorerControl_->setTellInfoCall([this](ExplorerSharedData& es) { localExplorerControl_->tellInfo(es); });
+    connect(connectorControl_, &ConnectorControl::signalNoticeClear, this, [this]() { remoteExplorerControl_->onClear(); });
 
     connect(localExplorerControl_, &ExplorerControl::transTaskRun, this,
             [this](std::shared_ptr<RelayTaskData> data) { onTransTaskRun(data); });

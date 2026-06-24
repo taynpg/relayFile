@@ -318,4 +318,17 @@ void ServerCore::onClearClient()
         }
     }
     socket->deleteLater();
+
+    // 通知在线客户端，有变动。
+    Message tellMsg;
+    GetClientList(tellMsg);
+
+    auto f = OneFrame::Create();
+    f->type = FrameType::kMsgType_Notify_ClientList;
+    f->data = serializeStruct(tellMsg);
+
+    QWriteLocker locker(&rwLock_);
+    for (auto& cli : clientMap_) {
+        sendData(f, cli->socket);
+    }
 }

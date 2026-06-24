@@ -250,6 +250,10 @@ void ControlSession::handleFrame(FramePtr frame)
         break;
     }
     default: {
+        if (pubCall_.contains(frame->type)) {
+            pubCall_[frame->type](frame);
+            break;
+        }
         QMutexLocker locker(&requestWaitLock_);
         if (auto it = requestWaitFrame_.find(frame->sessionId); it != requestWaitFrame_.end()) {
             auto& callType = it.value()->callType;
@@ -273,6 +277,11 @@ void ControlSession::handleFrame(FramePtr frame)
         break;
     }
     }
+}
+
+void ControlSession::RegisterPubCall(FrameType type, std::function<void(FramePtr frame)> callback)
+{
+    pubCall_[type] = std::move(callback);
 }
 
 bool ControlSession::SendWithCall(const Message& msg, FrameType type, std::function<void(FramePtr)> callback)

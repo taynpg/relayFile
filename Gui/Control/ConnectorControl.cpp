@@ -88,6 +88,35 @@ void ConnectorControl::initSignals()
     connect(this, &ConnectorControl::signalAskID, controlSession.get(),
             [this](const QString& name) { doubleLinker_->GetControlSession()->AskOwnID(name); });
     connect(ui->tableClients, &QTableWidget::customContextMenuRequested, this, &ConnectorControl::onTableContextMenu);
+    connect(this, &ConnectorControl::signalCancelWaitMsg, doubleLinker_.get(), &DoubleLinker::onCancelWaitMsg);
+
+    doubleLinker_->GetControlSession()->RegisterPubCall(FrameType::kMsgType_Notify_ClientList, [this](FramePtr frame) {
+        if (!frame) {
+            return;
+        }
+        MessagePtr answerMsg = std::make_shared<Message>();
+        deserializeStruct(frame->data, *answerMsg);
+
+        if (!doubleLinker_->GetControlSession()->getOtherInfo().clientId.empty()) {
+            bool have = false;
+            auto oId = doubleLinker_->GetControlSession()->getOtherInfo().clientId;
+            for (auto& client : answerMsg->clientList) {
+                if (client.clientId == oId) {
+                    have = true;
+                    break;
+                }
+            }
+            if (!have) {
+                emit signalCancelWaitMsg();
+                emit signalNoticeClear();
+                ClientInfo o;
+                doubleLinker_->GetControlSession()->getClientCore()->setOtherClientInfo(o);
+                ui->edCurrentClient->setText("");
+            }
+        }
+
+        QMetaObject::invokeMethod(this, [this, answerMsg]() { updateClientList(answerMsg); });
+    });
 }
 
 void ConnectorControl::onRefresh()
@@ -197,6 +226,8 @@ void ConnectorControl::onErrorOccurred()
 
     ui->edCurrentClient->setText("");
     ui->lineEdit->setText("");
+
+    emit signalNoticeClear();
 }
 
 void ConnectorControl::onOwnInfo(const ClientInfo& info)

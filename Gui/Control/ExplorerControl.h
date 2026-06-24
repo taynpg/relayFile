@@ -41,6 +41,7 @@ signals:
 
 public slots:
     void onFileListChanged(bool isSuccess, const std::vector<FileMeta>& fileList);
+    void onClear();
 
 public:
     void Quit();

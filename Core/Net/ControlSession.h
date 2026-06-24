@@ -81,6 +81,7 @@ public:
     ClientInfo getOtherInfo();
     ClientInfo getOwnInfo();
     ClientCore* getClientCore();
+    void RegisterPubCall(FrameType type, std::function<void(FramePtr frame)> callback);
 
 public slots:
     void AskOwnID(const QString& name);
@@ -102,4 +103,5 @@ private:
     std::shared_ptr<TimerPoolStd> timerPoolStd_{};
     QMap<uint64_t, std::shared_ptr<WaiteFrame>> requestWaitFrame_;
     QMap<uint64_t, std::shared_ptr<TaskWorker>> responseWaitWorker_;
+    QMap<FrameType, std::function<void(FramePtr frame)>> pubCall_;
 };

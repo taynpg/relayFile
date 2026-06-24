@@ -287,6 +287,16 @@ QString ExplorerControl::typeStr(FileType type)
     }
 }
 
+void ExplorerControl::onClear()
+{
+    tableWidget_->clearContents();
+    tableWidget_->setRowCount(0);
+    fileMetaList_.clear();
+    currentMetaList_.clear();
+    currentPath_ = "";
+    ui->cbPath->clear();
+}
+
 void ExplorerControl::onTableContextMenu(const QPoint& pos)
 {
     auto datas = tableWidget_->selectedItems();

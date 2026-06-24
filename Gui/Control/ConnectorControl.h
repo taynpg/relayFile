@@ -21,6 +21,8 @@ signals:
     void signalConnectDone();
     void signalAskID(const QString& name);
     void signalConfirmOther();
+    void signalCancelWaitMsg();
+    void signalNoticeClear();
 
 public:
     explicit ConnectorControl(QWidget* parent = nullptr);
