@@ -30,6 +30,8 @@ void ConnectorControl::initUI()
 {
     ui->lineEdit->setEnabled(false);
     ui->edCurrentClient->setEnabled(false);
+    ui->btnDisconnect->setEnabled(false);
+    ui->btnRefresh->setEnabled(false);
 }
 
 void ConnectorControl::initLoadIp()
