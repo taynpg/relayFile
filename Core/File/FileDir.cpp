@@ -160,7 +160,7 @@ QString FileDir::GenFileName(const QString& fullPath)
 bool FileDir::GetFileNameNoExt(const QString& path, QString& fileName)
 {
     QFileInfo fileInfo(path);
-    fileName = fileInfo.baseName();
+    fileName = fileInfo.completeBaseName();
     return true;
 }
 

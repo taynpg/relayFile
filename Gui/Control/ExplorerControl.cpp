@@ -714,23 +714,23 @@ void ExplorerControl::onUnArchive(int row)
             if (!confirmResult_) {
                 return;
             }
-            auto fileName = tableWidget_->item(row, 1)->text();
-            auto filePath = FileDir::Join(currentPath_, fileName);
-            if (askDf_->AskUnArchive(filePath.toStdString(), outDir.toStdString())) {
-                if (isCreateDir) {
-                    FileMeta newDirMeta;
-                    if (askDf_->AskFileMeta(outDir.toStdString(), newDirMeta)) {
-                        exitActions.emplace_back([this, row, newDirMeta]() {
-                            QMetaObject::invokeMethod(this, [this, row, newDirMeta]() {
-                                tableWidget_->insertRow(row + 1);
-                                setFileItem(newDirMeta, row + 1);
-                            });
+        }
+        auto fileName = tableWidget_->item(row, 1)->text();
+        auto filePath = FileDir::Join(currentPath_, fileName);
+        if (askDf_->AskUnArchive(filePath.toStdString(), outDir.toStdString())) {
+            if (isCreateDir) {
+                FileMeta newDirMeta;
+                if (askDf_->AskFileMeta(outDir.toStdString(), newDirMeta)) {
+                    exitActions.emplace_back([this, row, newDirMeta]() {
+                        QMetaObject::invokeMethod(this, [this, row, newDirMeta]() {
+                            tableWidget_->insertRow(row + 1);
+                            setFileItem(newDirMeta, row + 1);
                         });
-                    }
+                    });
                 }
-            } else {
-                exitActions.emplace_back([this]() { emit signalShowNotice("文件解压失败"); });
             }
+        } else {
+            exitActions.emplace_back([this]() { emit signalShowNotice("文件解压失败"); });
         }
     });
 }
