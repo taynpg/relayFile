@@ -193,50 +193,53 @@ bool ZipHandle::UnArchive(const QString& archivePath, const QString& extractPath
         return false;
     }
 
-    ensureDir(extractPath);
+    auto cleanup = qScopeGuard([&] { mz_zip_reader_end(&zip); });
+
+    // 确保解压根目录存在
+    if (!ensureDir(extractPath)) {
+        qWarning() << "Failed to create extract path:" << extractPath;
+        return false;
+    }
 
     const mz_uint fileCount = mz_zip_reader_get_num_files(&zip);
 
     for (mz_uint i = 0; i < fileCount; ++i) {
-        mz_zip_archive_file_stat st;
-        if (!mz_zip_reader_file_stat(&zip, i, &st)) {
+        // 关键：立刻拿到文件名，避免 m_filename 被覆盖
+        char rawName[MZ_ZIP_MAX_ARCHIVE_FILENAME_SIZE];
+        if (!mz_zip_reader_get_filename(&zip, i, rawName, sizeof(rawName))) {
             continue;
         }
 
-        QString relPath = QString::fromUtf8(st.m_filename);
-        relPath.replace("\\", "/");
-        QString fullPath = QDir::cleanPath(extractPath + QLatin1Char('/') + relPath);
+        QString relPath = QString::fromUtf8(rawName).replace("\\", "/");
+        if (relPath.isEmpty()) {
+            continue;
+        }
+
+        const QString fullPath = QDir::cleanPath(extractPath + QLatin1Char('/') + relPath);
 
         if (!fullPath.startsWith(QDir::cleanPath(extractPath))) {
             qWarning() << "Zip slip detected:" << relPath;
-            mz_zip_reader_end(&zip);
             return false;
         }
 
         if (relPath.endsWith('/')) {
-            ensureDir(fullPath);
+            if (!ensureDir(fullPath)) {
+                qWarning() << "Failed to create directory:" << fullPath;
+                return false;
+            }
             continue;
         }
 
-        ensureDir(QFileInfo(fullPath).absolutePath());
-        size_t size = 0;
-        void* data = mz_zip_reader_extract_to_heap(&zip, i, &size, 0);
-        if (!data) {
-            qWarning() << "Failed to extract:" << relPath;
-            mz_zip_reader_end(&zip);
+        if (!ensureDir(QFileInfo(fullPath).absolutePath())) {
+            qWarning() << "Failed to create parent dir for:" << fullPath;
             return false;
         }
 
-        QFile out(fullPath);
-        if (!out.open(QIODevice::WriteOnly)) {
-            qWarning() << "Failed to create file:" << fullPath;
-            free(data);
-            mz_zip_reader_end(&zip);
+        if (!mz_zip_reader_extract_to_file(&zip, i, fullPath.toUtf8().constData(), 0)) {
+            qWarning() << "Failed to extract file:" << fullPath;
             return false;
         }
-        out.write(static_cast<const char*>(data), static_cast<qint64>(size));
-        free(data);
     }
-    mz_zip_reader_end(&zip);
+
     return true;
 }
