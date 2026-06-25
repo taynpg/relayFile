@@ -26,7 +26,7 @@ find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Network)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Network)
 
 add_executable(relayFileServer Server.cpp ../Gui/Resource/relayFileS.rc)
-add_executable(relayFileClient Client.cpp ../Gui/Resource/relayFileC.rc)
+add_executable(relayFileClient Client.cpp Client.h ClientMain.cpp ../Gui/Resource/relayFileC.rc)
 
 target_include_directories(relayFileServer PUBLIC ${CMAKE_CURRENT_LIST_DIR})
 target_link_libraries(relayFileServer PUBLIC relayFileCore Qt${QT_VERSION_MAJOR}::Core Qt${QT_VERSION_MAJOR}::Network)

@@ -21,6 +21,8 @@ relayFile::relayFile(QWidget* parent) : QWidget(parent), ui(new Ui::relayFile)
     auto controlSession = std::make_shared<ControlSession>();
     auto fileSession = std::make_shared<FileSession>();
     baseConfig_ = std::make_shared<BaseConfig>();
+
+    GlobalData::getInstance()->setGlobalConfigDir(QString::fromStdString(baseConfig_->configDir_));
     GlobalData::getInstance()->setControlSession(controlSession);
     GlobalData::getInstance()->setFileSession(fileSession);
 

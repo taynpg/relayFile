@@ -5,40 +5,8 @@
 #include <Net/FileSession.h>
 #include <QString>
 #include <Utils/Common.h>
-#include <nlohmann/json.hpp>
 
 #include "AskDirFile/BaseAskDF.h"
-
-struct IpHistory {
-    std::vector<std::string> history;
-    std::string current;
-};
-
-class BaseConfig
-{
-public:
-    BaseConfig();
-    ~BaseConfig() = default;
-
-public:
-    QString getCurrentName();
-    QString generateRandomName();
-    bool getIpHistory(IpHistory& history);
-    bool pushOneIp(const std::string& ip);
-    std::pair<int, int> getWidthHeight();
-    bool saveWidthHeight(int width, int height);
-
-private:
-    bool saveJson(const nlohmann::json& j);
-    nlohmann::json loadJson();
-
-private:
-    void genPath();
-
-public:
-    QMutex mutex_;
-    QString baseConfigPath_;
-};
 
 class GlobalData
 {
