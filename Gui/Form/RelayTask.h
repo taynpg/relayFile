@@ -33,6 +33,7 @@ signals:
     void signalTransFail();
     void signalNeedConfirmFiles();
     void signalCancelWaitMsg();
+    void signalAutoStart();
 
 public:
     void Quit();

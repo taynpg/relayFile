@@ -102,6 +102,7 @@ void RelayTask::initSignals()
     connect(this, &RelayTask::signalCheckComplete, this, &RelayTask::onCheckComplete);
     connect(ui->btnBasicCheck, &QPushButton::clicked, this, &RelayTask::onBaseCheck);
     connect(ui->btnStart, &QPushButton::clicked, this, &RelayTask::onStartRun);
+    connect(this, &RelayTask::signalAutoStart, this, &RelayTask::onStartRun);
     connect(this, &RelayTask::signalUpdateTable, this, &RelayTask::updateTable);
     connect(this, &RelayTask::signalTransComplete, this, &RelayTask::onTransComplete);
     connect(this, &RelayTask::signalTransFail, this, &RelayTask::onTransFail);
@@ -233,6 +234,7 @@ void RelayTask::showEvent(QShowEvent* event)
         setWindowTitle("下载任务");
     }
     QDialog::showEvent(event);
+    onBaseCheck();
 }
 
 void RelayTask::onBaseCheck()
@@ -316,8 +318,7 @@ void RelayTask::onBaseCheck()
             auto trItem = std::make_shared<TransItem>();
             trItem->isSend = data_->isUpload;
             trItem->from = item;
-            GenOtherMetaPath(item, trItem->to, data_->isUpload, qLocalRoot,
-                             qRemoteRoot);
+            GenOtherMetaPath(item, trItem->to, data_->isUpload, qLocalRoot, qRemoteRoot);
             transItems_.push_back(trItem);
         }
 
@@ -401,6 +402,7 @@ void RelayTask::onCheckComplete()
     emit signalLog("检查完成");
     checkRet_ = true;
     enableControls();
+    emit signalAutoStart();
 }
 
 void RelayTask::onCheckUnComplete()

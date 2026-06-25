@@ -119,13 +119,6 @@
       </spacer>
      </item>
      <item>
-      <widget class="QPushButton" name="btnRetryAll">
-       <property name="text">
-        <string>重传失败项</string>
-       </property>
-      </widget>
-     </item>
-     <item>
       <widget class="QPushButton" name="btnBasicCheck">
        <property name="text">
         <string>基本检查</string>

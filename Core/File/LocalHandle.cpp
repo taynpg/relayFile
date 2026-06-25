@@ -137,8 +137,9 @@ bool ZipHandle::addToZip(mz_zip_archive& zip, const QString& rootPath, const QSt
         QDirIterator it(filePath, QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot | QDir::Hidden, QDirIterator::Subdirectories);
 
         while (it.hasNext()) {
-            if (!addToZip(zip, rootPath, it.next()))
+            if (!addToZip(zip, rootPath, it.next())) {
                 return false;
+            }
         }
         return true;
     }
