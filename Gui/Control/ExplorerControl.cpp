@@ -334,9 +334,13 @@ void ExplorerControl::onTableContextMenu(const QPoint& pos)
         deleteAction = menu.addAction(style()->standardIcon(QStyle::SP_TrashIcon), "删除");
         compressAction = menu.addAction("压缩");
         mkdirDirAction = menu.addAction(style()->standardIcon(QStyle::SP_DirOpenIcon), "新建文件夹");
-        menu.addAction(explorerAction);
+        if (explorerAction) {
+            menu.addAction(explorerAction);
+        }
     } else {
-        menu.addAction(explorerAction);
+        if (explorerAction) {
+            menu.addAction(explorerAction);
+        }
     }
 
     auto* selectAction = menu.exec(tableWidget_->viewport()->mapToGlobal(pos));
