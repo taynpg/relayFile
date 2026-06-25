@@ -67,7 +67,6 @@ void RelayTask::initControl()
     ui->pedLog->setEnabled(false);
     // ui->lbSpeed->setEnabled(false);
     ui->btnStart->setEnabled(false);
-    ui->btnRetryAll->setEnabled(false);
     ui->curProgress->setValue(0);
     ui->lbSpeed->setText("--");
 
@@ -380,13 +379,11 @@ bool RelayTask::normalCheckFileExist()
 void RelayTask::disableControls()
 {
     ui->btnBasicCheck->setEnabled(false);
-    ui->btnRetryAll->setEnabled(false);
     ui->btnStart->setEnabled(false);
 }
 void RelayTask::enableControls()
 {
     ui->btnBasicCheck->setEnabled(true);
-    ui->btnRetryAll->setEnabled(true);
     ui->btnStart->setEnabled(true);
 }
 
@@ -410,7 +407,6 @@ void RelayTask::onCheckUnComplete()
     emit signalLog("检查未完成");
     checkRet_ = false;
     ui->btnBasicCheck->setEnabled(true);
-    ui->btnRetryAll->setEnabled(false);
     ui->btnStart->setEnabled(false);
 }
 
