@@ -1,15 +1,23 @@
 #include <QCoreApplication>
 #include <Utils/Logger.h>
 #include <Utils/OwnLogger.h>
+#include <iostream>
+#include <relayFileVersion.h>
 
 int main(int argc, char* argv[])
 {
+    if (argc == 2 && std::strcmp(argv[1], "--version") == 0) {
+        std::cout << VERSION_GIT_COMMIT << "-v" << VERSION_NUM << "-" << VERSION_DEV << std::endl;
+        return 0;
+    }
     Logger logger;
     logger.setInfo("log/relayFileClient.log", "relayFileClient");
     if (!logger.initSimpleLogger(true)) {
         return 1;
     }
 
+    qInfo() << "Version:" << VERSION_GIT_COMMIT << "-v" << VERSION_NUM << "-" << VERSION_DEV;
+    
     OwnLogger ownLogger;
     qInstallMessageHandler(ownLogger.ConsoleMsgHander);
 
