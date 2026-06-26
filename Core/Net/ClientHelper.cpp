@@ -11,7 +11,7 @@ DoubleLinker::DoubleLinker(QObject* parent) : QObject(parent)
 {
     heartTimer_ = new QTimer(this);
     connect(heartTimer_, &QTimer::timeout, this, &DoubleLinker::onTellHeart);
-    heartTimer_->start(3000);
+    heartTimer_->start(1500);
 }
 
 DoubleLinker::~DoubleLinker()
