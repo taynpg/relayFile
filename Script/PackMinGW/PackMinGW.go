@@ -145,6 +145,7 @@ func main() {
 		"-B", buildDir,
 		"-S", root,
 		"-DCMAKE_BUILD_TYPE=Release",
+		"-DRF_USE_MINGW=ON",
 		"-G", "MinGW Makefiles",
 	}
 

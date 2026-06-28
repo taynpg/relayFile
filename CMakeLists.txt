@@ -3,7 +3,9 @@ cmake_minimum_required(VERSION 3.16)
 project(relayFile VERSION 0.2 LANGUAGES C CXX)
 
 set(PROJECT_URL "https://github.com/taynpg/relayFile")
+
 option(RF_USE_GTEST "Use Test." OFF)
+option(RF_USE_MINGW "Use MinGW." OFF)
 
 if(DEFINED RELEASE_MARK)
 message(STATUS "Set RELEASE_MARK => ${RELEASE_MARK}.")
@@ -17,8 +19,11 @@ if (MSVC)
     add_definitions(-D_WIN32_WINNT=0x0601)
 endif()
 
-list(APPEND CMAKE_PREFIX_PATH C:/Qt/6.10.3/msvc2022_64)
-list(APPEND CMAKE_PREFIX_PATH C:/Qt/6.10.3/mingw_64)
+if(DEFINED RF_USE_MINGW AND RF_USE_MINGW)
+    list(APPEND CMAKE_PREFIX_PATH C:/Qt/6.10.3/mingw_64)
+else()
+    list(APPEND CMAKE_PREFIX_PATH C:/Qt/6.10.3/msvc2022_64)
+endif()
 
 set(CMAKE_DEBUG_POSTFIX "d")
 set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib/${CMAKE_BUILD_TYPE})
