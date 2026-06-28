@@ -25,9 +25,9 @@ func projectRoot() string {
 }
 
 const (
-	QtDeploy = `C:\Qt\6.10.3\mingw_64\bin\windeployqt.exe`
+	QtDeploy = `C:\Qt\6.10.3\msvc2022_64\bin\windeployqt.exe`
 	Config   = `Release`
-	BuildDev = `build-dev`
+	BuildDev = `build-dev-msvc`
 )
 
 func run(dir, name string, args ...string) {
@@ -109,7 +109,7 @@ func main() {
 
 	buildName := BuildDev
 	if isRelease {
-		buildName = "build-release"
+		buildName = "build-release-msvc"
 	}
 
 	buildDir := filepath.Join(root, buildName)
@@ -131,8 +131,7 @@ func main() {
 	cmakeArgs := []string{
 		"-B", buildDir,
 		"-S", root,
-		"-DCMAKE_BUILD_TYPE=Release",
-		"-G", "MinGW Makefiles",
+		"-A", "x64",
 	}
 
 	if isRelease {
