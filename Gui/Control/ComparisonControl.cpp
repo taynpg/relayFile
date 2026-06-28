@@ -248,11 +248,17 @@ void ComparisonControl::insertRow(int id, const QString& name, const QString& ty
 void ComparisonControl::showEvent(QShowEvent* event)
 {
     auto tables = comparisonSql_->tables();
+    if (tables.isEmpty()) {
+        QDialog::showEvent(event);
+        return;
+    }
+
+    ui->cbConfig->blockSignals(true);
     ui->cbConfig->clear();
     ui->cbConfig->addItems(tables);
-    if (!tables.isEmpty()) {
-        ui->cbConfig->setCurrentText(tables.first());
-    }
+    ui->cbConfig->setCurrentText(tables.first());
+    ui->cbConfig->blockSignals(false);
+
     QDialog::showEvent(event);
 }
 

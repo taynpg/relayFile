@@ -30,11 +30,24 @@ const (
 	BuildDev = `build-dev-mingw`
 )
 
+func containsPath(path, target string) bool {
+	return len(path) >= len(target) &&
+		(path == target || path[:len(target)] == target ||
+			strings.Contains(path, target+";") ||
+			strings.Contains(path, ";"+target))
+}
+
 func run(dir, name string, args ...string) {
 	cmd := exec.Command(name, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Dir = dir
+
+	path := os.Getenv("PATH")
+	mingw := `C:\Qt\Tools\mingw1310_64\bin`
+	if !containsPath(path, mingw) {
+		cmd.Env = append(os.Environ(), "PATH="+path+";"+mingw)
+	}
 
 	fmt.Printf("-> %s %v (dir=%s)\n", name, args, dir)
 	if err := cmd.Run(); err != nil {
