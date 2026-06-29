@@ -2,154 +2,147 @@ package main
 
 import (
 	"archive/zip"
-	"encoding/json"
+	"bufio"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 )
 
+/*
+==================== 配置 ====================
+*/
 const (
-	Owner   = "taynpg"
-	Repo    = "relayFile"
+	Owner = "taynpg"
+	Repo  = "relayFile"
+
 	MainExe = "relayFileGui.exe"
 	Exes    = "relayFileClient.exe|relayFileGui.exe|relayFileServer.exe"
 )
 
-type Asset struct {
-	Name string `json:"name"`
-	URL  string `json:"browser_download_url"`
+/*
+==================== 通用暂停 ====================
+*/
+func pause() {
+	fmt.Println("\n按 Enter 退出...")
+	bufio.NewReader(os.Stdin).ReadString('\n')
 }
 
-type Release struct {
-	TagName string  `json:"tag_name"`
-	Assets  []Asset `json:"assets"`
-}
+/*
+==================== 代理配置 ====================
+*/
+func initProxy() {
+	reader := bufio.NewReader(os.Stdin)
 
-type LocalVersion struct {
-	Commit string
-	Num    string // 0.2
-	Dev    string // dev / release
-}
+	fmt.Print("是否使用代理? (y/N): ")
+	line, _ := reader.ReadString('\n')
+	line = strings.TrimSpace(strings.ToLower(line))
 
-func parseLocalVersion(output string) LocalVersion {
-	output = strings.TrimSpace(output)
-	parts := strings.Split(output, "-")
-	if len(parts) < 3 {
-		return LocalVersion{}
-	}
-	return LocalVersion{
-		Commit: parts[0],
-		Num:    strings.TrimPrefix(parts[1], "v"),
-		Dev:    parts[2],
-	}
-}
-
-// 解析 zip 文件名：relayFile-7c262c1-v0.2-dev-20260312.zip
-func parseZipName(name string) (commit, version, dev string) {
-	name = strings.TrimSuffix(name, ".zip")
-	parts := strings.Split(name, "-")
-	if len(parts) < 5 {
+	if line != "y" && line != "yes" {
+		fmt.Println("不使用代理")
 		return
 	}
-	commit = parts[1]
-	version = strings.TrimPrefix(parts[2], "v")
-	dev = parts[3]
-	return
-}
 
-func versionGT(a, b string) bool {
-	majA, minA := splitVersion(a)
-	majB, minB := splitVersion(b)
-	return majA > majB || (majA == majB && minA > minB)
-}
+	defaultProxy := "http://127.0.0.1:7897"
 
-func splitVersion(v string) (int, int) {
-	parts := strings.Split(v, ".")
-	maj, _ := strconv.Atoi(parts[0])
-	min := 0
-	if len(parts) > 1 {
-		min, _ = strconv.Atoi(parts[1])
+	fmt.Printf("是否使用默认代理 (%s)? (Y/n): ", defaultProxy)
+	line, _ = reader.ReadString('\n')
+	line = strings.TrimSpace(strings.ToLower(line))
+
+	proxy := defaultProxy
+	if line != "" && line != "y" && line != "yes" {
+		proxy = line
 	}
-	return maj, min
+
+	if !strings.HasPrefix(proxy, "http://") && !strings.HasPrefix(proxy, "https://") {
+		proxy = "http://" + proxy
+	}
+
+	os.Setenv("HTTP_PROXY", proxy)
+	os.Setenv("HTTPS_PROXY", proxy)
+
+	fmt.Println("✓ 代理已设置:", proxy)
 }
 
-func getLatestRelease() Release {
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", Owner, Repo)
-	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Set("User-Agent", "relayFile-updater")
+/*
+==================== 下载 ====================
+*/
+func download(url, dst string) error {
+	fmt.Println("下载:", url)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := http.Get(url)
 	if err != nil {
-		panic("获取 release 失败: " + err.Error())
+		return err
 	}
 	defer resp.Body.Close()
 
-	var r Release
-	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {
-		panic("解析 release JSON 失败: " + err.Error())
-	}
-	return r
-}
-
-func selectUpdateAsset(local LocalVersion, assets []Asset) (*Asset, string) {
-	var devCandidate *Asset
-
-	for _, asset := range assets {
-		commit, ver, dev := parseZipName(asset.Name)
-		if ver == "" {
-			continue
-		}
-		if dev == "release" && versionGT(ver, local.Num) {
-			return &asset, fmt.Sprintf("发现更高版本 release v%s", ver)
-		}
-		if dev == "dev" &&
-			ver == local.Num &&
-			commit != local.Commit &&
-			devCandidate == nil {
-			devCandidate = &asset
-		}
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("下载失败: %s", resp.Status)
 	}
 
-	if devCandidate != nil {
-		return devCandidate, "发现新 dev 构建"
-	}
-
-	return nil, "已是最新版本"
-}
-
-func download(url, dst string) {
-	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Set("User-Agent", "relayFile-updater")
-
-	resp, err := http.DefaultClient.Do(req)
+	out, err := os.Create(dst)
 	if err != nil {
-		panic("下载失败: " + err.Error())
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, resp.Body)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("✓ 下载完成")
+	return nil
+}
+
+/*
+==================== update_list.txt ====================
+*/
+func fetchUpdateList(tag string) ([]string, error) {
+	url := fmt.Sprintf(
+		"https://github.com/%s/%s/releases/download/%s/update_list.txt",
+		Owner, Repo, tag,
+	)
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
 	}
 	defer resp.Body.Close()
 
-	f, err := os.Create(dst)
-	if err != nil {
-		panic(err)
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("update_list.txt 不存在或无权限")
 	}
-	defer f.Close()
 
-	fmt.Print("下载中...")
-	_, err = io.Copy(f, resp.Body)
-	if err != nil {
-		panic(err)
+	body, _ := io.ReadAll(resp.Body)
+
+	var list []string
+	for _, line := range strings.Split(strings.TrimSpace(string(body)), "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			list = append(list, line)
+		}
 	}
-	fmt.Println(" ✓")
+
+	if len(list) == 0 {
+		return nil, fmt.Errorf("update_list.txt 为空")
+	}
+	return list, nil
 }
 
-func extractZip(zipPath, destDir string) {
+/*
+==================== 解压 ====================
+*/
+func extractZip(zipPath, dest string) error {
+	fmt.Printf("zip路径：%s\n", zipPath)
+	fmt.Printf("目标路径：%s\n", dest)
+
 	r, err := zip.OpenReader(zipPath)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	defer r.Close()
 
@@ -161,24 +154,28 @@ func extractZip(zipPath, destDir string) {
 				rc, _ := f.Open()
 				defer rc.Close()
 
-				outPath := filepath.Join(destDir, name)
-				_ = os.Remove(outPath)
+				target := filepath.Join(dest, name)
+				_ = os.Remove(target)
 
-				out, err := os.Create(outPath)
+				out, err := os.Create(target)
 				if err != nil {
-					panic("无法写入 " + name + ": " + err.Error())
+					return fmt.Errorf("无法写入 %s: %v", name, err)
 				}
 				io.Copy(out, rc)
 				out.Close()
-				fmt.Println("  ✓ 更新", name)
-				break
+				fmt.Println("✓ 更新", name)
 			}
 		}
 	}
+	return nil
 }
 
+/*
+==================== 进程控制 ====================
+*/
 func killMain() {
-	exec.Command("taskkill", "/F", "/IM", MainExe).Run()
+	cmd := exec.Command("taskkill", "/F", "/IM", MainExe)
+	cmd.Run()
 }
 
 func startMain(exePath string) {
@@ -187,48 +184,70 @@ func startMain(exePath string) {
 	_ = cmd.Start()
 }
 
+/*
+==================== main ====================
+*/
 func main() {
+	defer pause()
+
 	fmt.Println("=== relayFile Updater ===")
+
+	initProxy()
+
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Print("请输入 Release Tag（如 v0.2）: ")
+	tag, _ := reader.ReadString('\n')
+	tag = strings.TrimSpace(tag)
+
+	files, err := fetchUpdateList(tag)
+	if err != nil {
+		fmt.Println("❌", err)
+		return
+	}
+
+	fmt.Println("\n可选的更新包：")
+	for i, f := range files {
+		fmt.Printf(" [%d] %s\n", i, f)
+	}
+
+	fmt.Print("请选择编号：")
+	var idx int
+	_, err = fmt.Scanln(&idx)
+	if err != nil || idx < 0 || idx >= len(files) {
+		fmt.Println("❌ 无效的选择")
+		return
+	}
+
+	zipName := files[idx]
 
 	exeDir, err := os.Executable()
 	if err != nil {
-		panic(err)
+		fmt.Println("❌ 获取路径失败:", err)
+		return
 	}
 	exeDir = filepath.Dir(exeDir)
 
-	mainExe := filepath.Join(exeDir, MainExe)
-
-	out, err := exec.Command(mainExe, "--version").Output()
-	if err != nil {
-		fmt.Println("无法获取本地版本，可能是首次运行")
-		return
-	}
-	local := parseLocalVersion(string(out))
-	fmt.Printf("本地版本: %s (commit %s)\n", local.Num, local.Commit)
-
-	rel := getLatestRelease()
-	fmt.Printf("Assets count: %d\n", len(rel.Assets))
-	fmt.Println("Latest release:", rel.TagName)
-
-	asset, reason := selectUpdateAsset(local, rel.Assets)
-	if asset == nil {
-		fmt.Println(reason)
-		return
-	}
-
-	fmt.Println("准备更新:", asset.Name)
-	fmt.Println("原因:", reason)
-
 	zipPath := filepath.Join(exeDir, "__update__.zip")
-	download(asset.URL, zipPath)
+	dlURL := fmt.Sprintf(
+		"https://github.com/%s/%s/releases/download/%s/%s",
+		Owner, Repo, tag, zipName,
+	)
+
+	if err := download(dlURL, zipPath); err != nil {
+		fmt.Println("❌", err)
+		return
+	}
 
 	killMain()
 
-	extractZip(zipPath, exeDir)
+	if err := extractZip(zipPath, exeDir); err != nil {
+		fmt.Println("❌ 解压失败:", err)
+		return
+	}
 
-	_ = os.Remove(zipPath)
+	os.Remove(zipPath)
 
-	startMain(mainExe)
-
-	fmt.Println("✓ 更新完成，程序已重启")
+	startMain(filepath.Join(exeDir, MainExe))
+	fmt.Println("✓ 更新完成")
 }
