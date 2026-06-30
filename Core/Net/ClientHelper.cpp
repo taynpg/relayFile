@@ -75,6 +75,7 @@ void DoubleLinker::onTellHeart()
     Message heartMsg;
     heartMsg.comStr = fileSession_->getClientCore()->getOwnClientInfo().clientId;
     auto f = OneFrame::Create();
+    f->sessionId = -1;
     f->data = serializeStruct(heartMsg);
     f->type = FrameType::kMsgType_Ask_Heart;
 
