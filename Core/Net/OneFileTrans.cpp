@@ -188,6 +188,9 @@ void OneFileTrans::onFrameReceive(FramePtr frame)
     //          << "，index:" << frame->index;
     if (state_ == TransStatus::Finished || state_ == TransStatus::Interrupted) {
         qWarning() << "文件传输已结束，无法处理消息, state is:" << static_cast<int>(state_);
+        auto f = CreateFrame(FrameType::kFileType_Request_Cancel);
+        f->to = targetControlId_;
+        emit signalRequestSend(f);
         return;
     }
     switch (frame->type) {
