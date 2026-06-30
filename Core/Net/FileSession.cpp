@@ -74,7 +74,9 @@ void FileSession::pushTask(const std::shared_ptr<OneFileTrans>& fileTrans, const
     rf->mark = fileTrans->getTransMode() == OneFileTrans::TransMode::Send ? 0 : 1;
     rf->fuuid = msg.uuid;
 
-    connect(fileTrans.get(), &OneFileTrans::signalRequestSend, this, [this](FramePtr frame) { signalRequestSend(frame); });
+    if (ret) {
+        connect(fileTrans.get(), &OneFileTrans::signalRequestSend, this, [this](FramePtr frame) { signalRequestSend(frame); });
+    }
     emit signalRequestSend(rf);
 }
 
@@ -86,7 +88,10 @@ void FileSession::clearTask(const std::string& uuid, bool isSend)
         QMutexLocker locker(&transferMapLock_);
         if (transferMap_.find(mapKeyUUID) != transferMap_.end()) {
             isFind = true;
-            transferMap_[mapKeyUUID]->stopTrans();
+            auto& tf = transferMap_[mapKeyUUID];
+            if (tf) {
+                tf->stopTrans();
+            }
             transferMap_.remove(mapKeyUUID);
         }
     }
@@ -121,6 +126,21 @@ void FileSession::handleFrame(FramePtr frame)
         break;
     }
     case FrameType::kFileType_Answer_Down: {
+        // 判断成功性
+        Message ansMsg;
+        deserializeStruct(frame->data, ansMsg);
+        if (ansMsg.msgStateCode == MessageStateCode::kMessageStateCodeFailed) {
+            auto kuuid = getMapKeyUUIDByMode(msg.uuid, OneFileTrans::TransMode::Receive);
+            {
+                QMutexLocker locker(&transferMapLock_);
+                if (!transferMap_.contains(kuuid)) {
+                    transferMap_[kuuid] = nullptr;
+                }
+            }
+            // 失败了就放弃传输。
+            qWarning() << QString::fromStdString(ansMsg.errMsg);
+            break;
+        }
         auto fileTrans = std::make_shared<OneFileTrans>();
         auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Receive, msg.ft, msg.transId,
                                            clientCore_->getOwnClientInfo().clientId, msg.uuid);
@@ -143,6 +163,21 @@ void FileSession::handleFrame(FramePtr frame)
         break;
     }
     case FrameType::kFileType_Answer_Send: {
+        // 判断成功性
+        Message ansMsg;
+        deserializeStruct(frame->data, ansMsg);
+        if (ansMsg.msgStateCode == MessageStateCode::kMessageStateCodeFailed) {
+            auto kuuid = getMapKeyUUIDByMode(msg.uuid, OneFileTrans::TransMode::Send);
+            {
+                QMutexLocker locker(&transferMapLock_);
+                if (!transferMap_.contains(kuuid)) {
+                    transferMap_[kuuid] = nullptr;
+                }
+            }
+            // 失败了就放弃传输。
+            qWarning() << QString::fromStdString(ansMsg.errMsg);
+            break;
+        }
         auto fileTrans = std::make_shared<OneFileTrans>();
         auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Send, msg.ff, msg.transId,
                                            clientCore_->getOwnClientInfo().clientId, msg.uuid);
@@ -181,7 +216,12 @@ bool FileSession::getTransStatus(OneFileTrans::TransStatus& status, const std::s
         QMutexLocker locker(&transferMapLock_);
         if (transferMap_.contains(mapKeyUUID)) {
             have = true;
-            status = transferMap_[mapKeyUUID]->getTransStatus();
+            auto& ot = transferMap_[mapKeyUUID];
+            if (ot == nullptr) {
+                status = OneFileTrans::TransStatus::Interrupted;
+            } else {
+                status = ot->getTransStatus();
+            }
         }
     }
     return have;
