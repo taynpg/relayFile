@@ -258,16 +258,7 @@ void RelayTask::onBaseCheck()
         std::shared_ptr<BaseAskDF> askDfOther = data_->isUpload ? askRemoteDf_ : askLocalDf_;
         auto name = data_->isUpload ? GUI_DIRECTION_LOCAL : GUI_DIRECTION_REMOTE;
 
-        QString qLocalRoot;
-        QString qRemoteRoot;
-
         for (const auto& item : data_->fileList) {
-            if (qLocalRoot.isEmpty()) {
-                qLocalRoot = item.localRoot;
-            }
-            if (qRemoteRoot.isEmpty()) {
-                qRemoteRoot = item.remoteRoot;
-            }
             auto path = FileDir::Join(data_->isUpload ? item.localRoot : item.remoteRoot, item.name);
             if (item.type == RFileType::mTypeDir) {
                 std::vector<FileMeta> fileList;
@@ -275,6 +266,10 @@ void RelayTask::onBaseCheck()
                     emit signalLog(QString("获取目录内容：%1 失败。").arg(path));
                     emit signalCheckUnComplete();
                     return;
+                }
+                for (auto& tmpItem : fileList) {
+                    tmpItem.localRoot = item.localRoot.toStdString();
+                    tmpItem.remoteRoot = item.remoteRoot.toStdString();
                 }
                 fileList_.insert(fileList_.end(), fileList.begin(), fileList.end());
                 continue;
@@ -317,7 +312,8 @@ void RelayTask::onBaseCheck()
             auto trItem = std::make_shared<TransItem>();
             trItem->isSend = data_->isUpload;
             trItem->from = item;
-            GenOtherMetaPath(item, trItem->to, data_->isUpload, qLocalRoot, qRemoteRoot);
+            GenOtherMetaPath(item, trItem->to, data_->isUpload, QString::fromStdString(item.localRoot),
+                             QString::fromStdString(item.remoteRoot));
             transItems_.push_back(trItem);
         }
 
