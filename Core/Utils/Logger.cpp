@@ -23,7 +23,7 @@ bool Logger::initSimpleLogger(bool enableConsole)
         std::vector<spdlog::sink_ptr> sinks{file_sink};
         if (enableConsole) {
             auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-            console_sink->set_pattern("%H:%M:%S.%e %^[%l]: %v%$");
+            console_sink->set_pattern("%Y-%m-%d %H:%M:%S.%e %^[%l]: %v%$");
             sinks.push_back(console_sink);
         }
 
