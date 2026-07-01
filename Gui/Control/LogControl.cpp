@@ -8,6 +8,7 @@
 LogControl::LogControl(QWidget* parent) : QDialog(parent), ui(new Ui::LogControl)
 {
     ui->setupUi(this);
+    ui->pedLog->setReadOnly(true);
 }
 
 LogControl::~LogControl()
