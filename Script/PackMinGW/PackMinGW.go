@@ -111,8 +111,13 @@ func parseVersionH(path string) VersionInfo {
 
 func buildZipName(v VersionInfo) string {
 	date := time.Now().Format("20060102")
-	return fmt.Sprintf("relayFile-%s-v%s-%s-%s.zip",
-		v.Commit, v.Num, v.Dev, date)
+	if v.Dev == "dev" {
+		return fmt.Sprintf("relayFile-%s-v%s-%s-%s-mingw.zip",
+			v.Commit, v.Num, v.Dev, date)
+	} else {
+		return fmt.Sprintf("relayFile-%s-v%s-%s-mingw.zip",
+			v.Commit, v.Num, v.Dev)
+	}
 }
 
 func main() {
