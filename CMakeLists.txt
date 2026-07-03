@@ -6,6 +6,7 @@ set(PROJECT_URL "https://github.com/taynpg/relayFile")
 
 option(RF_USE_GTEST "Use Test." OFF)
 option(RF_USE_MINGW "Use MinGW." OFF)
+option(RF_USE_GUI "Use Gui." ON)
 
 if(DEFINED RELEASE_MARK)
 message(STATUS "Set RELEASE_MARK => ${RELEASE_MARK}.")
@@ -33,9 +34,13 @@ include(CMake/Compile.cmake)
 
 include_directories(${PROJECT_BINARY_DIR})
 set(THIRD_PATH ${CMAKE_CURRENT_LIST_DIR}/Third)
+
 add_subdirectory(Core)
-add_subdirectory(Gui)
 add_subdirectory(Console)
+
+if(DEFINED RF_USE_GUI AND RF_USE_GUI)
+    add_subdirectory(Gui)
+endif()
 
 execute_process(
     COMMAND git rev-parse --short HEAD
