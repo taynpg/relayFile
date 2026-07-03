@@ -217,9 +217,32 @@ QString FileDir::Join(const QString& path, const QString& n1, const QString& n2)
 
 QString FileDir::GenDir(const QString& fullPath)
 {
-    QFileInfo fileInfo(fullPath);
-    return fileInfo.dir().path();
+    if (fullPath.isEmpty()) {
+        return {};
+    }
+
+    QString p = QDir::fromNativeSeparators(fullPath);
+
+    // Windows absolute path (X:/)
+    if (isWindowsAbsolutePath(p)) {
+        int idx = p.lastIndexOf('/');
+        if (idx <= 2) {
+            return p.left(3);   // D:/
+        }
+        return p.left(idx + 1);
+    }
+
+    // Unix absolute path
+    if (p.startsWith('/')) {
+        QFileInfo fi(p);
+        return QDir::cleanPath(fi.absolutePath());
+    }
+
+    // Relative path: resolve based on current working directory
+    QFileInfo fi(p);
+    return QDir::cleanPath(fi.absolutePath());
 }
+
 QString FileDir::GenFileName(const QString& fullPath)
 {
     QFileInfo fileInfo(fullPath);
