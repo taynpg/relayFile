@@ -56,82 +56,10 @@ QString FileDir::GetErrInfo()
     return errInfo;
 }
 
-bool isWindowsAbsolutePath(const QString& p)
-{
-    if (p.length() < 3) {
-        return false;
-    }
-
-    const QChar drive = p.at(0);
-    if (!drive.isLetter()) {
-        return false;
-    }
-
-    return p.at(1) == QLatin1Char(':') && (p.at(2) == QLatin1Char('/') || p.at(2) == QLatin1Char('\\'));
-}
-
-bool isUncPath(const QString& p)
-{
-    return p.startsWith("//") || p.startsWith("\\\\");
-}
-
-bool isUnixAbsolutePath(const QString& p)
-{
-    return p.startsWith('/');
-}
-
 QString FileDir::cdUp(const QString& path)
 {
-    if (path.isEmpty()) {
-        return {};
-    }
-
-    QString p = QDir::fromNativeSeparators(path);
-
-    // Windows absolute path: C:/...
-    if (isWindowsAbsolutePath(p)) {
-        int idx = p.lastIndexOf('/', p.length() - 2);
-        if (idx <= 2) {
-            return p.left(3);   // C:/
-        }
-        return p.left(idx + 1);
-    }
-
-    // UNC path: //server/share/...
-    if (isUncPath(p)) {
-        QStringList parts = p.mid(2).split('/', Qt::SkipEmptyParts);
-        if (parts.size() <= 2) {
-            return "//" + parts.join('/');
-        }
-        parts.removeLast();
-        return "//" + parts.join('/');
-    }
-
-    // Unix-style absolute path: /...
-    if (isUnixAbsolutePath(p)) {
-        if (p == "/") {
-            return "/";
-        }
-
-        QString trimmed = p;
-        if (trimmed.endsWith('/')) {
-            trimmed.chop(1);
-        }
-
-        int idx = trimmed.lastIndexOf('/');
-        if (idx <= 0) {
-            return "/";
-        }
-
-        return trimmed.left(idx + 1);
-    }
-
-    // Relative path: resolve to absolute path first
-    QFileInfo fi(p);
-    QString abs = QDir::cleanPath(fi.absoluteFilePath());
-
-    // Recurse only once
-    return FileDir::cdUp(abs);
+    auto p = miniPath::cdUp(path.toStdString());
+    return QString::fromStdString(p);
 }
 
 bool FileDir::GetFileList(const QString& path, QVector<RFileMeta>& fileList, bool recursive)
@@ -182,7 +110,16 @@ bool FileDir::GetFileList(const QString& path, QVector<RFileMeta>& fileList, boo
 
 bool FileDir::GetHome(QString& home)
 {
+#ifdef Q_OS_WIN
+    const QChar targetSep('\\');
+    const QChar wrongSep('/');
+#else
+    const QChar targetSep('/');
+    const QChar wrongSep('\\');
+#endif
+
     home = QDir::homePath();
+    home.replace(wrongSep, targetSep);
     return true;
 }
 
@@ -200,47 +137,61 @@ void FileDir::TurnMeta(const RFileMeta& rmeta, FileMeta& meta)
     meta.exist = rmeta.exist;
 }
 
+static bool IsWindowsPath(const QString& path)
+{
+    if (path.startsWith("\\\\")) {
+        return true;
+    }
+    if (path.length() >= 2 && path[1] == QLatin1Char(':')) {
+        return true;
+    }
+    return false;
+}
+
 QString FileDir::Join(const QString& path, const QString& name)
 {
-    QDir dir(path);
-    QString combined = dir.filePath(name);
-    return QDir::cleanPath(combined);
+    if (path.isEmpty()) {
+        return name;
+    }
+
+    if (name.isEmpty()) {
+        return path;
+    }
+
+    const QChar unixSep('/');
+    const QChar winSep('\\');
+
+    /* 判断路径风格 */
+    bool isWindows = IsWindowsPath(path);
+    QChar sep = isWindows ? winSep : unixSep;
+
+    QString p = path;
+
+    /* 去掉尾部多余分隔符 */
+    while (!p.isEmpty() && (p.back() == unixSep || p.back() == winSep)) {
+        p.chop(1);
+    }
+
+    /* 去掉 name 前导分隔符 */
+    QString n = name;
+    while (!n.isEmpty() && (n.front() == unixSep || n.front() == winSep)) {
+        n.remove(0, 1);
+    }
+
+    if (n.isEmpty()) {
+        return p + sep;
+    }
+
+    QString result = p + sep + n;
+
+    /* 只做规范化，不改变风格 */
+    return QDir::cleanPath(result);
 }
 
 QString FileDir::Join(const QString& path, const QString& n1, const QString& n2)
 {
-    QDir dir(path);
-    QString combined = dir.filePath(n1);
-    combined = QDir(combined).filePath(n2);
-    return QDir::cleanPath(combined);
-}
-
-QString FileDir::GenDir(const QString& fullPath)
-{
-    if (fullPath.isEmpty()) {
-        return {};
-    }
-
-    QString p = QDir::fromNativeSeparators(fullPath);
-
-    // Windows absolute path (X:/)
-    if (isWindowsAbsolutePath(p)) {
-        int idx = p.lastIndexOf('/');
-        if (idx <= 2) {
-            return p.left(3);   // D:/
-        }
-        return p.left(idx + 1);
-    }
-
-    // Unix absolute path
-    if (p.startsWith('/')) {
-        QFileInfo fi(p);
-        return QDir::cleanPath(fi.absolutePath());
-    }
-
-    // Relative path: resolve based on current working directory
-    QFileInfo fi(p);
-    return QDir::cleanPath(fi.absolutePath());
+    auto p = Join(path, n1);
+    return Join(p, n2);
 }
 
 QString FileDir::GenFileName(const QString& fullPath)
@@ -318,7 +269,7 @@ void FileDir::GetFileRFileMeta(const QString& path, RFileMeta& rmeta)
     QFileInfo info(path);
     if (info.exists()) {
         rmeta.exist = 1;
-        rmeta.dir = GenDir(path);
+        rmeta.dir = cdUp(path);
         rmeta.fileName = info.fileName();
         rmeta.permission = info.permissions();
         rmeta.fileType = info.isDir() ? RFileType::mTypeDir : RFileType::mTypeFile;

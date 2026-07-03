@@ -74,7 +74,7 @@ bool LocalHandle::AskArchive(const std::vector<FileMeta>& fileList, const std::s
     if (fileList.empty()) {
         return false;
     }
-    auto parentPath = FileDir::GenDir(QString::fromStdString(fileList[0].fullPath));
+    auto parentPath = FileDir::cdUp(QString::fromStdString(fileList[0].fullPath));
     ZipHandle zipHandle;
     QStringList inputPaths;
     for (const auto& meta : fileList) {

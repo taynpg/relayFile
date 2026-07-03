@@ -12,9 +12,13 @@
 #ifdef OS_MINI_WINDOWS
 #include <Windows.h>
 static HANDLE hOut = nullptr;
+static constexpr auto otherSep = '/';
+static constexpr auto nativeSep = '\\';
 #elif defined(OS_MINI_UNIXLIKE)
 #include <limits.h>
 #include <unistd.h>
+static constexpr auto otherSep = '\\';
+static constexpr auto nativeSep = '/';
 #endif
 
 namespace fs = std::filesystem;
@@ -535,10 +539,129 @@ bool miniPath::GetList(const std::string& path, std::vector<miniFileMeta>& fileL
     return true;
 }
 
+std::string miniPath::Normalize(const std::string& path)
+{
+    std::string s = path;
+    for (char& c : s) {
+        if (c == otherSep) {
+            c = '/';
+        }
+    }
+    return s;
+}
+
+bool miniPath::isUnc(const std::string& p)
+{
+    if (p.size() < 5) {
+        return false;
+    }
+    if (p[0] != '\\' || p[1] != '\\') {
+        return false;
+    }
+    if (p[2] == '?' || p[2] == '.') {
+        return false;
+    }
+    size_t sep = p.find('\\', 2);
+    if (sep == std::string::npos) {
+        return false;
+    }
+    if (sep + 1 >= p.size()) {
+        return false;
+    }
+    return true;
+}
+
+std::string miniPath::toNative(const std::string& p)
+{
+    std::string s = p;
+    for (char& c : s) {
+        if (c == otherSep) {
+            c = nativeSep;
+        }
+    }
+    return s;
+}
+
 std::string miniPath::cdUp(const std::string& path)
 {
-    fs::path p(path);
-    p = p.parent_path();
-    p = p.lexically_normal();
-    return p.string();
+    if (path.empty()) {
+        return "/";
+    }
+
+    std::string p = path;
+
+    /* 去掉尾部所有 / 或 \ */
+    while (!p.empty() && (p.back() == '/' || p.back() == '\\')) {
+        p.pop_back();
+    }
+
+    if (p.empty()) {
+        return "/";
+    }
+
+    /* ---------- Linux 绝对路径 ---------- */
+    if (p[0] == '/') {
+        if (p == "/") {
+            return "/";
+        }
+
+        size_t lastSep = p.find_last_of('/');
+        if (lastSep == std::string::npos) {
+            return "/";
+        }
+
+        if (lastSep == 0) {
+            return "/";
+        }
+
+        return p.substr(0, lastSep + 1);
+    }
+
+    /* ---------- Windows UNC ---------- */
+    if (p.size() >= 2 && p[0] == '\\' && p[1] == '\\') {
+        const char* seps = "\\/";
+
+        size_t serverEnd = p.find_first_of(seps, 2);
+        if (serverEnd == std::string::npos) {
+            return p + "\\";
+        }
+
+        size_t shareEnd = p.find_first_of(seps, serverEnd + 1);
+        if (shareEnd == std::string::npos) {
+            return p + "\\";
+        }
+
+        if (p.size() <= shareEnd + 1) {
+            return p + "\\";
+        }
+
+        size_t lastSep = p.find_last_of(seps);
+        if (lastSep == shareEnd) {
+            return p.substr(0, shareEnd + 1);
+        }
+
+        return p.substr(0, lastSep + 1);
+    }
+
+    /* ---------- Windows 盘符 ---------- */
+    if (p.size() >= 2 && p[1] == ':') {
+        char drive = p[0];
+        if (p.size() == 2) {
+            return std::string(1, drive) + ":\\";
+        }
+
+        if (p.size() == 3 && (p[2] == '\\' || p[2] == '/')) {
+            return std::string(1, drive) + ":\\";
+        }
+
+        size_t lastSep = p.find_last_of("\\/");
+        if (lastSep == 2) {
+            return p.substr(0, 3);
+        }
+
+        return p.substr(0, lastSep + 1);
+    }
+
+    /* ---------- 无法识别的绝对路径 ---------- */
+    return "/";
 }

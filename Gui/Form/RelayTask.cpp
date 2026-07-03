@@ -28,7 +28,8 @@ RelayTask::~RelayTask()
 
 void RelayTask::Quit()
 {
-    emit signalCancelWaitMsg();
+    //emit signalCancelWaitMsg();
+    doubleLinker_->GetControlSession()->onCancelWaitMsg();
     workerThread_->stop();
     workerThread_->quit();
 }
@@ -176,7 +177,7 @@ void RelayTask::GenOtherMetaPath(const FileMeta& in, FileMeta& out, bool isSend,
     auto fullPath = FileDir::GenOutPath(isSend ? localRoot : remoteRoot, in.fullPath, isSend ? remoteRoot : localRoot);
     out.fullPath = fullPath.toStdString();
     out.name = FileDir::GenFileName(fullPath).toStdString();
-    out.dir = FileDir::GenDir(fullPath).toStdString();
+    out.dir = FileDir::cdUp(fullPath).toStdString();
 }
 
 bool RelayTask::handleOneLine(int row)

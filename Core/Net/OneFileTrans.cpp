@@ -43,7 +43,8 @@ bool OneFileTrans::initTransfer(TransMode mode, const Message& msg, const std::s
     uuid_ = uuid;
     curBlockIndex_ = 0;
     ownId_ = ownId;
-    filePath_ = QString::fromStdString(miniPath::Join(meta_.dir, meta_.name));
+    // filePath_ = QString::fromStdString(miniPath::Join(meta_.dir, meta_.name));
+    filePath_ = QString::fromStdString(meta_.fullPath);
 
     qDebug() << "处理文件路径：" << filePath_;
 
@@ -53,14 +54,14 @@ bool OneFileTrans::initTransfer(TransMode mode, const Message& msg, const std::s
 
     if (tMode_ == TransMode::Send) {
         sendFile_.setFileName(filePath_);
-        if (!FileDir::EnsureDir(FileDir::GenDir(filePath_)) || !sendFile_.open(QIODevice::ReadOnly)) {
+        if (!FileDir::EnsureDir(FileDir::cdUp(filePath_)) || !sendFile_.open(QIODevice::ReadOnly)) {
             qWarning() << "打开发送文件失败:" << filePath_ << sendFile_.errorString();
             return false;
         }
         state_ = TransStatus::Sending;
     } else {
         recvFile_.setFileName(filePath_);
-        if (!FileDir::EnsureDir(FileDir::GenDir(filePath_)) || !recvFile_.open(QIODevice::WriteOnly)) {
+        if (!FileDir::EnsureDir(FileDir::cdUp(filePath_)) || !recvFile_.open(QIODevice::WriteOnly)) {
             qWarning() << "打开接收文件失败:" << filePath_ << recvFile_.errorString();
             return false;
         }

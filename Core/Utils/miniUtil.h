@@ -11,7 +11,7 @@
  * 最基本的辅助工具，无需额外依赖。
  * 运行环境: UTF-8
  *
- * version: 0.10.0
+ * version: 0.11.0
  *
  * 所有 std::pair 返回值的，统一，第一个值是错误字符串，为空正常。
  */
@@ -118,9 +118,13 @@ public:
     static bool IsExist(const std::string& path);
     static bool GetList(const std::string& path, std::vector<miniFileMeta>& fileList);
 
-    static std::string cdUp(const std::string& path);
     static std::string Join(const std::string& path, const std::string& f);
     static std::string Join(const std::string& path, const std::string& f1, const std::string& f2);
+
+    static std::string cdUp(const std::string& path);
+    static bool isUnc(const std::string& p);
+    static std::string Normalize(const std::string& path);
+    static std::string toNative(const std::string& p);
 };
 
 #endif   // MINI_UTIL_H

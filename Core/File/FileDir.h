@@ -38,7 +38,6 @@ public:
     static QString Join(const QString& path, const QString& n1, const QString& n2);
     static QString GenOutPath(const QString& root, const QString& fullPath, const QString& outRoot);
     static QString GenOutPath(const QString& root, const std::string& fullPath, const QString& outRoot);
-    static QString GenDir(const QString& fullPath);
     static QString GenFileName(const QString& fullPath);
     static bool IsDir(const QString& path);
     static bool IsFile(const QString& path);
