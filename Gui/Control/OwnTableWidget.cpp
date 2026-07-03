@@ -48,8 +48,14 @@ void ComDropTable::dropEvent(QDropEvent* event)
     auto mimeData = event->mimeData()->data(MY_MIME_DROP_TYPE);
     InfoDrop infoDrop = infoUnpack<InfoDrop>(mimeData);
 
-    int startRow = rowAt(event->position().toPoint().y());
-    int startCol = columnAt(event->position().toPoint().x());
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    QPoint pos = event->position().toPoint();
+#else
+    QPoint pos = event->pos();
+#endif
+
+    int startRow = rowAt(pos.y());
+    int startCol = columnAt(pos.x());
 
     int curRow = startRow;
     if (curRow < 0) {

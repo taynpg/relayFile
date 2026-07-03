@@ -23,7 +23,7 @@ template <typename HandleResp> bool RemoteAskDF::Request(Message& msg, HandleRes
 
     MessagePtr ret = future.get();
     if (!ret) {
-        qWarning() << "请求远端" << controlSession_->getOtherInfo().clientId << "失败";
+        qWarning() << "请求远端" << QString::fromStdString(controlSession_->getOtherInfo().clientId) << "失败";
         return false;
     }
 
@@ -52,7 +52,8 @@ bool RemoteAskDF::AskFileList(const std::string& path, std::vector<FileMeta>& fi
                 fileList = item.second;
                 break;
             }
-            qInfo() << "获取远端" << controlSession_->getOtherInfo().clientId << "文件列表个数:" << fileList.size();
+            qInfo() << "获取远端" << QString::fromStdString(controlSession_->getOtherInfo().clientId)
+                    << "文件列表个数:" << fileList.size();
             return true;
         },
         FrameType::kMsgType_Ask_FileList);
@@ -68,7 +69,8 @@ bool RemoteAskDF::AskHome(std::string& home)
                 return false;
             }
             home = ret->comStr;
-            qInfo() << "获取远端" << controlSession_->getOtherInfo().clientId << "目录:" << QString::fromStdString(home);
+            qInfo() << "获取远端" << QString::fromStdString(controlSession_->getOtherInfo().clientId)
+                    << "目录:" << QString::fromStdString(home);
             return true;
         },
         FrameType::kMsgType_Ask_Home);

@@ -88,7 +88,7 @@ void ComparisonControl::initSignals()
     connect(ui->btnSave, &QPushButton::clicked, this, &ComparisonControl::saveConfig);
     connect(ui->btnLoad, &QPushButton::clicked, this, &ComparisonControl::loadConfig);
     connect(ui->btnDel, &QPushButton::clicked, this, &ComparisonControl::delConfig);
-    connect(ui->cbConfig, &QComboBox::currentIndexChanged, this, [this]() {
+    connect(ui->cbConfig, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() {
         autoChange_ = true;
         ui->listWidget->clear();
         autoChange_ = false;
@@ -255,7 +255,8 @@ void ComparisonControl::showEvent(QShowEvent* event)
 
     ui->cbConfig->blockSignals(true);
     ui->cbConfig->clear();
-    ui->cbConfig->addItems(tables);
+    // Qt5 兼容
+    ui->cbConfig->addItems(QStringList(tables.begin(), tables.end()));
     ui->cbConfig->setCurrentText(tables.first());
     ui->cbConfig->blockSignals(false);
 

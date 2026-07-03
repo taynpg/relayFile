@@ -293,12 +293,12 @@ void RelayTask::onBaseCheck()
         FileMeta tmpMeta;
         for (auto& item : fileList_) {
             if (!askDfOwn->AskFileMeta(item.fullPath, tmpMeta)) {
-                emit signalLog(QString("%1文件文件存在性检查：%2 失败。").arg(name).arg(item.fullPath));
+                emit signalLog(QString("%1文件文件存在性检查：%2 失败。").arg(name).arg(QString::fromStdString(item.fullPath)));
                 emit signalCheckUnComplete();
                 return;
             }
             if (tmpMeta.exist == 0) {
-                emit signalLog(QString("%1文件：%2 不存在。").arg(name).arg(item.fullPath));
+                emit signalLog(QString("%1文件：%2 不存在。").arg(name).arg(QString::fromStdString(item.fullPath)));
                 emit signalCheckUnComplete();
                 return;
             }
@@ -325,12 +325,14 @@ void RelayTask::onBaseCheck()
         auto nameConfirm = data_->isUpload ? GUI_DIRECTION_REMOTE : GUI_DIRECTION_LOCAL;
         for (const auto& item : transItems_) {
             if (!askDfOther->AskFileMeta(item->to.fullPath, tmpMeta)) {
-                emit signalLog(QString("%1文件文件存在性检查：%2 失败。").arg(nameConfirm).arg(item->to.fullPath));
+                emit signalLog(
+                    QString("%1文件文件存在性检查：%2 失败。").arg(nameConfirm).arg(QString::fromStdString(item->to.fullPath)));
                 emit signalCheckUnComplete();
                 return;
             }
             if (tmpMeta.exist != 0) {
-                emit signalLog(QString("%1文件：%2 已存在相同文件。").arg(nameConfirm).arg(item->to.fullPath));
+                emit signalLog(
+                    QString("%1文件：%2 已存在相同文件。").arg(nameConfirm).arg(QString::fromStdString(item->to.fullPath)));
                 needConfirmFiles_.push_back(item->to);
             }
         }

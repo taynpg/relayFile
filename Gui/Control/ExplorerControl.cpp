@@ -3,6 +3,7 @@
 #include <File/FileDir.h>
 #include <QClipboard>
 #include <QDateTime>
+#include <QDebug>
 #include <QDesktopServices>
 #include <QHeaderView>
 #include <QMenu>

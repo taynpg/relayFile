@@ -24,8 +24,6 @@
 
 `relayFile`是 [frelay传输工具 (XP支持)](https://github.com/taynpg/frelay) 的重新整理优化版本并去除了XP支持，以便可以更好的使用新标准和语法。
 
-`relayFile`目前仅在`Qt6`上编译测试通过，理论上`Qt5`也可以但并不保证。
-
 `relayFile`是跨平台的，由于Linux环境难以统一，仅预编译Windows版本，`v1.0`及其以后会编译流行Linux发行版包。
 
 主要优化内容：

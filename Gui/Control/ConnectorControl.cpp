@@ -235,7 +235,7 @@ void ConnectorControl::onErrorOccurred()
 
 void ConnectorControl::onOwnInfo(const ClientInfo& info)
 {
-    QString infoMsg = QString("%1,%2").arg(info.clientId).arg(info.clientName);
+    QString infoMsg = QString("%1,%2").arg(QString::fromStdString(info.clientId)).arg(QString::fromStdString(info.clientName));
     ui->lineEdit->setText(infoMsg);
     onRefresh();
 }
