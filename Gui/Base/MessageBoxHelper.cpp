@@ -88,3 +88,12 @@ bool MessageBoxHelper::getTextInput(QWidget* parent, const QString& title, const
     outText = dialog.textValue().trimmed();
     return !outText.isEmpty();
 }
+
+void MessageBoxHelper::information(QWidget* parent, const QString& title, const QString& text)
+{
+    QMessageBox msgBox(parent);
+    msgBox.setWindowTitle(title);
+    msgBox.setText(text);
+    msgBox.setIcon(QMessageBox::Information);
+    msgBox.exec();
+}

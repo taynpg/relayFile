@@ -96,13 +96,14 @@ private:
     std::vector<FileMeta> needConfirmFiles_;
     std::vector<FileMeta> needRemoveTaskFiles_;
 
-    std::map<QString, int> curTableData_;
     std::shared_ptr<BaseAskDF> askLocalDf_{};
     std::shared_ptr<BaseAskDF> askRemoteDf_{};
     RelayTaskStatus status_{RelayTaskStatus::Init};
     std::shared_ptr<DoubleLinker> doubleLinker_{};
+
     std::vector<std::shared_ptr<TransItem>> transItems_;
     std::shared_ptr<WorkerThread<RelayTask>> workerThread_{};
+    std::map<QString, std::pair<int, QString>> curTableData_;
 };
 
 #endif   // RELAYTASK_H

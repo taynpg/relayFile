@@ -18,4 +18,5 @@ public:
     static bool questionYesNo(QWidget* parent, const QString& title, const QString& text);
     static bool getTextInput(QWidget* parent, const QString& title, const QString& label, QString& outText,
                              const QString& defaultValue = QString());
+    static void information(QWidget* parent, const QString& title, const QString& text);
 };

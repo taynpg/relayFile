@@ -111,6 +111,7 @@ void RelayTask::initSignals()
     connect(this, &RelayTask::signalNeedConfirmFiles, this, &RelayTask::onConfirmFiles);
     connect(this, &RelayTask::signalTransing, this, &RelayTask::onTransing);
     connect(this, &RelayTask::signalCancelWaitMsg, doubleLinker_.get(), &DoubleLinker::onCancelWaitMsg);
+    connect(this, &RelayTask::signalCheckUnComplete, this, &RelayTask::onCheckUnComplete);
 }
 
 void RelayTask::onTransComplete()
@@ -134,6 +135,10 @@ void RelayTask::onTransing()
 
 void RelayTask::onStartRun()
 {
+    if (!checkRet_) {
+        MessageBoxHelper::information(this, "提示", "基本检查未通过。");
+        return;
+    }
     disableControls();
     speedTimer_->start();
     workerThread_->invoke([this]() {
@@ -351,18 +356,20 @@ void RelayTask::onConfirmFiles()
             needRemoveTaskFiles_.push_back(item);
         } else if (r == MessageBoxHelper::Result::Exit) {
             emit signalCheckUnComplete();
+            return;
         } else if (r == MessageBoxHelper::Result::ALL) {
             needAsk = false;
         }
     }
     for (const auto& item : needRemoveTaskFiles_) {
-        QMetaObject::invokeMethod(this, [this, item]() {
-            auto qFull = QString::fromStdString(item.fullPath);
-            if (curTableData_.count(qFull)) {
-                auto* item = tableWidget_->item(curTableData_[qFull], 3);
+        auto fileName = QString::fromStdString(item.name);
+        for (const auto& mapItem : curTableData_) {
+            if (mapItem.second.second == fileName) {
+                auto* item = tableWidget_->item(mapItem.second.first, 3);
                 item->setText(GUI_FILE_TRAN_STATE_SKIP);
+                break;
             }
-        });
+        }
     }
     emit signalCheckComplete();
 }
@@ -474,7 +481,7 @@ void RelayTask::onRefreshSpeed()
 
 void RelayTask::setFileItem(const FileMeta& meta, int row, int index)
 {
-    curTableData_[QString::fromStdString(meta.fullPath)] = row;
+    curTableData_[QString::fromStdString(meta.fullPath)] = std::make_pair(row, QString::fromStdString(meta.name));
 
     auto* indexItem = new QTableWidgetItem(QString::number(index));
     indexItem->setFlags(indexItem->flags() & ~Qt::ItemIsEditable);
