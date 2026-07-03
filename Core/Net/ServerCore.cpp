@@ -8,7 +8,7 @@
 ServerCore::ServerCore(QObject* parent) : QTcpServer(parent)
 {
     monitorTimer_ = new QTimer(this);
-    monitorTimer_->setInterval(5000);
+    monitorTimer_->setInterval(15000);
     connect(monitorTimer_, &QTimer::timeout, this, &ServerCore::onMonitorHeart);
     monitorTimer_->start();
     connect(this, &QTcpServer::newConnection, this, &ServerCore::onNewConnection);
