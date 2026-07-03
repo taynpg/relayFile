@@ -28,10 +28,11 @@ void ConnectorControl::Quit()
 
 void ConnectorControl::initUI()
 {
-    ui->lineEdit->setEnabled(false);
-    ui->edCurrentClient->setEnabled(false);
+    ui->lineEdit->setReadOnly(true);
+    ui->edCurrentClient->setReadOnly(true);
     ui->btnDisconnect->setEnabled(false);
     ui->btnRefresh->setEnabled(false);
+    ui->lineEdit->setStyleSheet("color: red;");
 }
 
 void ConnectorControl::initLoadIp()
