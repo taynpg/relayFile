@@ -1,6 +1,7 @@
 #include "FileSession.h"
 
 #include "CoreDefine.hpp"
+#include "File/FileDir.h"
 #include "Protocol/Serialize.hpp"
 
 FileSession::FileSession(QObject* parent)
@@ -116,10 +117,11 @@ void FileSession::handleFrame(FramePtr frame)
     }
     case FrameType::kFileType_Request_Down: {
         auto fileTrans = std::make_shared<OneFileTrans>();
-        auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Send, msg.ff, msg.transId,
+        auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Send, msg, msg.transId,
                                            clientCore_->getOwnClientInfo().clientId, msg.uuid);
 
         fileTrans->setTargetControlId(frame->from);
+
         pushTask(fileTrans, msg, "文件任务初始化失败（Request_Down）。", FrameType::kFileType_Answer_Down, ret, false);
         qDebug() << QString::fromStdString(msg.from.clientId)
                  << "kFileType_Answer_Down:" << QString::fromStdString(msg.ff.fullPath) << "，结果：" << ret;
@@ -142,7 +144,7 @@ void FileSession::handleFrame(FramePtr frame)
             break;
         }
         auto fileTrans = std::make_shared<OneFileTrans>();
-        auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Receive, msg.ft, msg.transId,
+        auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Receive, msg, msg.transId,
                                            clientCore_->getOwnClientInfo().clientId, msg.uuid);
 
         fileTrans->setTargetControlId(frame->from);
@@ -153,7 +155,7 @@ void FileSession::handleFrame(FramePtr frame)
     }
     case FrameType::kFileType_Request_Send: {
         auto fileTrans = std::make_shared<OneFileTrans>();
-        auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Receive, msg.ft, msg.transId,
+        auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Receive, msg, msg.transId,
                                            clientCore_->getOwnClientInfo().clientId, msg.uuid);
 
         fileTrans->setTargetControlId(frame->from);
@@ -179,7 +181,7 @@ void FileSession::handleFrame(FramePtr frame)
             break;
         }
         auto fileTrans = std::make_shared<OneFileTrans>();
-        auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Send, msg.ff, msg.transId,
+        auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Send, msg, msg.transId,
                                            clientCore_->getOwnClientInfo().clientId, msg.uuid);
 
         fileTrans->setTargetControlId(frame->from);

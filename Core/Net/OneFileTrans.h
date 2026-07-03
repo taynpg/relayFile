@@ -42,7 +42,7 @@ public slots:
 public:
     OneFileTrans(QObject* parent = nullptr);
 
-    bool initTransfer(TransMode mode, const FileMeta& fileMeta, const std::string& targetId, const std::string& ownId,
+    bool initTransfer(TransMode mode, const Message& msg, const std::string& targetId, const std::string& ownId,
                       const std::string& uuid);
     void initSignals();
 
@@ -67,6 +67,7 @@ private:
     TransStatus state_{};
 
     FileMeta meta_;
+    Message msg_;
     QString filePath_;
     std::string uuid_;
     std::string targetId_;

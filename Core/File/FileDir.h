@@ -2,6 +2,7 @@
 
 #include <QString>
 #include <QVector>
+
 #include "Protocol/FileMeta.h"
 
 enum class RFileType {
@@ -17,6 +18,7 @@ struct RFileMeta {
     quint64 lastModified;
     quint16 permission;
     uint16_t exist{};
+    uint16_t mark{};
 };
 
 class FileDir
@@ -47,4 +49,6 @@ public:
     static bool EnsureDir(const QString& path);
     static bool Rename(const QString& oldName, const QString& newName);
     static bool GetFileNameNoExt(const QString& path, QString& fileName);
+    static uint16_t GetMark();
+    static bool SetPermission(const QString& path, quint16 permission);
 };

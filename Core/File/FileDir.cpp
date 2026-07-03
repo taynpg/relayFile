@@ -156,6 +156,7 @@ bool FileDir::GetFileList(const QString& path, QVector<RFileMeta>& fileList, boo
             info.dir = entry.isDir() ? entry.absoluteFilePath() : entry.path();
             info.fileName = entry.fileName();
             info.permission = entry.permissions();
+            info.mark = GetMark();
 
             if (entry.isDir()) {
                 info.fileType = RFileType::mTypeDir;
@@ -194,6 +195,7 @@ void FileDir::TurnMeta(const RFileMeta& rmeta, FileMeta& meta)
     meta.sizeStr = miniUtil::GetSizeInfo(rmeta.fileSize);
     meta.lastModified = rmeta.lastModified;
     meta.permission = rmeta.permission;
+    meta.mark = rmeta.mark;
     meta.type = rmeta.fileType == RFileType::mTypeDir ? FileType::FILE_TYPE_DIR : FileType::FILE_TYPE_FILE;
     meta.exist = rmeta.exist;
 }
@@ -229,6 +231,31 @@ bool FileDir::GetFileNameNoExt(const QString& path, QString& fileName)
     QFileInfo fileInfo(path);
     fileName = fileInfo.completeBaseName();
     return true;
+}
+
+uint16_t FileDir::GetMark()
+{
+#if defined(_WIN32)
+    return 0;
+#else
+    return 1;
+#endif
+}
+
+bool FileDir::SetPermission(const QString& path, quint16 permission)
+{
+    if (path.isEmpty()) {
+        return false;
+    }
+
+    QFile file(path);
+    if (!file.exists()) {
+        return false;
+    }
+
+    QFile::Permissions perms = static_cast<QFile::Permissions>(permission);
+    const bool ok = file.setPermissions(perms);
+    return ok;
 }
 
 QString FileDir::GenOutPath(const QString& root, const std::string& fullPath, const QString& outRoot)
@@ -274,6 +301,7 @@ void FileDir::GetFileRFileMeta(const QString& path, RFileMeta& rmeta)
         rmeta.fileType = info.isDir() ? RFileType::mTypeDir : RFileType::mTypeFile;
         rmeta.fileSize = info.size();
         rmeta.lastModified = info.lastModified().toMSecsSinceEpoch();
+        rmeta.mark = GetMark();
         return;
     }
     rmeta.exist = 0;

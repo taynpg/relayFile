@@ -3,6 +3,7 @@
 #include <QCoreApplication>
 #include <QTimer>
 
+#include "File/FileDir.h"
 #include "Protocol/Serialize.hpp"
 #include "Utils/Common.h"
 #include "Utils/TimerSTD.hpp"
@@ -102,7 +103,7 @@ bool DoubleLinker::RunTaskItem(const std::shared_ptr<TransItem>& item)
     reqMsg.from.clientId = controlSession_->getOwnInfo().clientId;
     reqMsg.to.clientId = controlSession_->getOtherInfo().clientId;
     reqMsg.mark = 1;
-
+    
     auto requestFrame = OneFrame::Create();
     requestFrame->data = serializeStruct(reqMsg);
     requestFrame->type = item->isSend ? FrameType::kFileType_Request_Send : FrameType::kFileType_Request_Down;

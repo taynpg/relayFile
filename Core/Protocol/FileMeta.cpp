@@ -16,6 +16,7 @@ FileMeta::FileMeta(const FileMeta& o)
     this->permission = o.permission;
     this->localRoot = o.localRoot;
     this->remoteRoot = o.remoteRoot;
+    this->mark = o.mark;
 }
 
 FileMeta& FileMeta::operator=(const FileMeta& o)
@@ -34,6 +35,7 @@ FileMeta& FileMeta::operator=(const FileMeta& o)
     this->permission = o.permission;
     this->localRoot = o.localRoot;
     this->remoteRoot = o.remoteRoot;
+    this->mark = o.mark;
     return *this;
 }
 
@@ -50,4 +52,5 @@ FileMeta::FileMeta(FileMeta&& s) noexcept
     this->permission = std::move(s.permission);
     this->localRoot = std::move(s.localRoot);
     this->remoteRoot = std::move(s.remoteRoot);
+    this->mark = std::move(s.mark);
 }

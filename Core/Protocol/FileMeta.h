@@ -28,6 +28,8 @@ struct FileMeta {
     std::string localRoot;
     std::string remoteRoot;
     uint16_t exist{};
+    uint16_t mark{};
+
     template <class Archive> void serialize(Archive& ar)
     {
         ar(dir, name, fullPath, size, sizeStr, type, lastModified, permission, localRoot, remoteRoot, exist);

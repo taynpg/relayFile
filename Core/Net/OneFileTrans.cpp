@@ -30,14 +30,15 @@ OneFileTrans::TransMode OneFileTrans::getTransMode()
     return tMode_;
 }
 
-bool OneFileTrans::initTransfer(TransMode mode, const FileMeta& fileMeta, const std::string& targetId, const std::string& ownId,
+bool OneFileTrans::initTransfer(TransMode mode, const Message& msg, const std::string& targetId, const std::string& ownId,
                                 const std::string& uuid)
 {
     QMutexLocker locker(&qMut_);
     tMode_ = mode;
     targetId_ = targetId;
-    totalSize_ = fileMeta.size;
-    meta_ = fileMeta;
+    msg_ = msg;
+    totalSize_ = (tMode_ == TransMode::Send ? msg.ff.size : msg.ft.size);
+    meta_ = (tMode_ == TransMode::Send ? msg.ff : msg.ft);
     transSize_ = 0;
     uuid_ = uuid;
     curBlockIndex_ = 0;
@@ -170,6 +171,16 @@ bool OneFileTrans::handleFinish(FramePtr frame)
     if (tMode_ == TransMode::Receive) {
         if (recvFile_.isOpen()) {
             recvFile_.close();
+        }
+        // 查看是否需要同步权限
+        auto ownMark = FileDir::GetMark();
+        if (ownMark != msg_.ff.mark) {
+            qInfo() << "不同系统，不同步权限，ownMark:" << ownMark << "，msgMark:" << msg_.ff.mark;
+        } else {
+            // 同步权限
+            auto ret = FileDir::SetPermission(filePath_, msg_.ff.permission);
+            qInfo() << "相同系统，同步权限，ownMark:" << ownMark << "，msgMark:" << msg_.ff.mark
+                    << ", permission:" << msg_.ff.permission << ", ret:" << ret;
         }
         emit signalFinished(ownId_);
         state_ = TransStatus::Finished;

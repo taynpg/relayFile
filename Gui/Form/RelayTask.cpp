@@ -302,7 +302,10 @@ void RelayTask::onBaseCheck()
                 emit signalCheckUnComplete();
                 return;
             }
+            // 发送方的信息
             item.size = tmpMeta.size;
+            item.permission = tmpMeta.permission;
+            item.mark = tmpMeta.mark;
         }
         emit signalUpdateTable();
         emit signalLog("源端文件存在性检查完成。");
@@ -323,7 +326,7 @@ void RelayTask::onBaseCheck()
         }
 
         auto nameConfirm = data_->isUpload ? GUI_DIRECTION_REMOTE : GUI_DIRECTION_LOCAL;
-        for (const auto& item : transItems_) {
+        for (auto& item : transItems_) {
             if (!askDfOther->AskFileMeta(item->to.fullPath, tmpMeta)) {
                 emit signalLog(
                     QString("%1文件文件存在性检查：%2 失败。").arg(nameConfirm).arg(QString::fromStdString(item->to.fullPath)));
