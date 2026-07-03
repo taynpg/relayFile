@@ -56,16 +56,82 @@ QString FileDir::GetErrInfo()
     return errInfo;
 }
 
-// QString FileDir::cdUp(const QString& path)
-// {
-//     QDir qdir(path);
-//     return qdir.cdUp() ? qdir.absolutePath() : path;
-// }
+bool isWindowsAbsolutePath(const QString& p)
+{
+    if (p.length() < 3) {
+        return false;
+    }
+
+    const QChar drive = p.at(0);
+    if (!drive.isLetter()) {
+        return false;
+    }
+
+    return p.at(1) == QLatin1Char(':') && (p.at(2) == QLatin1Char('/') || p.at(2) == QLatin1Char('\\'));
+}
+
+bool isUncPath(const QString& p)
+{
+    return p.startsWith("//") || p.startsWith("\\\\");
+}
+
+bool isUnixAbsolutePath(const QString& p)
+{
+    return p.startsWith('/');
+}
+
 QString FileDir::cdUp(const QString& path)
 {
-    QFileInfo fi(path);
-    QString up = fi.dir().absolutePath();
-    return (up == path) ? path : up;
+    if (path.isEmpty()) {
+        return {};
+    }
+
+    QString p = QDir::fromNativeSeparators(path);
+
+    // Windows absolute path: C:/...
+    if (isWindowsAbsolutePath(p)) {
+        int idx = p.lastIndexOf('/', p.length() - 2);
+        if (idx <= 2) {
+            return p.left(3);   // C:/
+        }
+        return p.left(idx + 1);
+    }
+
+    // UNC path: //server/share/...
+    if (isUncPath(p)) {
+        QStringList parts = p.mid(2).split('/', Qt::SkipEmptyParts);
+        if (parts.size() <= 2) {
+            return "//" + parts.join('/');
+        }
+        parts.removeLast();
+        return "//" + parts.join('/');
+    }
+
+    // Unix-style absolute path: /...
+    if (isUnixAbsolutePath(p)) {
+        if (p == "/") {
+            return "/";
+        }
+
+        QString trimmed = p;
+        if (trimmed.endsWith('/')) {
+            trimmed.chop(1);
+        }
+
+        int idx = trimmed.lastIndexOf('/');
+        if (idx <= 0) {
+            return "/";
+        }
+
+        return trimmed.left(idx + 1);
+    }
+
+    // Relative path: resolve to absolute path first
+    QFileInfo fi(p);
+    QString abs = QDir::cleanPath(fi.absoluteFilePath());
+
+    // Recurse only once
+    return FileDir::cdUp(abs);
 }
 
 bool FileDir::GetFileList(const QString& path, QVector<RFileMeta>& fileList, bool recursive)
