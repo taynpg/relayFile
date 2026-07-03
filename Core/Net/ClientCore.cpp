@@ -115,7 +115,7 @@ ClientInfo ClientCore::getOwnClientInfo() const
 
 QString ClientCore::getClientFullName() const
 {
-    QString name = QString("%1,%2").arg(oInfo_.clientId).arg(oInfo_.clientName);
+    QString name = QString("%1,%2").arg(QString::fromStdString(oInfo_.clientId)).arg(QString::fromStdString(oInfo_.clientName));
     return name;
 }
 

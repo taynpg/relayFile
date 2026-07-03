@@ -1,10 +1,12 @@
 #include "Common.h"
 
 #include <QCryptographicHash>
+#include <QDebug>
 #include <QFile>
 #include <QRandomGenerator>
 #include <QStorageInfo>
 #include <QUuid>
+#include <unordered_set>
 
 #include "miniUtil.h"
 

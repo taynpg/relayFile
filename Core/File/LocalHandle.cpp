@@ -1,5 +1,6 @@
 #include "LocalHandle.h"
 
+#include <QDebug>
 #include <QDir>
 #include <QDirIterator>
 #include <QFile>
@@ -194,7 +195,7 @@ bool ZipHandle::UnArchive(const QString& archivePath, const QString& extractPath
         return false;
     }
 
-    auto cleanup = qScopeGuard([&] { mz_zip_reader_end(&zip); });
+    std::shared_ptr<void> recv(nullptr, [&](void*) { mz_zip_reader_end(&zip); });
 
     // 确保解压根目录存在
     if (!ensureDir(extractPath)) {

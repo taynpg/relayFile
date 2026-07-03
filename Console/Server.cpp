@@ -1,4 +1,5 @@
 #include <Net/ServerCore.h>
+#include <Protocol/Protocol.h>
 #include <QCoreApplication>
 #include <Utils/Logger.h>
 #include <Utils/OwnLogger.h>
@@ -7,6 +8,10 @@
 
 int main(int argc, char* argv[])
 {
+    // Qt5兼容
+    qRegisterMetaType<int16_t>("int16_t");
+    qRegisterMetaType<FramePtr>("FramePtr");
+
     auto versionMsg = fmt::format("{}-v{}-{}", VERSION_GIT_COMMIT, VERSION_NUM, VERSION_DEV);
 
     if (argc == 2 && std::strcmp(argv[1], "--version") == 0) {

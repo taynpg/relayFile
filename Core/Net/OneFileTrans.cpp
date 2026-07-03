@@ -20,7 +20,7 @@ void OneFileTrans::onSendTimeout()
     QMutexLocker locker(&qMut_);
     if (state_ == TransStatus::Sending) {
         emit signalFailed(ownId_, "超时");
-        qWarning() << "发送超时:" << ownId_;
+        qWarning() << "发送超时:" << QString::fromStdString(ownId_);
         state_ = TransStatus::Interrupted;
     }
 }

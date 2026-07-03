@@ -40,3 +40,7 @@ target_link_libraries(relayFileCore PUBLIC Qt${QT_VERSION_MAJOR}::Core Qt${QT_VE
 if (COMPILE_NAME MATCHES "MINGW")
     target_link_libraries(relayFileCore PUBLIC ws2_32 mswsock)
 endif()
+
+if (UNIX)
+    target_link_libraries(relayFileCore PUBLIC pthread)
+endif()

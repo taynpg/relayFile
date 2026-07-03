@@ -96,7 +96,7 @@ void FileSession::clearTask(const std::string& uuid, bool isSend)
         }
     }
     if (isFind) {
-        qWarning() << "清除任务：" << uuid;
+        qWarning() << "清除任务：" << QString::fromStdString(uuid);
     }
 }
 
@@ -111,7 +111,7 @@ void FileSession::handleFrame(FramePtr frame)
         ClientInfo info;
         info.clientId = msg.to.clientId;
         clientCore_->onRecordOwnInfo(info);
-        qDebug() << "传输ID：" << info.clientId;
+        qDebug() << "传输ID：" << QString::fromStdString(info.clientId);
         break;
     }
     case FrameType::kFileType_Request_Down: {

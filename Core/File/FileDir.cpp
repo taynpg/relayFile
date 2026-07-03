@@ -1,5 +1,6 @@
 #include "FileDir.h"
 
+#include <QDateTime>
 #include <QDir>
 #include <QQueue>
 #include <Utils/miniUtil.h>

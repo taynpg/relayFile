@@ -155,7 +155,7 @@ template <typename HandleResp> bool DoubleLinker::bRequest(FramePtr frame, Handl
 
     FramePtr f = future.get();
     if (!f) {
-        qWarning() << "请求远端" << controlSession_->getOtherInfo().clientId << "超时未响应。";
+        qWarning() << "请求远端" << QString::fromStdString(controlSession_->getOtherInfo().clientId) << "超时未响应。";
         return false;
     }
 
@@ -171,7 +171,7 @@ template <typename HandleResp> void DoubleLinker::vRequest(FramePtr frame, Handl
 
     FramePtr f = future.get();
     if (!f) {
-        qWarning() << "请求远端" << controlSession_->getOtherInfo().clientId << "超时未响应。";
+        qWarning() << "请求远端" << QString::fromStdString(controlSession_->getOtherInfo().clientId) << "超时未响应。";
         return;
     }
 

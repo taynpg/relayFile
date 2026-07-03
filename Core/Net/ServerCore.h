@@ -22,7 +22,7 @@ public:
     bool startListen(const QString& hostName, quint16 port);
     void stopListen();
 
-private:
+public:
     struct ClientInfo {
         QTcpSocket* socket;
         QString id;
@@ -58,3 +58,6 @@ private:
     QMap<std::string, std::shared_ptr<ClientInfo>> tempMap_;
     QMap<std::string, std::shared_ptr<ClientInfo>> transMap_;
 };
+
+// Qt5兼容
+Q_DECLARE_METATYPE(ServerCore::ClientInfo*)
