@@ -32,6 +32,6 @@ struct FileMeta {
 
     template <class Archive> void serialize(Archive& ar)
     {
-        ar(dir, name, fullPath, size, sizeStr, type, lastModified, permission, localRoot, remoteRoot, exist);
+        ar(dir, name, fullPath, size, sizeStr, type, lastModified, permission, localRoot, remoteRoot, exist, mark);
     }
 };
