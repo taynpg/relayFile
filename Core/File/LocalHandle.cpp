@@ -118,7 +118,7 @@ QString ZipHandle::calcZipPath(const QString& root, const QString& file)
         return QFileInfo(file).fileName();
     }
 
-    return rel.replace("\\", "/");
+    return rel.replace(wrongSep, targetSep);
 }
 
 bool ZipHandle::addToZip(mz_zip_archive& zip, const QString& rootPath, const QString& filePath)
@@ -127,8 +127,8 @@ bool ZipHandle::addToZip(mz_zip_archive& zip, const QString& rootPath, const QSt
 
     if (fi.isDir()) {
         QString zipPath = calcZipPath(rootPath, filePath);
-        if (!zipPath.endsWith('/')) {
-            zipPath += '/';
+        if (!zipPath.endsWith(targetSep)) {
+            zipPath += targetSep;
         }
 
         if (!mz_zip_writer_add_mem(&zip, zipPath.toUtf8().constData(), nullptr, 0, MZ_DEFAULT_COMPRESSION)) {
@@ -213,19 +213,19 @@ bool ZipHandle::UnArchive(const QString& archivePath, const QString& extractPath
             continue;
         }
 
-        QString relPath = QString::fromUtf8(rawName).replace("\\", "/");
+        QString relPath = QString::fromUtf8(rawName).replace(wrongSep, targetSep);
         if (relPath.isEmpty()) {
             continue;
         }
 
-        const QString fullPath = QDir::cleanPath(extractPath + QLatin1Char('/') + relPath);
+        const QString fullPath = QDir::cleanPath(extractPath + targetSep + relPath);
 
         if (!fullPath.startsWith(QDir::cleanPath(extractPath))) {
             qWarning() << "Zip slip detected:" << relPath;
             return false;
         }
 
-        if (relPath.endsWith('/')) {
+        if (relPath.endsWith(targetSep)) {
             if (!ensureDir(fullPath)) {
                 qWarning() << "Failed to create directory:" << fullPath;
                 return false;

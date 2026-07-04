@@ -172,9 +172,7 @@ QString FileDir::Join(const QString& path, const QString& name)
     }
 
     QString result = p + sep + n;
-
-    /* 只做规范化，不改变风格 */
-    return QDir::cleanPath(result);
+    return result;
 }
 
 QString FileDir::Join(const QString& path, const QString& n1, const QString& n2)
