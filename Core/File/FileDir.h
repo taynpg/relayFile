@@ -5,6 +5,17 @@
 
 #include "Protocol/FileMeta.h"
 
+#ifdef Q_OS_WIN
+const QChar targetSep('\\');
+const QChar wrongSep('/');
+#else
+const QChar targetSep('/');
+const QChar wrongSep('\\');
+#endif
+
+const QChar unixSep('/');
+const QChar winSep('\\');
+
 enum class RFileType {
     mTypeDir,
     mTypeFile,

@@ -97,7 +97,8 @@ bool LocalHandle::AskHomeAndDriver(std::vector<std::string>& drivers, std::strin
     }
     auto ds = Common::GetLocalDrivers();
     drivers.clear();
-    for (const auto& driver : ds) {
+    for (auto& driver : ds) {
+        driver.replace(wrongSep, targetSep);
         drivers.push_back(driver.toStdString());
     }
     return true;

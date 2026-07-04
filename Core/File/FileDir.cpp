@@ -110,14 +110,6 @@ bool FileDir::GetFileList(const QString& path, QVector<RFileMeta>& fileList, boo
 
 bool FileDir::GetHome(QString& home)
 {
-#ifdef Q_OS_WIN
-    const QChar targetSep('\\');
-    const QChar wrongSep('/');
-#else
-    const QChar targetSep('/');
-    const QChar wrongSep('\\');
-#endif
-
     home = QDir::homePath();
     home.replace(wrongSep, targetSep);
     return true;
@@ -157,9 +149,6 @@ QString FileDir::Join(const QString& path, const QString& name)
     if (name.isEmpty()) {
         return path;
     }
-
-    const QChar unixSep('/');
-    const QChar winSep('\\');
 
     /* 判断路径风格 */
     bool isWindows = IsWindowsPath(path);
@@ -243,25 +232,35 @@ QString FileDir::GenOutPath(const QString& root, const QString& fullPath, const 
         return QString();
     }
 
-    QFileInfo rootInfo(root);
-    QFileInfo fullPathInfo(fullPath);
+    auto lexRoot = root;
+    auto lexFull = fullPath;
 
-    QString absRoot = QDir::cleanPath(rootInfo.absoluteFilePath());
-    QString absFull = QDir::cleanPath(fullPathInfo.absoluteFilePath());
+    lexRoot.replace('\\', '/');
+    lexFull.replace('\\', '/');
 
-    if (!absRoot.endsWith('/')) {
-        absRoot += '/';
+    if (!lexRoot.endsWith('/')) {
+        lexRoot += '/';
     }
 
-    if (!absFull.startsWith(absRoot, Qt::CaseInsensitive)) {
+    if (!lexFull.startsWith(lexRoot, Qt::CaseInsensitive)) {
         return QString();
     }
 
-    QString relativePath = absFull.mid(absRoot.length());
-    QDir outDir(outRoot);
-    QString result = outDir.filePath(relativePath);
+    QString relativePath = lexFull.mid(lexRoot.length());
 
-    return QDir::cleanPath(result);
+    auto lexOutRoot = outRoot;
+    if (lexOutRoot.startsWith('/')) {
+        if (!lexOutRoot.endsWith('/')) {
+            lexOutRoot += '/';
+        }
+        lexOutRoot += relativePath;
+    } else {
+        if (!lexOutRoot.endsWith('\\')) {
+            lexOutRoot += '\\';
+        }
+        lexOutRoot += relativePath;
+    }
+    return lexOutRoot;
 }
 
 void FileDir::GetFileRFileMeta(const QString& path, RFileMeta& rmeta)
