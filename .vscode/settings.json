@@ -33,7 +33,9 @@
     //     //"--query-driver=C:/msys64/ucrt64/bin/g++.exe"
     // ],
     "cmake.configureArgs": [
-        "-DRF_USE_GTEST=ON"
+        "-DRF_USE_GTEST=ON",
+        "-DQT_DEFAULT_MAJOR_VERSION=6",
+        "-DQAPPLICATION_CLASS=QApplication"
     ],
     "cmake.options.statusBarVisibility": "visible",
     "cmake.generator": "Ninja",

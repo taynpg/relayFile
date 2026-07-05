@@ -53,6 +53,7 @@ target_link_libraries(relayFileGui PRIVATE relayFileCore
     Qt${QT_VERSION_MAJOR}::Widgets 
     Qt${QT_VERSION_MAJOR}::Network 
     Qt${QT_VERSION_MAJOR}::Sql
+    SingleApplication::SingleApplication
 )
 set_target_properties(relayFileGui PROPERTIES
     MACOSX_BUNDLE TRUE

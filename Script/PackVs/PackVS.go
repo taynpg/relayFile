@@ -136,6 +136,8 @@ func main() {
 	cmakeArgs := []string{
 		"-B", buildDir,
 		"-S", root,
+		"-DQT_DEFAULT_MAJOR_VERSION=6",
+		"-DQAPPLICATION_CLASS=QApplication",
 		"-A", "x64",
 	}
 

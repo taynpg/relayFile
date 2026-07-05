@@ -151,6 +151,8 @@ func main() {
 		"-S", root,
 		"-DCMAKE_BUILD_TYPE=Release",
 		"-DRF_USE_MINGW=ON",
+		"-DQT_DEFAULT_MAJOR_VERSION=6",
+		"-DQAPPLICATION_CLASS=QApplication",
 		"-G", "MinGW Makefiles",
 	}
 

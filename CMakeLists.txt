@@ -39,6 +39,7 @@ add_subdirectory(Core)
 add_subdirectory(Console)
 
 if(DEFINED RF_USE_GUI AND RF_USE_GUI)
+    add_subdirectory(Third/SingleApplication)
     add_subdirectory(Gui)
 endif()
 
