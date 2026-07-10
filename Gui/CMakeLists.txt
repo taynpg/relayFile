@@ -31,6 +31,7 @@ set(CONTROL_SOURCES
     Form/WaitDialog.h Form/WaitDialog.cpp
     Form/FileMetaInfo.h Form/FileMetaInfo.cpp Form/FileMetaInfo.ui
     Form/ReplaceArea.h Form/ReplaceArea.cpp Form/ReplaceArea.ui
+    Form/Setting.h Form/Setting.cpp Form/Setting.ui
 )
 
 set(BASE_SOURCES

@@ -15,6 +15,9 @@ public:
     explicit LogControl(QWidget* parent = nullptr);
     ~LogControl();
 
+private:
+    void InitMenu();
+
 public:
     void Debug(const QString& msg);
     void Info(const QString& msg);

@@ -58,6 +58,18 @@ void to_json(nlohmann::json& j, const IpHistory& h)
     j = nlohmann::json{{"history", h.history}, {"current", h.current}};
 }
 
+void from_json(const nlohmann::json& j, RetryCon& con)
+{
+    j.at("interval").get_to(con.interval);
+    j.at("count").get_to(con.count);
+    j.at("useRecon").get_to(con.useRecon);
+}
+
+void to_json(nlohmann::json& j, const RetryCon& con)
+{
+    j = nlohmann::json{{"interval", con.interval}, {"count", con.count}, {"useRecon", con.useRecon}};
+}
+
 void BaseConfig::genPath()
 {
     configDir_ = miniPath::Join(miniPath::GetHome().second, ".config", "relayFile");
@@ -171,6 +183,25 @@ bool BaseConfig::saveWidthHeight(int width, int height)
     nlohmann::json j = loadJson();
     j["Width"] = width;
     j["Height"] = height;
+    return saveJson(j);
+}
+
+bool BaseConfig::getReconInterval(RetryCon& con)
+{
+    QMutexLocker locker(&mutex_);
+    nlohmann::json j = loadJson();
+    if (j.contains("reconInterval") && !j["reconInterval"].is_null()) {
+        con = j["reconInterval"].get<RetryCon>();
+        return true;
+    }
+    return false;
+}
+
+bool BaseConfig::saveReconInterval(const RetryCon& con)
+{
+    QMutexLocker locker(&mutex_);
+    nlohmann::json j = loadJson();
+    j["reconInterval"] = con;
     return saveJson(j);
 }
 

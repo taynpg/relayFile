@@ -9,6 +9,12 @@ struct IpHistory {
     std::string current;
 };
 
+struct RetryCon {
+    bool useRecon{false};
+    int interval{100};
+    int count{1};
+};
+
 class Common
 {
 private:
@@ -34,6 +40,8 @@ public:
     bool pushOneIp(const std::string& ip);
     std::pair<int, int> getWidthHeight();
     bool saveWidthHeight(int width, int height);
+    bool getReconInterval(RetryCon& con);
+    bool saveReconInterval(const RetryCon& con);
 
 private:
     bool saveJson(const nlohmann::json& j);
