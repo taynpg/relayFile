@@ -17,7 +17,6 @@ void OneFileTrans::initSignals()
 
 void OneFileTrans::onSendOrRecvTimeout()
 {
-    QMutexLocker locker(&qMut_);
     if (state_ == TransStatus::Sending) {
         emit signalFailed(ownId_, "超时");
         qWarning() << "发送超时:" << QString::fromStdString(ownId_);
@@ -175,6 +174,7 @@ FramePtr OneFileTrans::CreateFrame(FrameType type)
 
 bool OneFileTrans::handleFinish(FramePtr frame)
 {
+    sendOrRecvTimeout_->stop();
     if (tMode_ == TransMode::Receive) {
         if (recvFile_.isOpen()) {
             recvFile_.close();
