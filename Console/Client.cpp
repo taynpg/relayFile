@@ -5,6 +5,12 @@
 
 BaseClient::BaseClient(QObject* parent) : QObject(parent)
 {
+    reconHelper_ = std::make_shared<ReconHelper>();
+}
+
+BaseClient::~BaseClient()
+{
+    reconTimer_->stop();
 }
 
 void BaseClient::Work(const QString& ip, int16_t port)
@@ -16,9 +22,39 @@ void BaseClient::Work(const QString& ip, int16_t port)
     doubleLinker_ = std::make_shared<DoubleLinker>();
     doubleLinker_->SetControlSession(controlSession_);
     doubleLinker_->SetFileSession(fileSession_);
-    
+
+    curIp_ = ip;
+    curPort_ = port;
+
     initSignal();
-    emit signalConnect(ip, port);
+    initReconnectTimer();
+}
+
+void BaseClient::initReconnectTimer()
+{
+    // 重连助手
+    reconHelper_ = std::make_shared<ReconHelper>();
+    RetryCon rc;
+    baseConfig_->getReconInterval(rc);
+    reconHelper_->setRetryCon(rc);
+    reconHelper_->markConnected(false);
+    reconHelper_->markNeedRecon(true);
+
+    reconTimer_ = new QTimer(this);
+    connect(reconTimer_, &QTimer::timeout, this, &BaseClient::onReconnectCheck);
+    reconTimer_->start(1000);
+
+    if (!rc.useRecon) {
+        emit signalConnect(curIp_, curPort_);
+    }
+}
+
+void BaseClient::onReconnectCheck()
+{
+    if (reconHelper_->shouleReconnct()) {
+        qWarning() << "Auto reconnect To => " << curIp_ << ":" << curPort_;
+        emit signalConnect(curIp_, curPort_);
+    }
 }
 
 void BaseClient::initSignal()
@@ -36,6 +72,7 @@ void BaseClient::initSignal()
 
 void BaseClient::onSuccess()
 {
+    reconHelper_->markConnected(true);
     if (baseConfig_) {
         emit signalAskID(baseConfig_->getCurrentName());
     }
@@ -43,5 +80,6 @@ void BaseClient::onSuccess()
 
 void BaseClient::onError()
 {
+    reconHelper_->markConnected(false);
     qInfo() << "断开了连接...";
 }

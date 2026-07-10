@@ -55,3 +55,25 @@ public:
     std::string configDir_{};
     QString baseConfigPath_;
 };
+
+class ReconHelper
+{
+public:
+    ReconHelper();
+    ~ReconHelper() = default;
+
+public:
+    void setRetryCon(const RetryCon& con);
+    void markNeedRecon(bool needRecon);
+    void markConnected(bool isConnected);
+    bool shouleReconnct();
+
+private:
+    QMutex mutex_;
+    int curRetryCount_{0};
+    bool needRecon_{false};
+    bool isConnected_{false};
+    RetryCon retryCon_;
+    // 记录当前时间戳
+    uint64_t lastReconTime_{0};
+};

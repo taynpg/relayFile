@@ -285,3 +285,52 @@ QString BaseConfig::generateRandomName()
 
     return adj + noun;
 }
+
+ReconHelper::ReconHelper()
+{
+    curRetryCount_ = 0;
+}
+
+void ReconHelper::setRetryCon(const RetryCon& con)
+{
+    QMutexLocker locker(&mutex_);
+    retryCon_ = con;
+}
+
+void ReconHelper::markNeedRecon(bool needRecon)
+{
+    QMutexLocker locker(&mutex_);
+    needRecon_ = needRecon;
+}
+
+void ReconHelper::markConnected(bool isConnected)
+{
+    isConnected_ = isConnected;
+    if (isConnected_) {
+        curRetryCount_ = 0;
+        lastReconTime_ = QDateTime::currentMSecsSinceEpoch();
+    }
+}
+
+bool ReconHelper::shouleReconnct()
+{
+    // 不需要连，不连。
+    if (!needRecon_ || !retryCon_.useRecon) {
+        return false;
+    }
+    // 未断开，不连。
+    if (isConnected_) {
+        return false;
+    }
+    // 超过了重试次数，不连。
+    if (curRetryCount_ >= retryCon_.count) {
+        return false;
+    }
+    // 未达到间隔时间，不连。
+    if ((QDateTime::currentMSecsSinceEpoch() - lastReconTime_) / 1000 < retryCon_.interval) {
+        return false;
+    }
+    ++curRetryCount_;
+    lastReconTime_ = QDateTime::currentMSecsSinceEpoch();
+    return true;
+}

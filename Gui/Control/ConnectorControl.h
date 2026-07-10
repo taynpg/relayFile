@@ -36,6 +36,7 @@ private:
     void initSignals();
     void initUI();
     void initLoadIp();
+    void initReconnectTimer();
 
 public slots:
     void onConnectSuccess();
@@ -47,6 +48,7 @@ public slots:
     void onOwnInfo(const ClientInfo& info);
     void onTableContextMenu(const QPoint& pos);
     void onUseClient(const QString& id, const QString& name);
+    void onReconnectCheck();
 
 public:
     void connectToServer();
@@ -56,9 +58,13 @@ private:
     void updateClientList(const MessagePtr& msg);
 
 private:
-    std::shared_ptr<BaseConfig> baseConfig_{};
-    std::shared_ptr<DoubleLinker> doubleLinker_{};
+    QString curIp_;
+    int16_t curPort_;
+    QTimer* reconTimer_{};
     Ui::ConnectorControl* ui;
+    std::shared_ptr<BaseConfig> baseConfig_{};
+    std::shared_ptr<ReconHelper> reconHelper_{};
+    std::shared_ptr<DoubleLinker> doubleLinker_{};
 };
 
 #endif   // CONNECTORCONTROL_H

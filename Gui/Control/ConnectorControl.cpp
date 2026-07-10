@@ -20,6 +20,30 @@ ConnectorControl::ConnectorControl(QWidget* parent) : QDialog(parent), ui(new Ui
     initSignals();
     baseConfig_ = GlobalData::getInstance()->getBaseConfig();
     initLoadIp();
+    initReconnectTimer();
+}
+
+void ConnectorControl::initReconnectTimer()
+{
+    // 重连助手
+    reconHelper_ = std::make_shared<ReconHelper>();
+    RetryCon rc;
+    baseConfig_->getReconInterval(rc);
+    reconHelper_->setRetryCon(rc);
+    reconHelper_->markConnected(false);
+    reconHelper_->markNeedRecon(false);
+
+    reconTimer_ = new QTimer(this);
+    connect(reconTimer_, &QTimer::timeout, this, &ConnectorControl::onReconnectCheck);
+    reconTimer_->start(1000);
+}
+
+void ConnectorControl::onReconnectCheck()
+{
+    if (reconHelper_->shouleReconnct()) {
+        qWarning() << "Auto reconnect To => " << curIp_ << ":" << curPort_;
+        emit signalDoConnect(curIp_, curPort_);
+    }
 }
 
 void ConnectorControl::Quit()
@@ -50,6 +74,7 @@ void ConnectorControl::initLoadIp()
 
 ConnectorControl::~ConnectorControl()
 {
+    reconTimer_->stop();
     delete ui;
 }
 
@@ -74,7 +99,10 @@ void ConnectorControl::initTable()
 void ConnectorControl::initSignals()
 {
     connect(ui->btnConnect, &QPushButton::clicked, this, &ConnectorControl::connectToServer);
-    connect(ui->btnDisconnect, &QPushButton::clicked, this, [this]() { emit signalDoDisConnect(); });
+    connect(ui->btnDisconnect, &QPushButton::clicked, this, [this]() {
+        reconHelper_->markNeedRecon(false);
+        emit signalDoDisConnect();
+    });
     connect(ui->btnRefresh, &QPushButton::clicked, this, &ConnectorControl::onRefresh);
 
     auto* cliCore = doubleLinker_->GetControlSession()->getClientCore();
@@ -172,7 +200,9 @@ void ConnectorControl::connectToServer()
         return;
     }
     int16_t portNum = port.toInt();
-    emit signalDoConnect(ip, portNum);
+    curIp_ = ip;
+    curPort_ = portNum;
+    emit signalDoConnect(curIp_, curPort_);
 }
 
 bool ConnectorControl::parseIpPort(const QString& ipPort, QString& outIp, QString& outPort)
@@ -205,6 +235,8 @@ bool ConnectorControl::parseIpPort(const QString& ipPort, QString& outIp, QStrin
 
 void ConnectorControl::onConnectSuccess()
 {
+    reconHelper_->markConnected(true);
+    reconHelper_->markNeedRecon(true);
     ui->btnConnect->setEnabled(false);
     ui->btnDisconnect->setEnabled(true);
     ui->btnRefresh->setEnabled(true);
@@ -221,6 +253,7 @@ void ConnectorControl::onDisconnectSuccess()
 
 void ConnectorControl::onErrorOccurred()
 {
+    reconHelper_->markConnected(false);
     ui->btnConnect->setEnabled(true);
     ui->btnDisconnect->setEnabled(false);
     ui->btnRefresh->setEnabled(false);
