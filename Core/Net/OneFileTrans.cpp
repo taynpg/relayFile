@@ -6,22 +6,26 @@
 
 OneFileTrans::OneFileTrans(QObject* parent) : QObject(parent)
 {
-    sendTimeoutTimer_ = new QTimer(this);
-    sendTimeoutTimer_->setSingleShot(true);
-    connect(sendTimeoutTimer_, &QTimer::timeout, this, &OneFileTrans::onSendTimeout);
+    sendOrRecvTimeout_ = new QTimer(this);
+    sendOrRecvTimeout_->setSingleShot(true);
+    connect(sendOrRecvTimeout_, &QTimer::timeout, this, &OneFileTrans::onSendOrRecvTimeout);
 }
 
 void OneFileTrans::initSignals()
 {
 }
 
-void OneFileTrans::onSendTimeout()
+void OneFileTrans::onSendOrRecvTimeout()
 {
     QMutexLocker locker(&qMut_);
     if (state_ == TransStatus::Sending) {
         emit signalFailed(ownId_, "超时");
         qWarning() << "发送超时:" << QString::fromStdString(ownId_);
-        state_ = TransStatus::Interrupted;
+        handleInterrupt(nullptr);
+    } else if (state_ == TransStatus::Receving) {
+        emit signalFailed(ownId_, "超时");
+        qWarning() << "接收超时:" << QString::fromStdString(ownId_);
+        handleInterrupt(nullptr);
     }
 }
 
@@ -103,7 +107,7 @@ bool OneFileTrans::nextSend()
     auto frame = CreateFrame(FrameType::kFileType_Request_Chuck);
     frame->data.assign(buffer.begin(), buffer.end());
     emit signalRequestSend(frame);
-    sendTimeoutTimer_->start(defSendTimeout);
+    sendOrRecvTimeout_->start(defSendTimeout);
     return true;
 }
 
@@ -111,7 +115,7 @@ bool OneFileTrans::handleAck(FramePtr frame)
 {
     if (frame->index == curBlockIndex_) {
         // timer
-        sendTimeoutTimer_->stop();
+        sendOrRecvTimeout_->stop();
         transSize_ += blockSize_;
         if (transSize_ > totalSize_) {
             transSize_ = totalSize_;
@@ -134,6 +138,7 @@ bool OneFileTrans::handleRecvChuck(FramePtr frame)
     if (frame->index != curBlockIndex_) {
         return false;
     }
+    sendOrRecvTimeout_->stop();
     qint64 written = recvFile_.write(frame->data.data(), static_cast<qint64>(frame->data.size()));
     if (written != static_cast<qint64>(frame->data.size())) {
         qWarning() << "写入文件失败";
@@ -143,6 +148,7 @@ bool OneFileTrans::handleRecvChuck(FramePtr frame)
     emit signalProcess(transSize_, totalSize_);
     auto f = CreateFrame(FrameType::kFileType_Request_Ack);
     emit signalRequestSend(f);
+    sendOrRecvTimeout_->start(defRecvTimeout);
 
     curBlockIndex_++;
     return true;

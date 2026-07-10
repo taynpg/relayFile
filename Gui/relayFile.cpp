@@ -67,6 +67,7 @@ relayFile::~relayFile()
 void relayFile::Quit()
 {
     emit signalCancelWaitMsg();
+    connectorControl_->Quit();
     doubleLinker_->Quit();
     localExplorerControl_->Quit();
     remoteExplorerControl_->Quit();

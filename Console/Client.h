@@ -4,6 +4,7 @@
 #include <QString>
 #include <Utils/Common.h>
 #include <memory>
+#include <QTimer>
 
 class BaseConfig;
 class ControlSession;

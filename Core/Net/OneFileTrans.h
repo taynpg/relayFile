@@ -56,14 +56,14 @@ public:
     TransStatus getTransStatus() const;
     QString getTransName() const;
 
-    void onSendTimeout();
+    void onSendOrRecvTimeout();
     void setTargetControlId(const std::string& targetControlId);
     FramePtr CreateFrame(FrameType type);
 
 private:
     TransMode tMode_{};
     QMutex qMut_;
-    QTimer* sendTimeoutTimer_{};
+    QTimer* sendOrRecvTimeout_{};
     TransStatus state_{};
 
     FileMeta meta_;

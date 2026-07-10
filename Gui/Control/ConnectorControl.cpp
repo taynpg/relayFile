@@ -48,6 +48,7 @@ void ConnectorControl::onReconnectCheck()
 
 void ConnectorControl::Quit()
 {
+    reconTimer_->stop();
 }
 
 void ConnectorControl::initUI()
@@ -74,7 +75,6 @@ void ConnectorControl::initLoadIp()
 
 ConnectorControl::~ConnectorControl()
 {
-    reconTimer_->stop();
     delete ui;
 }
 
