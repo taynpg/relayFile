@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>678</width>
-    <height>398</height>
+    <width>1240</width>
+    <height>479</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -72,6 +72,19 @@
         </size>
        </property>
       </spacer>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="edFrom"/>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="edTo"/>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnReplace">
+       <property name="text">
+        <string>搜索替换</string>
+       </property>
+      </widget>
      </item>
     </layout>
    </item>

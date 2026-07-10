@@ -34,6 +34,7 @@ private:
     void insertRow(int id, const QString& name, const QString& type, const QString& mark, const QString& localDir,
                    const QString& remoteDir);
     bool isNameValid(const QString& name);
+    void exeReplace();
 
 private:
     void initControls();

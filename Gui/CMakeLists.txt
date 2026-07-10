@@ -30,6 +30,7 @@ set(CONTROL_SOURCES
     Base/InfoDrop.h Base/InfoDrop.cpp
     Form/WaitDialog.h Form/WaitDialog.cpp
     Form/FileMetaInfo.h Form/FileMetaInfo.cpp Form/FileMetaInfo.ui
+    Form/ReplaceArea.h Form/ReplaceArea.cpp Form/ReplaceArea.ui
 )
 
 set(BASE_SOURCES

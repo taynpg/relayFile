@@ -9,6 +9,7 @@
 
 #include "Base/BaseHelper.h"
 #include "Base/MessageBoxHelper.h"
+#include "Form/ReplaceArea.h"
 #include "ui_ComparisonControl.h"
 
 ComparisonControl::ComparisonControl(QWidget* parent) : QDialog(parent), ui(new Ui::ComparisonControl)
@@ -21,6 +22,9 @@ ComparisonControl::ComparisonControl(QWidget* parent) : QDialog(parent), ui(new 
     ui->cbConfig->setEditable(false);
     comparisonSql_ = std::make_shared<ComparisonSql>();
     comparisonSql_->open(GlobalData::getInstance()->getGlobalConfigDir() + "/relayFileDb");
+
+    ui->edFrom->setMaximumWidth(200);
+    ui->edTo->setMaximumWidth(200);
 }
 
 ComparisonControl::~ComparisonControl()
@@ -99,6 +103,7 @@ void ComparisonControl::initSignals()
     connect(ui->btnNew, &QPushButton::clicked, this, &ComparisonControl::onNewConfig);
     connect(ui->btnCopy, &QPushButton::clicked, this, &ComparisonControl::onCopyConfig);
     connect(ui->listWidget, &QListWidget::itemDoubleClicked, this, &ComparisonControl::onListDoubleClick);
+    connect(ui->btnReplace, &QPushButton::clicked, this, &ComparisonControl::exeReplace);
 }
 
 void ComparisonControl::initTableWidget()
@@ -185,7 +190,7 @@ void ComparisonControl::saveConfig()
         }
     }
     if (isSuccess) {
-        QMessageBox::information(this, "提示", "保存成功");
+        QMessageBox::information(this, "提示", "保存成功，请重新加载配置。");
         if (ui->cbConfig->findText(config) < 0) {
             ui->cbConfig->addItem(config);
         }
@@ -393,6 +398,45 @@ bool ComparisonControl::isNameValid(const QString& name)
         return false;
     }
     return true;
+}
+
+void ComparisonControl::exeReplace()
+{
+    auto fromContent = ui->edFrom->text().trimmed();
+    auto toContent = ui->edTo->text().trimmed();
+    if (fromContent.isEmpty() || toContent.isEmpty()) {
+        MessageBoxHelper::information(this, "提示", "内容不能为空");
+        return;
+    }
+
+    if (!MessageBoxHelper::questionYesNo(this, "确认", "是否执行替换？")) {
+        return;
+    }
+
+    ReplaceArea replaceArea(this);
+    replaceArea.exec();
+
+    auto ret = replaceArea.getResult();
+    if (!ret->useReplace) {
+        return;
+    }
+
+    auto replaceItem = [this](int i, int index, bool useCase, bool useRegex, const QString& fromContent,
+                              const QString& toContent) {
+        auto* item = tableWidget_->item(i, index);
+        auto preText = item->text().trimmed();
+        if (preText.contains(fromContent)) {
+            preText.replace(fromContent, toContent);
+            item->setText(preText);
+        }
+    };
+
+    auto count = tableWidget_->rowCount();
+    for (int i = 0; i < count; i++) {
+        for (const auto& index : ret->areaIndexs) {
+            replaceItem(i, index, ret->useCase, ret->useRegex, fromContent, toContent);
+        }
+    }
 }
 
 void ComparisonControl::onNewConfig()
