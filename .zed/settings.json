@@ -1,0 +1,21 @@
+{
+  "lsp": {
+    "clangd": {
+      "binary": {
+        "arguments": [
+          "--header-insertion=never",
+          "--all-scopes-completion",
+          "--completion-style=detailed",
+          "--clang-tidy",
+          "-j=4",
+          "--pch-storage=memory",
+          "--compile-commands-dir=build",
+          "--background-index",
+          "--ranking-model=heuristics",
+          "--function-arg-placeholders=false",
+          "--query-driver=D:/Program/mingw64/bin/g++.exe",
+        ],
+      },
+    },
+  },
+}

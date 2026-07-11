@@ -81,6 +81,7 @@ private:
     void onShowWaitDialog();
     void onShowNotice(const QString& msg);
     void onConfirm(const QString& title, const QString& text);
+    void onHeaderClicked(int index);
 
 private:
     void uiPathSet(const QString& path);

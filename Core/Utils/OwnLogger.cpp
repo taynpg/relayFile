@@ -2,8 +2,13 @@
 
 #include "Logger.h"
 
-OwnLogger::OwnLogger()
+OwnLogger::OwnLogger(QObject* parent) : QObject(parent)
 {
+    connect(&Logger::instance(), &Logger::signalLogTrace, this, &OwnLogger::ShowInfo);
+    connect(&Logger::instance(), &Logger::signalLogDebug, this, &OwnLogger::ShowInfo);
+    connect(&Logger::instance(), &Logger::signalLogInfo, this, &OwnLogger::ShowInfo);
+    connect(&Logger::instance(), &Logger::signalLogWarn, this, &OwnLogger::ShowInfo);
+    connect(&Logger::instance(), &Logger::signalLogError, this, &OwnLogger::ShowInfo);
 }
 
 OwnLogger::~OwnLogger()
@@ -33,4 +38,9 @@ void OwnLogger::ConsoleMsgHander(QtMsgType type, const QMessageLogContext& conte
         SPDLOG_WARN("Unknown QtMsgType type.");
         break;
     }
+}
+
+void OwnLogger::ShowInfo(const QString& data)
+{
+    qInfo() << data;
 }

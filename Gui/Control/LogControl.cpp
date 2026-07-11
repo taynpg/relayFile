@@ -13,6 +13,12 @@ LogControl::LogControl(QWidget* parent) : QDialog(parent), ui(new Ui::LogControl
     ui->setupUi(this);
     ui->pedLog->setReadOnly(true);
     InitMenu();
+
+    connect(&Logger::instance(), &Logger::signalLogTrace, this, &LogControl::ShowInfo);
+    connect(&Logger::instance(), &Logger::signalLogDebug, this, &LogControl::ShowInfo);
+    connect(&Logger::instance(), &Logger::signalLogInfo, this, &LogControl::ShowInfo);
+    connect(&Logger::instance(), &Logger::signalLogWarn, this, &LogControl::ShowInfo);
+    connect(&Logger::instance(), &Logger::signalLogError, this, &LogControl::ShowInfo);
 }
 
 LogControl::~LogControl()
@@ -35,40 +41,8 @@ void LogControl::InitMenu()
             [this, menu](const QPoint& pos) { menu->exec(ui->pedLog->mapToGlobal(pos)); });
 }
 
-void LogControl::Debug(const QString& msg)
+void LogControl::ShowInfo(const QString& msg)
 {
-    auto cpMsg = msg;
-    SPDLOG_DEBUG(cpMsg.toStdString());
-    formatMsg(cpMsg);
-    ui->pedLog->appendPlainText(cpMsg);
-}
-
-void LogControl::Info(const QString& msg)
-{
-    auto cpMsg = msg;
-    SPDLOG_INFO(cpMsg.toStdString());
-    formatMsg(cpMsg);
-    ui->pedLog->appendPlainText(cpMsg);
-}
-
-void LogControl::Warn(const QString& msg)
-{
-    auto cpMsg = msg;
-    SPDLOG_WARN(cpMsg.toStdString());
-    formatMsg(cpMsg);
-    ui->pedLog->appendPlainText(cpMsg);
-}
-
-void LogControl::Error(const QString& msg)
-{
-    auto cpMsg = msg;
-    SPDLOG_ERROR(cpMsg.toStdString());
-    formatMsg(cpMsg);
-    ui->pedLog->appendPlainText(cpMsg);
-}
-
-void LogControl::formatMsg(QString& msg)
-{
-    auto dt = QDateTime::currentDateTime().toString("hh:mm:ss.zzz");
-    msg = "[" + dt + "] " + msg;
+    ui->pedLog->moveCursor(QTextCursor::End);
+    ui->pedLog->insertPlainText(msg);
 }

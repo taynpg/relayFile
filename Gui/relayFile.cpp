@@ -1,6 +1,7 @@
 #include "relayFile.h"
 
 #include <QCloseEvent>
+#include <QDateTime>
 #include <QMessageBox>
 #include <QScreen>
 #include <QSplitter>
@@ -33,7 +34,7 @@ relayFile::relayFile(QWidget* parent) : QWidget(parent), ui(new Ui::relayFile)
     GlobalData::getInstance()->setBaseConfig(baseConfig_);
     connect(this, &relayFile::signalCancelWaitMsg, doubleLinker_.get(), &DoubleLinker::onCancelWaitMsg);
 
-    Logger logger;
+    Logger& logger = Logger::instance();
     logger.setInfo("log/relayFileGUI.log", "relayFileGUI");
     logger.initSimpleLogger(false);
 
@@ -45,6 +46,8 @@ relayFile::relayFile(QWidget* parent) : QWidget(parent), ui(new Ui::relayFile)
 
     qInstallMessageHandler(ControlMsgHander);
     qInfo() << "启动。";
+    SPDLOG_INFO("启动2");
+    SPDLOG_INFO("启动3");
     initAfter();
 }
 
@@ -125,19 +128,12 @@ void relayFile::ControlMsgHander(QtMsgType type, const QMessageLogContext& conte
         return;
     }
     switch (type) {
-    case QtDebugMsg:
-        QMetaObject::invokeMethod(gLogControl, [msg]() { gLogControl->Debug(msg); });
-        break;
-    case QtInfoMsg:
-        QMetaObject::invokeMethod(gLogControl, [msg]() { gLogControl->Info(msg); });
-        break;
-    case QtWarningMsg:
-        QMetaObject::invokeMethod(gLogControl, [msg]() { gLogControl->Warn(msg); });
-        break;
-    case QtCriticalMsg:
-        QMetaObject::invokeMethod(gLogControl, [msg]() { gLogControl->Error(msg); });
-        break;
     default:
+        QMetaObject::invokeMethod(gLogControl, [msg]() {
+            auto dt = QDateTime::currentDateTime().toString("hh:mm:ss.zzz");
+            auto retMsg = "[" + dt + "] " + msg + "\n";
+            gLogControl->ShowInfo(retMsg);
+        });
         break;
     }
 }

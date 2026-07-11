@@ -197,6 +197,10 @@ void ExplorerControl::onRefresh()
 {
 }
 
+void ExplorerControl::onHeaderClicked(int index)
+{
+}
+
 void ExplorerControl::onUp()
 {
     auto path = FileDir::cdUp(currentPath_);
