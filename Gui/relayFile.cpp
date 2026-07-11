@@ -45,9 +45,7 @@ relayFile::relayFile(QWidget* parent) : QWidget(parent), ui(new Ui::relayFile)
     isQuit = false;
 
     qInstallMessageHandler(ControlMsgHander);
-    qInfo() << "启动。";
-    SPDLOG_INFO("启动2");
-    SPDLOG_INFO("启动3");
+    SPDLOG_INFO("启动");
     initAfter();
 }
 
