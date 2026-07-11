@@ -127,11 +127,7 @@ void relayFile::ControlMsgHander(QtMsgType type, const QMessageLogContext& conte
     }
     switch (type) {
     default:
-        QMetaObject::invokeMethod(gLogControl, [msg]() {
-            auto dt = QDateTime::currentDateTime().toString("hh:mm:ss.zzz");
-            auto retMsg = "[" + dt + "] " + msg + "\n";
-            gLogControl->ShowInfo(retMsg);
-        });
+        SPDLOG_INFO(msg.toStdString());
         break;
     }
 }
