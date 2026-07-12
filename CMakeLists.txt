@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(relayFile VERSION 0.3 LANGUAGES C CXX)
+project(relayFile VERSION 0.4 LANGUAGES C CXX)
 
 set(PROJECT_URL "https://github.com/taynpg/relayFile")
 
