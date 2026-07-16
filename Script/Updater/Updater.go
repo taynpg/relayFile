@@ -10,11 +10,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"relayfile/scripts/Common"
 )
 
-/*
-==================== 配置 ====================
-*/
 const (
 	Owner = "taynpg"
 	Repo  = "relayFile"
@@ -23,38 +22,25 @@ const (
 	Exes    = "relayFileClient.exe|relayFileGui.exe|relayFileServer.exe"
 )
 
-/*
-==================== 通用暂停 ====================
-*/
 func pause() {
 	fmt.Println("\n按 Enter 退出...")
 	bufio.NewReader(os.Stdin).ReadString('\n')
 }
 
-/*
-==================== 代理配置 ====================
-*/
 func initProxy() {
-	reader := bufio.NewReader(os.Stdin)
+	defaultProxy := "http://127.0.0.1:7897"
 
-	fmt.Print("是否使用代理? (y/N): ")
-	line, _ := reader.ReadString('\n')
-	line = strings.TrimSpace(strings.ToLower(line))
-
-	if line != "y" && line != "yes" {
+	if !Common.AskYesNo("是否使用代理", false) {
 		fmt.Println("不使用代理")
 		return
 	}
 
-	defaultProxy := "http://127.0.0.1:7897"
-
-	fmt.Printf("是否使用默认代理 (%s)? (Y/n): ", defaultProxy)
-	line, _ = reader.ReadString('\n')
-	line = strings.TrimSpace(strings.ToLower(line))
-
 	proxy := defaultProxy
-	if line != "" && line != "y" && line != "yes" {
-		proxy = line
+	if !Common.AskYesNo(fmt.Sprintf("是否使用默认代理 (%s)", defaultProxy), true) {
+		fmt.Print("请输入代理地址: ")
+		reader := bufio.NewReader(os.Stdin)
+		proxy, _ = reader.ReadString('\n')
+		proxy = strings.TrimSpace(proxy)
 	}
 
 	if !strings.HasPrefix(proxy, "http://") && !strings.HasPrefix(proxy, "https://") {
@@ -67,9 +53,6 @@ func initProxy() {
 	fmt.Println("✓ 代理已设置:", proxy)
 }
 
-/*
-==================== 下载 ====================
-*/
 func download(url, dst string) error {
 	fmt.Println("下载:", url)
 
@@ -98,9 +81,6 @@ func download(url, dst string) error {
 	return nil
 }
 
-/*
-==================== update_list.txt ====================
-*/
 func fetchUpdateList(tag string) ([]string, error) {
 	url := fmt.Sprintf(
 		"https://github.com/%s/%s/releases/download/%s/update_list.txt",
@@ -133,9 +113,6 @@ func fetchUpdateList(tag string) ([]string, error) {
 	return list, nil
 }
 
-/*
-==================== 解压 ====================
-*/
 func extractZip(zipPath, dest string) error {
 	fmt.Printf("zip路径：%s\n", zipPath)
 	fmt.Printf("目标路径：%s\n", dest)
@@ -170,12 +147,8 @@ func extractZip(zipPath, dest string) error {
 	return nil
 }
 
-/*
-==================== 进程控制 ====================
-*/
 func killMain() {
-	cmd := exec.Command("taskkill", "/F", "/IM", MainExe)
-	cmd.Run()
+	Common.Run("", "taskkill", "/F", "/IM", MainExe)
 }
 
 func startMain(exePath string) {
@@ -184,9 +157,6 @@ func startMain(exePath string) {
 	_ = cmd.Start()
 }
 
-/*
-==================== main ====================
-*/
 func main() {
 	defer pause()
 

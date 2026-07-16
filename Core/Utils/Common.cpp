@@ -1,6 +1,7 @@
 #include "Common.h"
 
 #include <QCryptographicHash>
+#include <QDateTime>
 #include <QDebug>
 #include <QFile>
 #include <QRandomGenerator>

@@ -26,20 +26,20 @@ protected:
 
         switch (msg.level) {
         case spdlog::level::trace:
-            QMetaObject::invokeMethod(logger_, "signalLogTrace", Qt::QueuedConnection, text);
+            QMetaObject::invokeMethod(logger_, "signalLogTrace", Qt::QueuedConnection, Q_ARG(QString, text));
             break;
         case spdlog::level::debug:
-            QMetaObject::invokeMethod(logger_, "signalLogDebug", Qt::QueuedConnection, text);
+            QMetaObject::invokeMethod(logger_, "signalLogDebug", Qt::QueuedConnection, Q_ARG(QString, text));
             break;
         case spdlog::level::info:
-            QMetaObject::invokeMethod(logger_, "signalLogInfo", Qt::QueuedConnection, text);
+            QMetaObject::invokeMethod(logger_, "signalLogInfo", Qt::QueuedConnection, Q_ARG(QString, text));
             break;
         case spdlog::level::warn:
-            QMetaObject::invokeMethod(logger_, "signalLogWarn", Qt::QueuedConnection, text);
+            QMetaObject::invokeMethod(logger_, "signalLogWarn", Qt::QueuedConnection, Q_ARG(QString, text));
             break;
         case spdlog::level::err:
         case spdlog::level::critical:
-            QMetaObject::invokeMethod(logger_, "signalLogError", Qt::QueuedConnection, text);
+            QMetaObject::invokeMethod(logger_, "signalLogError", Qt::QueuedConnection, Q_ARG(QString, text));
             break;
         default:
             break;

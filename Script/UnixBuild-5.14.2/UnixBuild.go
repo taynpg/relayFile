@@ -5,6 +5,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"relayfile/scripts/Common"
@@ -23,11 +24,19 @@ func main() {
 
 	Common.RemoveBuildDir(buildDir)
 
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to get home directory: %v", err))
+	}
+
+	qtPrefix := filepath.Join(homeDir, "Qt5.14.2", "5.14.2", "gcc_64")
+
 	cmakeArgs := []string{
 		"-B", buildDir,
 		"-S", root,
 		"-DCMAKE_BUILD_TYPE=" + config,
-		"-DQT_DEFAULT_MAJOR_VERSION=6",
+		"-DQT_DEFAULT_MAJOR_VERSION=5",
+		"-DCMAKE_PREFIX_PATH=" + qtPrefix,
 	}
 
 	if useGUI {
