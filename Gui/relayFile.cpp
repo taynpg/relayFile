@@ -45,6 +45,8 @@ relayFile::relayFile(QWidget* parent) : QWidget(parent), ui(new Ui::relayFile)
     isQuit = false;
 
     qInstallMessageHandler(ControlMsgHander);
+    DumpHelper::registerDumpSave(baseConfig_->configDir_);
+
     SPDLOG_INFO("启动");
     initAfter();
 }

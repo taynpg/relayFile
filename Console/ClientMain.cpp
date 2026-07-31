@@ -1,6 +1,7 @@
 #include <Protocol/Protocol.h>
 #include <QCoreApplication>
 #include <QTimer>
+#include <Utils/Common.h>
 #include <Utils/Logger.h>
 #include <Utils/OwnLogger.h>
 #include <fmt/format.h>
@@ -45,6 +46,9 @@ int main(int argc, char* argv[])
 
     OwnLogger ownLogger;
     qInstallMessageHandler(ownLogger.ConsoleMsgHander);
+
+    auto baseConfig = std::make_shared<BaseConfig>();
+    DumpHelper::registerDumpSave(baseConfig->configDir_);
 
     QCoreApplication app(argc, argv);
 

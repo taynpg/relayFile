@@ -35,6 +35,19 @@ include(CMake/Compile.cmake)
 include_directories(${PROJECT_BINARY_DIR})
 set(THIRD_PATH ${CMAKE_CURRENT_LIST_DIR}/Third)
 
+function(enable_win_clang_pdb TARGET)
+    if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND WIN32)
+        target_compile_options(${TARGET} PUBLIC
+            -gcodeview
+            -fno-omit-frame-pointer
+        )
+        target_link_options(${TARGET} PUBLIC
+            -fuse-ld=lld
+            -Wl,--pdb=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${TARGET}.pdb
+        )
+    endif()
+endfunction()
+
 add_subdirectory(Core)
 add_subdirectory(Console)
 

@@ -44,3 +44,7 @@ endif()
 if (UNIX)
     target_link_libraries(relayFileCore PUBLIC pthread)
 endif()
+
+if (WIN32)
+    target_link_libraries(relayFileCore PUBLIC dbghelp)
+endif()

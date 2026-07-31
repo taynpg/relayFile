@@ -62,6 +62,8 @@ set_target_properties(relayFileGui PROPERTIES
     WIN32_EXECUTABLE TRUE
 )
 
+enable_win_clang_pdb(relayFileGui)
+
 if(QT_VERSION_MAJOR EQUAL 6)
     qt_finalize_executable(relayFileGui)
 endif()

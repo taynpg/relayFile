@@ -37,3 +37,6 @@ target_link_libraries(relayFileClient PUBLIC relayFileCore Qt${QT_VERSION_MAJOR}
 if (COMPILE_NAME MATCHES "MINGW")
     target_link_libraries(relayFileServer PUBLIC ws2_32 mswsock)
 endif()
+
+enable_win_clang_pdb(relayFileServer)
+enable_win_clang_pdb(relayFileClient)

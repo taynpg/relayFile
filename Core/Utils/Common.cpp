@@ -1,15 +1,26 @@
 #include "Common.h"
 
+#include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDateTime>
 #include <QDebug>
 #include <QFile>
+#include <QFileInfo>
 #include <QRandomGenerator>
 #include <QStorageInfo>
 #include <QUuid>
 #include <unordered_set>
 
 #include "miniUtil.h"
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
+#ifdef _WIN32
+#include <dbghelp.h>
+#endif
+
+static std::string dumpSaveDir = "";
 
 QString Common::GetUUID()
 {
@@ -334,4 +345,50 @@ bool ReconHelper::shouleReconnct()
     ++curRetryCount_;
     lastReconTime_ = QDateTime::currentMSecsSinceEpoch();
     return true;
+}
+
+#ifdef _WIN32
+LONG WINAPI ExceptionFilter(EXCEPTION_POINTERS* pExceptionPointers)
+{
+    QString qDirPath = QString::fromStdString(dumpSaveDir);
+    QDir().mkpath(qDirPath);
+    std::wstring wDirPath = qDirPath.toStdWString();
+
+    SYSTEMTIME stLocalTime{};
+    GetLocalTime(&stLocalTime);
+
+    const QString qExePath = qApp->applicationFilePath();
+    const std::wstring wExePath = qExePath.toStdWString();
+    const std::wstring wExeName = QFileInfo(qExePath).completeBaseName().toStdWString();
+
+    wchar_t fullPath[MAX_PATH]{};
+    swprintf_s(fullPath, _countof(fullPath), L"%s\\%s-%04d%02d%02d-%02d%02d%02d.dmp", wDirPath.c_str(), wExeName.c_str(),
+               stLocalTime.wYear, stLocalTime.wMonth, stLocalTime.wDay, stLocalTime.wHour, stLocalTime.wMinute,
+               stLocalTime.wSecond);
+
+    HANDLE hFile = CreateFileW(fullPath, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (hFile == INVALID_HANDLE_VALUE) {
+        return EXCEPTION_EXECUTE_HANDLER;
+    }
+
+    MINIDUMP_EXCEPTION_INFORMATION mdei{};
+    mdei.ThreadId = GetCurrentThreadId();
+    mdei.ExceptionPointers = pExceptionPointers;
+    mdei.ClientPointers = FALSE;
+
+    MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), hFile,
+                      MiniDumpNormal,   // MiniDumpWithFullMemory
+                      &mdei, nullptr, nullptr);
+
+    CloseHandle(hFile);
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+#endif
+
+void DumpHelper::registerDumpSave(const std::string& dirPath)
+{
+    dumpSaveDir = dirPath;
+#ifdef _WIN32
+    SetUnhandledExceptionFilter(ExceptionFilter);
+#endif
 }

@@ -3,6 +3,7 @@
 #include <QMutex>
 #include <QString>
 #include <nlohmann/json.hpp>
+#include <string>
 
 struct IpHistory {
     std::vector<std::string> history;
@@ -76,4 +77,14 @@ private:
     RetryCon retryCon_;
     // 记录当前时间戳
     uint64_t lastReconTime_{0};
+};
+
+class DumpHelper
+{
+public:
+    DumpHelper() = default;
+    ~DumpHelper() = default;
+
+public:
+    static void registerDumpSave(const std::string& dirPath);
 };
