@@ -250,21 +250,22 @@ void ComparisonControl::insertRow(int id, const QString& name, const QString& ty
     tableWidget_->setItem(row, 5, new QTableWidgetItem(remoteDir));
 }
 
+// 2026-08-04 这个 showEvent 最小化恢复的时候也会调用。
 void ComparisonControl::showEvent(QShowEvent* event)
 {
-    auto tables = comparisonSql_->tables();
-    if (tables.isEmpty()) {
-        QDialog::showEvent(event);
-        return;
+    static bool inited = false;
+    if (!inited) {
+        inited = true;
+
+        auto tables = comparisonSql_->tables();
+        if (tables.isEmpty())
+            return;
+
+        ui->cbConfig->blockSignals(true);
+        ui->cbConfig->addItems(QStringList(tables.begin(), tables.end()));
+        ui->cbConfig->setCurrentIndex(0);
+        ui->cbConfig->blockSignals(false);
     }
-
-    ui->cbConfig->blockSignals(true);
-    ui->cbConfig->clear();
-    // Qt5 兼容
-    ui->cbConfig->addItems(QStringList(tables.begin(), tables.end()));
-    ui->cbConfig->setCurrentText(tables.first());
-    ui->cbConfig->blockSignals(false);
-
     QDialog::showEvent(event);
 }
 
