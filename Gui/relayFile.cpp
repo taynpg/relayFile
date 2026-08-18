@@ -9,7 +9,7 @@
 #include <Utils/Logger.h>
 #include <relayFileVersion.h>
 
-#include "./ui_relayFile.h"
+#include "ui_relayFile.h"
 #include "Base/BaseHelper.h"
 
 static LogControl* gLogControl{};

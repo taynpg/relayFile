@@ -3,6 +3,10 @@
     "editor.fontSize": 14,
     "cmake.configureOnOpen": true,
     "editor.fontFamily": "'Maple Mono NF CN', 'Maple Mono NF CN', 'Maple Mono NF CN'",
+
+    "ccls.completion.detailedLabel": true,
+    "ccls.misc.compilationDatabaseDirectory": "build",
+
     "cmake.debugConfig": {
         //"type": "lldb",
         "console": "externalTerminal",
