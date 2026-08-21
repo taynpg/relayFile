@@ -2,7 +2,7 @@
     "files.autoSave": "onFocusChange",
     "editor.fontSize": 14,
     "cmake.configureOnOpen": true,
-    "editor.fontFamily": "'Maple Mono NF CN', 'Maple Mono NF CN', 'Maple Mono NF CN'",
+    "editor.fontFamily": "'Maple Mono NF CN ExtraLight', 'Maple Mono NF CN ExtraLight', 'Maple Mono NF CN ExtraLight'",
 
     "C_Cpp.intelliSenseEngine": "disabled",
     "ccls.completion.detailedLabel": true,
