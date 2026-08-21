@@ -612,11 +612,6 @@ extern "C"
 }
 #endif
 
-
-
-
-
-#pragma once
 #include <assert.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -705,7 +700,6 @@ extern "C"
 #ifdef __cplusplus
 }
 #endif
- #pragma once
 
 
 #ifndef MINIZ_NO_DEFLATE_APIS
@@ -904,7 +898,6 @@ enum
 #endif
 
 #endif /*#ifndef MINIZ_NO_DEFLATE_APIS*/
- #pragma once
 
 /* ------------------- Low-level Decompression API Definitions */
 
@@ -1054,8 +1047,6 @@ typedef mz_uint32 tinfl_bit_buf_t;
 #endif
 
 #endif /*#ifndef MINIZ_NO_INFLATE_APIS*/
- 
-#pragma once
 
 
 /* ------------------- ZIP archive reading/writing */

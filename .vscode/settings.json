@@ -4,8 +4,14 @@
     "cmake.configureOnOpen": true,
     "editor.fontFamily": "'Maple Mono NF CN', 'Maple Mono NF CN', 'Maple Mono NF CN'",
 
+    "C_Cpp.intelliSenseEngine": "disabled",
     "ccls.completion.detailedLabel": true,
     "ccls.misc.compilationDatabaseDirectory": "build",
+    "ccls.codeLens.enabled": false,
+    //"ccls.launch.command": "D:/program/ccls/code",
+    "ccls.launch.args": [
+        "--init={\"clang\":{\"resourceDir\":\"C:/local/22\"}}"
+    ],
 
     "cmake.debugConfig": {
         //"type": "lldb",
@@ -22,20 +28,6 @@
     "cmake.configureSettings": {
         //"CMAKE_TOOLCHAIN_FILE": "D:/vcpkg/scripts/buildsystems/vcpkg.cmake"
     },
-    //"C_Cpp.intelliSenseEngine": "disabled",
-    // "clangd.arguments": [
-    //     "--header-insertion=never",
-    //     "--all-scopes-completion",
-    //     "--completion-style=detailed",
-    //     "--clang-tidy",
-    //     "-j=4",
-    //     "--pch-storage=memory",
-    //     "--compile-commands-dir=build",
-    //     "--background-index",
-    //     "--ranking-model=heuristics",
-    //     "--function-arg-placeholders=false",
-    //     //"--query-driver=C:/msys64/ucrt64/bin/g++.exe"
-    // ],
     "cmake.configureArgs": [
         "-DRF_USE_GTEST=ON",
         "-DQT_DEFAULT_MAJOR_VERSION=6",
