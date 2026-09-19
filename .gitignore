@@ -9,3 +9,7 @@ vsbuild/
 build*
 *.exe
 .ccls-cache/
+# ---> gmk
+gmk_cache
+gmk_temp
+log/

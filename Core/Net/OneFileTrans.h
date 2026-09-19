@@ -79,6 +79,12 @@ private:
 
     std::uint64_t totalSize_{};
     std::uint64_t transSize_{};
+    // 发送方：ackIndex_=最早未确认块号(窗口左沿)，sentIndex_=下一待发块号(右沿+1)
+    // 接收方：curBlockIndex_=期望收到的块号
+    std::uint64_t ackIndex_{};
+    std::uint64_t sentIndex_{};
     std::uint64_t curBlockIndex_{};
-    std::uint32_t blockSize_{1024 * 64};
+    bool eofReached_{};
+    int retransCount_{};
+    std::uint64_t blockSize_{defBlockSize};
 };
