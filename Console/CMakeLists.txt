@@ -28,6 +28,7 @@ find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Network)
 add_executable(relayFileServer Server.cpp ../Gui/Resource/relayFileS.rc)
 add_executable(relayFileClient Client.cpp Client.h ClientMain.cpp ../Gui/Resource/relayFileC.rc)
 add_executable(relayFileTransTest TransTest.cpp)
+add_executable(relayFileZipTest ZipTest.cpp)
 
 target_include_directories(relayFileServer PUBLIC ${CMAKE_CURRENT_LIST_DIR})
 target_link_libraries(relayFileServer PUBLIC relayFileCore Qt${QT_VERSION_MAJOR}::Core Qt${QT_VERSION_MAJOR}::Network)
@@ -38,9 +39,14 @@ target_link_libraries(relayFileClient PUBLIC relayFileCore Qt${QT_VERSION_MAJOR}
 target_include_directories(relayFileTransTest PUBLIC ${CMAKE_CURRENT_LIST_DIR})
 target_link_libraries(relayFileTransTest PUBLIC relayFileCore Qt${QT_VERSION_MAJOR}::Core Qt${QT_VERSION_MAJOR}::Network)
 
+target_include_directories(relayFileZipTest PUBLIC ${CMAKE_CURRENT_LIST_DIR})
+target_link_libraries(relayFileZipTest PUBLIC relayFileCore Qt${QT_VERSION_MAJOR}::Core Qt${QT_VERSION_MAJOR}::Network)
+
 if (COMPILE_NAME MATCHES "MINGW")
     target_link_libraries(relayFileServer PUBLIC ws2_32 mswsock)
 endif()
 
 enable_win_clang_pdb(relayFileServer)
 enable_win_clang_pdb(relayFileClient)
+enable_win_clang_pdb(relayFileTransTest)
+enable_win_clang_pdb(relayFileZipTest)

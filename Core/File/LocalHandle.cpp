@@ -136,7 +136,9 @@ bool ZipHandle::addToZip(mz_zip_archive& zip, const QString& rootPath, const QSt
             return false;
         }
 
-        QDirIterator it(filePath, QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot | QDir::Hidden, QDirIterator::Subdirectories);
+        // 只迭代直接子项：不能再加 QDirIterator::Subdirectories，否则迭代器自身已递归、
+        // 而 addToZip 又递归，深层条目会被重复加入压缩包
+        QDirIterator it(filePath, QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot | QDir::Hidden);
 
         while (it.hasNext()) {
             if (!addToZip(zip, rootPath, it.next())) {
