@@ -2,14 +2,20 @@
 
 #include <File/FileDir.h>
 #include <QClipboard>
+#include <QComboBox>
 #include <QDateTime>
 #include <QDebug>
 #include <QDesktopServices>
+#include <QFileInfo>
 #include <QHeaderView>
+#include <QLineEdit>
 #include <QMenu>
 #include <QTableWidgetItem>
+#include <QTimer>
 #include <QUrl>
 #include <Utils/miniUtil.h>
+
+#include <algorithm>
 
 #include "Base/GuiDefine.h"
 #include "Base/MessageBoxHelper.h"
@@ -27,6 +33,9 @@
         }                                                                                                                        \
         name.store(false);                                                                                                       \
     });
+
+// 后缀选项中代表“无后缀文件”的标签
+static const QString kNoExtLabel = QStringLiteral("(无后缀)");
 
 ExplorerControl::ExplorerControl(QWidget* parent) : QDialog(parent), ui(new Ui::ExplorerControl)
 {
@@ -64,6 +73,21 @@ void ExplorerControl::initSignals()
     connect(this, &ExplorerControl::signalShouldConfirm, this, &ExplorerControl::onConfirm);
     connect(this, &ExplorerControl::signalStartWaitForm, this, &ExplorerControl::onShowWaitDialog);
     connect(this, &ExplorerControl::signalShowNotice, this, &ExplorerControl::onShowNotice);
+
+    // 筛选控件：名称输入走 200ms 防抖，大目录下避免每次按键都全量重建
+    auto* filterTimer = new QTimer(this);
+    filterTimer->setSingleShot(true);
+    filterTimer->setInterval(200);
+    connect(filterTimer, &QTimer::timeout, this, &ExplorerControl::onFilterChanged);
+    connect(ui->edSearch, &QLineEdit::textChanged, filterTimer, QOverload<>::of(&QTimer::start));
+    // 后缀为点击式多选，无需防抖
+    connect(ui->cbExt, &CheckableComboBox::checkedItemsChanged, this,
+            [this](const QStringList&) { onFilterChanged(); });
+    connect(ui->btnFilter, &QPushButton::toggled, this, &ExplorerControl::onToggleFilter);
+    connect(ui->btnResetFilter, &QPushButton::clicked, this, &ExplorerControl::onResetFilter);
+
+    // 筛选行默认隐藏，与按钮初始选中状态同步
+    ui->filterWidget->setVisible(ui->btnFilter->isChecked());
 }
 
 std::shared_ptr<BaseAskDF> ExplorerControl::getAskDF()
@@ -179,18 +203,12 @@ void ExplorerControl::onFileListChanged(bool isSuccess, const std::vector<FileMe
     if (!isSuccess) {
         return;
     }
-    tableWidget_->clearContents();
-    tableWidget_->setRowCount(0);
-    for (int i = 0; i < fileList.size(); ++i) {
-        auto row = tableWidget_->rowCount();
-        tableWidget_->insertRow(row);
-        setFileItem(fileList[i], row);
-        if (i != 0 && i % 30 == 0) {
-            QGuiApplication::processEvents();
-        }
-    }
+    // 保存源数据，表格按当前筛选/排序条件派生
     fileMetaList_ = fileList;
     currentMetaList_ = fileMetaList_;
+    // 当前目录变化：刷新后缀集合选项（会保留仍存在的旧勾选），再重建视图
+    updateExtOptions();
+    rebuildView();
 }
 
 void ExplorerControl::onRefresh()
@@ -199,6 +217,157 @@ void ExplorerControl::onRefresh()
 
 void ExplorerControl::onHeaderClicked(int index)
 {
+    // 第 0 列是图标，不参与排序
+    if (index <= 0) {
+        return;
+    }
+    if (index == sortColumn_) {
+        sortOrder_ = (sortOrder_ == Qt::AscendingOrder) ? Qt::DescendingOrder : Qt::AscendingOrder;
+    } else {
+        sortColumn_ = index;
+        // 名称/类型默认升序，时间/大小默认降序（符合文件管理器习惯）
+        sortOrder_ = (index == 2 || index == 4) ? Qt::DescendingOrder : Qt::AscendingOrder;
+    }
+    rebuildView();
+}
+
+// ---------------- 筛选 ----------------
+
+void ExplorerControl::onFilterChanged()
+{
+    filterName_ = ui->edSearch->text().trimmed();
+    filterExts_ = ui->cbExt->checkedItems();
+    rebuildView();
+}
+
+void ExplorerControl::onToggleFilter(bool checked)
+{
+    ui->filterWidget->setVisible(checked);
+}
+
+void ExplorerControl::onResetFilter()
+{
+    // edSearch 清空走防抖重建；后缀清空立即触发 checkedItemsChanged → onFilterChanged
+    ui->edSearch->clear();
+    ui->cbExt->setCheckedItems({});
+}
+
+void ExplorerControl::updateExtOptions()
+{
+    // 收集当前目录下所有文件的后缀集合（去重、小写排序）；无后缀文件用特殊标签表示
+    QStringList exts;
+    bool hasNoExt = false;
+    for (const auto& meta : currentMetaList_) {
+        if (meta.type != FileType::FILE_TYPE_FILE) {
+            continue;
+        }
+        const QString ext = QFileInfo(QString::fromStdString(meta.name)).suffix().toLower();
+        if (ext.isEmpty()) {
+            hasNoExt = true;
+        } else if (!exts.contains(ext)) {
+            exts.append(ext);
+        }
+    }
+    exts.sort();
+    if (hasNoExt) {
+        exts.prepend(kNoExtLabel);
+    }
+    // setOptions 会自动保留同名的旧勾选，跨目录导航时“只看某类文件”得以延续
+    ui->cbExt->setOptions(exts);
+}
+
+// ---------------- 视图重建（过滤 + 排序） ----------------
+
+void ExplorerControl::rebuildView()
+{
+    // 1) 过滤，目录与文件分两组（目录始终置顶，与资源管理器一致）
+    std::vector<const FileMeta*> dirs;
+    std::vector<const FileMeta*> files;
+    for (const auto& meta : currentMetaList_) {
+        const bool isDir = (meta.type == FileType::FILE_TYPE_DIR);
+
+        // 名称模糊搜索（不区分大小写，文件与文件夹同等匹配）
+        if (!filterName_.isEmpty() &&
+            !QString::fromStdString(meta.name).contains(filterName_, Qt::CaseInsensitive)) {
+            continue;
+        }
+        // 后缀筛选：选中后缀后结果只保留匹配的文件，目录一律不显示
+        if (!filterExts_.isEmpty()) {
+            if (isDir) {
+                continue;
+            }
+            const QString rawExt = QFileInfo(QString::fromStdString(meta.name)).suffix().toLower();
+            const QString key = rawExt.isEmpty() ? kNoExtLabel : rawExt;
+            if (!filterExts_.contains(key)) {
+                continue;
+            }
+        }
+        (isDir ? dirs : files).push_back(&meta);
+    }
+
+    // 2) 各组内独立排序（保持目录置顶），再按升降序决定组内方向
+    const int col = sortColumn_;
+    auto cmp = [col](const FileMeta* a, const FileMeta* b) { return lessThanMeta(*a, *b, col); };
+    std::stable_sort(dirs.begin(), dirs.end(), cmp);
+    std::stable_sort(files.begin(), files.end(), cmp);
+    if (sortOrder_ == Qt::DescendingOrder) {
+        std::reverse(dirs.begin(), dirs.end());
+        std::reverse(files.begin(), files.end());
+    }
+
+    // 3) 重建表格
+    tableWidget_->setUpdatesEnabled(false);
+    tableWidget_->clearContents();
+    tableWidget_->setRowCount(0);
+
+    auto appendOne = [this](const FileMeta* meta, int row) {
+        tableWidget_->insertRow(row);
+        setFileItem(*meta, row);
+    };
+    int row = 0;
+    for (const auto* meta : dirs) {
+        appendOne(meta, row++);
+        if (row % 50 == 0) {
+            QGuiApplication::processEvents();
+        }
+    }
+    for (const auto* meta : files) {
+        appendOne(meta, row++);
+        if (row % 50 == 0) {
+            QGuiApplication::processEvents();
+        }
+    }
+
+    tableWidget_->horizontalHeader()->blockSignals(true);
+    tableWidget_->horizontalHeader()->setSortIndicator(sortColumn_, sortOrder_);
+    tableWidget_->horizontalHeader()->blockSignals(false);
+    tableWidget_->setUpdatesEnabled(true);
+}
+
+bool ExplorerControl::lessThanMeta(const FileMeta& a, const FileMeta& b, int sortColumn)
+{
+    // 主键比较；并列时一律以名称（不区分大小写）兜底，保证严格弱序
+    switch (sortColumn) {
+    case 2:   // 最后修改时间（毫秒时间戳）
+        if (a.lastModified != b.lastModified) {
+            return a.lastModified < b.lastModified;
+        }
+        break;
+    case 3:   // 类型
+        if (a.type != b.type) {
+            return static_cast<int>(a.type) < static_cast<int>(b.type);
+        }
+        break;
+    case 4:   // 大小（字节）
+        if (a.size != b.size) {
+            return a.size < b.size;
+        }
+        break;
+    case 1:   // 名称
+    default:
+        break;
+    }
+    return QString::fromStdString(a.name).toLower() < QString::fromStdString(b.name).toLower();
 }
 
 void ExplorerControl::onUp()
@@ -235,6 +404,11 @@ void ExplorerControl::initControl()
     tableWidget_->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
     tableWidget_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Fixed);
     tableWidget_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+
+    // 表头点击排序
+    tableWidget_->horizontalHeader()->setSectionsClickable(true);
+    tableWidget_->horizontalHeader()->setSortIndicatorShown(true);
+    connect(tableWidget_->horizontalHeader(), &QHeaderView::sectionClicked, this, &ExplorerControl::onHeaderClicked);
 
     tableWidget_->setGetOwnRoot([this]() { return currentPath_; });
 

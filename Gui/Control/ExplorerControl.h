@@ -82,6 +82,16 @@ private:
     void onShowNotice(const QString& msg);
     void onConfirm(const QString& title, const QString& text);
     void onHeaderClicked(int index);
+    void onFilterChanged();
+    void onToggleFilter(bool checked);
+    void onResetFilter();
+
+private:
+    // 基于 currentMetaList_（源数据）按当前筛选/排序条件重建表格
+    void rebuildView();
+    // 收集当前目录全部文件后缀集合并刷新后缀多选框（保留仍存在的旧选中项）
+    void updateExtOptions();
+    static bool lessThanMeta(const FileMeta& a, const FileMeta& b, int sortColumn);
 
 private:
     void uiPathSet(const QString& path);
@@ -103,6 +113,13 @@ private:
     std::vector<FileMeta> currentMetaList_;
     std::vector<FileMeta> fileMetaList_;
     std::function<void(ExplorerSharedData& es)> tellInfoCall_;
+
+    // 排序状态（列：1=名称 2=时间 3=类型 4=大小）
+    int sortColumn_{1};
+    Qt::SortOrder sortOrder_{Qt::AscendingOrder};
+    // 筛选状态
+    QString filterName_;
+    QStringList filterExts_;   // 后缀选项（小写、不带点；无后缀项用特殊标签）；空=不按后缀筛选
 
 private:
     QMutex askMut_;
