@@ -11,6 +11,7 @@ struct CompDataItem {
     QString mark;
     QString localDir;
     QString remoteDir;
+    QString remote;
 };
 
 class ComparisonSql
@@ -25,6 +26,7 @@ public:
 
     // 表管理
     bool createTable(const QString& tableName);
+    bool ensureSchema();
     void setTableName(const QString& tableName);
     QString tableName() const;
     bool tableExists(const QString& tableName);

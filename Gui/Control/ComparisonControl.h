@@ -32,7 +32,7 @@ private:
     void delConfig();
     void showEvent(QShowEvent* event) override;
     void insertRow(int id, const QString& name, const QString& type, const QString& mark, const QString& localDir,
-                   const QString& remoteDir);
+                   const QString& remoteDir, const QString& remote);
     bool isNameValid(const QString& name);
     void exeReplace();
 

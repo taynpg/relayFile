@@ -82,7 +82,7 @@ void ComparisonControl::onListItemChanged()
 
     for (const auto& item : curItems_) {
         if (types.contains(item.mark)) {
-            insertRow(item.id, item.name, item.type, item.mark, item.localDir, item.remoteDir);
+            insertRow(item.id, item.name, item.type, item.mark, item.localDir, item.remoteDir, item.remote);
         }
     }
 }
@@ -109,7 +109,7 @@ void ComparisonControl::initSignals()
 void ComparisonControl::initTableWidget()
 {
     tableWidget_ = new ComDropTable(this);
-    headers_ << "ID" << "名称" << "类型" << "标记" << "本地目录" << "远程目录";
+    headers_ << "ID" << "名称" << "类型" << "标记" << "本地目录" << "远程目录" << "远端";
 
     tableWidget_->setColumnCount(headers_.size());
     tableWidget_->setHorizontalHeaderLabels(headers_);
@@ -120,6 +120,7 @@ void ComparisonControl::initTableWidget()
     tableWidget_->setColumnWidth(1, 280);
     tableWidget_->setColumnWidth(2, 50);
     tableWidget_->setColumnWidth(3, 80);
+    tableWidget_->setColumnWidth(6, 120);
 
     tableWidget_->viewport()->setAcceptDrops(true);
     tableWidget_->setSelectionMode(QAbstractItemView::ExtendedSelection);
@@ -128,6 +129,7 @@ void ComparisonControl::initTableWidget()
     tableWidget_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Fixed);
     tableWidget_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
     tableWidget_->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Fixed);
+    tableWidget_->horizontalHeader()->setSectionResizeMode(6, QHeaderView::Fixed);
     tableWidget_->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Stretch);
     tableWidget_->horizontalHeader()->setSectionResizeMode(5, QHeaderView::Stretch);
 
@@ -163,6 +165,7 @@ void ComparisonControl::saveConfig()
         dataItem.mark = tableWidget_->item(i, 3)->text();
         dataItem.localDir = tableWidget_->item(i, 4)->text();
         dataItem.remoteDir = tableWidget_->item(i, 5)->text();
+        dataItem.remote = tableWidget_->item(i, 6)->text().trimmed();
 
         if (idText.isEmpty()) {
             if (!comparisonSql_->addItem(dataItem)) {
@@ -216,6 +219,11 @@ void ComparisonControl::loadConfig(bool notice)
         return;
     }
     comparisonSql_->setTableName(config);
+    // 加载前确保表结构最新（旧表自动补 remote 列），避免读取/保存时缺列
+    if (!comparisonSql_->ensureSchema()) {
+        QMessageBox::warning(this, "提示", "配置表结构升级失败");
+        return;
+    }
     curItems_ = comparisonSql_->getAll();
     // for (auto& item : curItems_) {
     //     insertRow(item.id, item.name, item.type, item.mark, item.localDir, item.remoteDir);
@@ -236,7 +244,7 @@ void ComparisonControl::onListDoubleClick(QListWidgetItem* item)
 }
 
 void ComparisonControl::insertRow(int id, const QString& name, const QString& type, const QString& mark, const QString& localDir,
-                                  const QString& remoteDir)
+                                  const QString& remoteDir, const QString& remote)
 {
     auto row = tableWidget_->rowCount();
     tableWidget_->insertRow(row);
@@ -248,6 +256,7 @@ void ComparisonControl::insertRow(int id, const QString& name, const QString& ty
     tableWidget_->setItem(row, 3, new QTableWidgetItem(mark));
     tableWidget_->setItem(row, 4, new QTableWidgetItem(localDir));
     tableWidget_->setItem(row, 5, new QTableWidgetItem(remoteDir));
+    tableWidget_->setItem(row, 6, new QTableWidgetItem(remote));
 }
 
 // 2026-08-04 这个 showEvent 最小化恢复的时候也会调用。
@@ -338,7 +347,7 @@ void ComparisonControl::onTableContextMenu(const QPoint& pos)
         return;
     }
     if (selectAction == newLineAction) {
-        insertRow(-1, "", "", "", "", "");
+        insertRow(-1, "", "", "", "", "", "");
         return;
     }
     if (selectAction == uploadAction) {
@@ -368,6 +377,9 @@ void ComparisonControl::onTableContextMenu(const QPoint& pos)
 
 void ComparisonControl::onTrans(const QList<QTableWidgetItem*>& items, bool isSend)
 {
+    // 当前通信对象名称（对方注册的标识名）
+    const auto peerName = GlobalData::getInstance()->getControlSession()->getOtherInfo().clientName;
+
     auto transData = std::make_shared<RelayTaskData>();
     transData->isUpload = isSend;
     for (int i = 0; i < items.size() / headers_.size(); i++) {
@@ -375,6 +387,17 @@ void ComparisonControl::onTrans(const QList<QTableWidgetItem*>& items, bool isSe
         auto name = tableWidget_->item(curRow, 1)->text();
         auto stdName = name.toStdString();
         auto type = tableWidget_->item(curRow, 2)->text();
+
+        // 远端身份校验：该项为空则不校验；非空则对方名称必须完全一致
+        const auto expectPeer = tableWidget_->item(curRow, 6)->text().trimmed();
+        if (!expectPeer.isEmpty() && expectPeer != QString::fromStdString(peerName)) {
+            QMessageBox::warning(
+                this, "远端校验失败",
+                QString("项[%1]要求远端名称为「%2」，当前通信对象为「%3」，传输已中止。")
+                    .arg(name, expectPeer, QString::fromStdString(peerName)));
+            return;
+        }
+
         FileItemData itemData;
         itemData.name = name;
         itemData.localRoot = tableWidget_->item(curRow, 4)->text().trimmed();

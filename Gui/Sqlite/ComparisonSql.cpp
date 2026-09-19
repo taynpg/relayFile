@@ -47,21 +47,53 @@ QString ComparisonSql::tableName() const
 
 bool ComparisonSql::createTable(const QString& tableName)
 {
+    // 必须先写入成员表名：ensureSchema() 依赖 tableName_，否则空名拼出非法 SQL
+    setTableName(tableName);
+
     const QString sql = QString("CREATE TABLE IF NOT EXISTS %1 ("
                                 "id INTEGER PRIMARY KEY AUTOINCREMENT, "
                                 "name TEXT, "
                                 "type TEXT, "
                                 "mark TEXT, "
                                 "localDir TEXT, "
-                                "remoteDir TEXT"
+                                "remoteDir TEXT, "
+                                "remote TEXT"
                                 ")")
-                            .arg(tableName);
+                            .arg(tableName_);
 
     QSqlQuery query(db_);
     if (!query.exec(sql)) {
         qCritical() << "createTable error:" << query.lastError().text();
         return false;
     }
+    return ensureSchema();
+}
+
+// 确保当前表含 remote 列；旧表（CREATE TABLE IF NOT EXISTS 不会改结构）缺失时补上
+bool ComparisonSql::ensureSchema()
+{
+    if (tableName_.isEmpty()) {
+        qWarning() << "ensureSchema: 表名为空，跳过";
+        return false;
+    }
+    QSqlQuery query(db_);
+    bool hasRemote = false;
+    if (query.exec(QString("PRAGMA table_info(%1)").arg(tableName_))) {
+        while (query.next()) {
+            if (query.value(1).toString() == "remote") {
+                hasRemote = true;
+                break;
+            }
+        }
+    }
+    if (hasRemote) {
+        return true;
+    }
+    if (!query.exec(QString("ALTER TABLE %1 ADD COLUMN remote TEXT").arg(tableName_))) {
+        qCritical() << "migrate add remote column error:" << query.lastError().text();
+        return false;
+    }
+    qInfo() << "表" << tableName_ << "已迁移，补充 remote 列";
     return true;
 }
 
@@ -85,6 +117,7 @@ QVector<CompDataItem> ComparisonSql::getAll()
         item.mark = query.value(3).toString();
         item.localDir = query.value(4).toString();
         item.remoteDir = query.value(5).toString();
+        item.remote = query.value(6).toString();
         items.append(item);
     }
     return items;
@@ -110,6 +143,7 @@ bool ComparisonSql::getItem(int id, CompDataItem& item)
         item.mark = query.value(3).toString();
         item.localDir = query.value(4).toString();
         item.remoteDir = query.value(5).toString();
+        item.remote = query.value(6).toString();
         return true;
     }
     return false;
@@ -117,8 +151,8 @@ bool ComparisonSql::getItem(int id, CompDataItem& item)
 
 bool ComparisonSql::addItem(CompDataItem& item)
 {
-    const QString sql = QString("INSERT INTO %1 (name, type, mark, localDir, remoteDir) "
-                                "VALUES (:name, :type, :mark, :localDir, :remoteDir)")
+    const QString sql = QString("INSERT INTO %1 (name, type, mark, localDir, remoteDir, remote) "
+                                "VALUES (:name, :type, :mark, :localDir, :remoteDir, :remote)")
                             .arg(tableName_);
 
     QSqlQuery query(db_);
@@ -129,6 +163,7 @@ bool ComparisonSql::addItem(CompDataItem& item)
     query.bindValue(":mark", item.mark);
     query.bindValue(":localDir", item.localDir);
     query.bindValue(":remoteDir", item.remoteDir);
+    query.bindValue(":remote", item.remote);
 
     if (!query.exec()) {
         qCritical() << "addItem error:" << query.lastError().text();
@@ -154,7 +189,7 @@ bool ComparisonSql::dropTable(const QString& tableName)
 bool ComparisonSql::updateItem(const CompDataItem& item)
 {
     const QString sql = QString("UPDATE %1 SET name=:name, type=:type, mark=:mark, "
-                                "localDir=:localDir, remoteDir=:remoteDir WHERE id=:id")
+                                "localDir=:localDir, remoteDir=:remoteDir, remote=:remote WHERE id=:id")
                             .arg(tableName_);
 
     QSqlQuery query(db_);
@@ -166,6 +201,7 @@ bool ComparisonSql::updateItem(const CompDataItem& item)
     query.bindValue(":mark", item.mark);
     query.bindValue(":localDir", item.localDir);
     query.bindValue(":remoteDir", item.remoteDir);
+    query.bindValue(":remote", item.remote);
 
     if (!query.exec()) {
         qCritical() << "updateItem error:" << query.lastError().text();
