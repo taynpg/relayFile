@@ -5,6 +5,7 @@
 #include <QHeaderView>
 #include <QMenu>
 #include <QMessageBox>
+#include <QSettings>
 #include <QUrl>
 
 #include "Base/BaseHelper.h"
@@ -208,9 +209,6 @@ void ComparisonControl::loadConfig(bool notice)
     if (!MessageBoxHelper::questionYesNo(this, "确认", "是否加载配置？")) {
         return;
     }
-    delIds_.clear();
-    tableWidget_->clearContents();
-    tableWidget_->setRowCount(0);
     auto config = ui->cbConfig->currentText().trimmed();
     if (config.isEmpty()) {
         if (notice) {
@@ -218,6 +216,15 @@ void ComparisonControl::loadConfig(bool notice)
         }
         return;
     }
+    applyConfig(config);
+}
+
+void ComparisonControl::applyConfig(const QString& config)
+{
+    delIds_.clear();
+    tableWidget_->clearContents();
+    tableWidget_->setRowCount(0);
+
     comparisonSql_->setTableName(config);
     // 加载前确保表结构最新（旧表自动补 remote 列），避免读取/保存时缺列
     if (!comparisonSql_->ensureSchema()) {
@@ -225,10 +232,11 @@ void ComparisonControl::loadConfig(bool notice)
         return;
     }
     curItems_ = comparisonSql_->getAll();
-    // for (auto& item : curItems_) {
-    //     insertRow(item.id, item.name, item.type, item.mark, item.localDir, item.remoteDir);
-    // }
     onRefreshMark();
+
+    // 记录最后一次使用的配置，下次启动自动选中
+    QSettings settings(GlobalData::getInstance()->getGlobalConfigDir() + "/relayFile.ini", QSettings::IniFormat);
+    settings.setValue(QStringLiteral("comparison/lastConfig"), config);
 }
 
 void ComparisonControl::onListDoubleClick(QListWidgetItem* item)
@@ -272,8 +280,18 @@ void ComparisonControl::showEvent(QShowEvent* event)
 
         ui->cbConfig->blockSignals(true);
         ui->cbConfig->addItems(QStringList(tables.begin(), tables.end()));
-        ui->cbConfig->setCurrentIndex(0);
+
+        // 恢复上次使用的配置；已被删除则回退到第一个
+        QSettings settings(GlobalData::getInstance()->getGlobalConfigDir() + "/relayFile.ini",
+                           QSettings::IniFormat);
+        const auto lastConfig = settings.value(QStringLiteral("comparison/lastConfig")).toString();
+        const int lastIndex = ui->cbConfig->findText(lastConfig);
+        const int selectIndex = lastIndex >= 0 ? lastIndex : 0;
+        ui->cbConfig->setCurrentIndex(selectIndex);
         ui->cbConfig->blockSignals(false);
+
+        // 静默加载该配置内容，无需再点“加载”
+        applyConfig(ui->cbConfig->itemText(selectIndex));
     }
     QDialog::showEvent(event);
 }
