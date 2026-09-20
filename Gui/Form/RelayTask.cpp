@@ -337,7 +337,29 @@ void RelayTask::onBaseCheck()
             if (tmpMeta.exist != 0) {
                 emit signalLog(
                     QString("%1文件：%2 已存在相同文件。").arg(nameConfirm).arg(QString::fromStdString(item->to.fullPath)));
-                needConfirmFiles_.push_back(item->to);
+
+                // 内容粗判：先比大小，大小一致再各抽取 10 个采样块比较
+                bool contentSame = false;
+                if (item->from.size == tmpMeta.size) {
+                    std::vector<SampleBlock> ownSamples;
+                    std::vector<SampleBlock> otherSamples;
+                    if (askDfOwn->AskFileSamples(item->from.fullPath, ownSamples)
+                        && askDfOther->AskFileSamples(item->to.fullPath, otherSamples)
+                        && ownSamples.size() == otherSamples.size()) {
+                        contentSame = true;
+                        for (size_t i = 0; i < ownSamples.size(); ++i) {
+                            if (ownSamples[i].offset != otherSamples[i].offset
+                                || ownSamples[i].data != otherSamples[i].data) {
+                                contentSame = false;
+                                break;
+                            }
+                        }
+                    }
+                }
+                emit signalLog(QString("文件：%1 内容粗判%2。")
+                                   .arg(QString::fromStdString(item->to.fullPath))
+                                   .arg(contentSame ? "一致" : "不一致"));
+                needConfirmFiles_.push_back({item->to, contentSame});
             }
         }
         emit signalNeedConfirmFiles();
@@ -350,22 +372,39 @@ void RelayTask::onConfirmFiles()
         emit signalCheckComplete();
         return;
     }
-    bool needAsk = true;
-    auto nameConfirm = data_->isUpload ? GUI_DIRECTION_REMOTE : GUI_DIRECTION_LOCAL;
-    for (const auto& item : needConfirmFiles_) {
-        if (!needAsk) {
-            break;
+    bool autoSkipSame = false;   // 一级全否：粗判一致的静默跳过，不一致的继续询问
+    bool autoSkipAll = false;    // 二级全否：剩余全部静默跳过
+    for (const auto& info : needConfirmFiles_) {
+        const auto& item = info.file;
+        if (autoSkipAll || (info.contentSame && autoSkipSame)) {
+            needRemoveTaskFiles_.push_back(item);
+            continue;
         }
-        auto r = MessageBoxHelper::questionFourButtons(
-            this, "警告", QString("已存在%1文件%2, 是否覆盖？").arg(nameConfirm).arg(QString::fromStdString(item.fullPath)));
+        QString prompt = info.contentSame
+                             ? QString("内容粗判一致，是否覆盖？\n%1").arg(QString::fromStdString(item.fullPath))
+                             : QString("内容不一致，是否覆盖？\n%1").arg(QString::fromStdString(item.fullPath));
+        auto r = MessageBoxHelper::questionFiveButtons(this, "警告", prompt);
         if (r == MessageBoxHelper::Result::No) {
             needRemoveTaskFiles_.push_back(item);
         } else if (r == MessageBoxHelper::Result::Exit) {
             emit signalCheckUnComplete();
             return;
         } else if (r == MessageBoxHelper::Result::ALL) {
-            needAsk = false;
+            // 全是：剩余全部覆盖，不再询问
+            break;
+        } else if (r == MessageBoxHelper::Result::ALL_NO) {
+            needRemoveTaskFiles_.push_back(item);
+            if (info.contentSame) {
+                // 一级：粗判一致的不再询问，仅内容不一致的继续询问
+                autoSkipSame = true;
+                emit signalLog("全否：粗判一致文件将自动跳过，内容不一致的仍会询问。");
+            } else {
+                // 二级：在内容不一致文件上点全否，剩余文件全部跳过
+                autoSkipAll = true;
+                emit signalLog("全否：剩余文件全部跳过。");
+            }
         }
+        // Yes：覆盖当前文件，继续询问下一个
     }
     for (const auto& item : needRemoveTaskFiles_) {
         auto fileName = QString::fromStdString(item.name);

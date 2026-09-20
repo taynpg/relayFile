@@ -5,6 +5,7 @@
 #include <cereal/types/string.hpp>
 #include <cereal/types/unordered_map.hpp>
 #include <cereal/types/vector.hpp>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -15,6 +16,16 @@
 enum class MessageStateCode : std::uint16_t {
     kMessageStateCodeSuccess = 0,
     kMessageStateCodeFailed = 1,
+};
+
+// 内容粗判采样块：文件内偏移 + 该偏移处的少量字节
+struct SampleBlock {
+    std::uint64_t offset{};
+    std::vector<char> data;
+    template <class Archive> void serialize(Archive& ar)
+    {
+        ar(offset, data);
+    }
 };
 
 struct ClientInfo {
@@ -47,10 +58,11 @@ struct Message {
     std::vector<ClientInfo> clientList;
     std::vector<std::string> strVec;
     std::unordered_map<std::string, std::vector<FileMeta>> mapData;
+    std::vector<SampleBlock> samples;
 
     template <class Archive> void serialize(Archive& ar)
     {
-        ar(mark, comStr, errMsg, transId, uuid, from, to, msgStateCode, ff, ft, clientList, strVec, mapData);
+        ar(mark, comStr, errMsg, transId, uuid, from, to, msgStateCode, ff, ft, clientList, strVec, mapData, samples);
     }
 
     static std::shared_ptr<Message> Create();

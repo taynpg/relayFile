@@ -7,6 +7,7 @@
 #include <QFileInfo>
 
 #include "FileDir.h"
+#include "CoreDefine.hpp"
 #include "Utils/Common.h"
 #include "Utils/miniUtil.h"
 
@@ -38,6 +39,37 @@ bool LocalHandle::AskFileMeta(const std::string& path, FileMeta& meta)
     RFileMeta rmeta;
     FileDir::GetFileRFileMeta(QString::fromStdString(path), rmeta);
     FileDir::TurnMeta(rmeta, meta);
+    return true;
+}
+
+bool LocalHandle::AskFileSamples(const std::string& path, std::vector<SampleBlock>& samples)
+{
+    samples.clear();
+    QFile file(QString::fromStdString(path));
+    if (!file.open(QIODevice::ReadOnly)) {
+        qWarning() << "采样打开文件失败:" << file.fileName() << file.errorString();
+        return false;
+    }
+    qint64 total = file.size();
+    if (total <= 0) {
+        return true;   // 空文件：无采样块，两端空集合相等
+    }
+    for (int i = 0; i < defSampleCount; ++i) {
+        qint64 offset = total * i / defSampleCount;
+        qint64 toRead = qMin(static_cast<qint64>(defSampleBlockSize), total - offset);
+        SampleBlock block;
+        block.offset = static_cast<std::uint64_t>(offset);
+        block.data.resize(static_cast<size_t>(toRead));
+        if (!file.seek(offset)) {
+            return false;
+        }
+        qint64 got = file.read(block.data.data(), toRead);
+        if (got < 0) {
+            return false;
+        }
+        block.data.resize(static_cast<size_t>(got));
+        samples.push_back(std::move(block));
+    }
     return true;
 }
 

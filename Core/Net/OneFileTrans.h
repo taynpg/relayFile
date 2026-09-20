@@ -12,6 +12,24 @@
 #include "Protocol/FileMeta.h"
 #include "Protocol/Protocol.h"
 
+/*
+### 1. 接收方 ACK 优先（核心修复）— OneFileTrans.cpp handleRecvChuck
+原来先写盘再发 ACK，写盘慢（尤其网络盘）会阻塞主线程，ACK 延迟触发发送方 15 秒超时重传。
+而重传后 ACK 才到会重置重传计数，形成"超时→重传→ACK 到→重置→再超时"的死循环，表现为永久卡住。
+
+改为：先立即回 ACK，再写盘。 ACK 不再被写盘阻塞，发送方窗口能持续推进。
+
+### 2. state_ 原子化 — OneFileTrans.h
+`state_` 从普通`TransStatus` 改为`std::atomic<TransStatus>` ，所有读写用`load()/store()` 。`getTransStatus` （workerThread_ 轮询）
+和 OneFileTrans（主线程）之间无锁跨线程访问现在有了内存序保证，避免状态变化不可见导致 RunTaskItem 死循环。
+
+### 3. 缩短发送超时 — CoreDefine.hpp
+`defSendTimeout` 从 15000ms 降到 5000ms，加快故障检测和重传节奏，减少单次卡顿持续时间。
+
+### 4. Send 返回值检查 — ClientCore.cpp + ClientHelper.cpp
+`ClientCore::Send` 失败（连接断开/写入不完整）时打 warning 日志，不再静默丢帧；DoubleLinker 的控制/文件连接发送 lambda 都检查返回值。
+*/
+
 class OneFileTrans : public QObject
 {
     Q_OBJECT

@@ -92,6 +92,22 @@ bool RemoteAskDF::AskFileMeta(const std::string& path, FileMeta& meta)
         FrameType::kMsgType_Ask_FileMeta);
 }
 
+bool RemoteAskDF::AskFileSamples(const std::string& path, std::vector<SampleBlock>& samples)
+{
+    Message msg;
+    msg.comStr = path;
+    return Request(
+        msg,
+        [&samples](MessagePtr ret) {
+            if (ret == nullptr) {
+                return false;
+            }
+            samples = ret->samples;
+            return true;
+        },
+        FrameType::kMsgType_Ask_FileSamples);
+}
+
 bool RemoteAskDF::AskDelete(const std::vector<std::string>& fileList, std::vector<std::string>& failedList)
 {
     Message msg;

@@ -93,7 +93,12 @@ private:
     Ui::RelayTask* ui;
 
 private:
-    std::vector<FileMeta> needConfirmFiles_;
+    // 覆盖确认项：目标端已存在文件 + 内容粗判结果（true=粗判一致）
+    struct ConfirmFileInfo {
+        FileMeta file;
+        bool contentSame{};
+    };
+    std::vector<ConfirmFileInfo> needConfirmFiles_;
     std::vector<FileMeta> needRemoveTaskFiles_;
 
     std::shared_ptr<BaseAskDF> askLocalDf_{};

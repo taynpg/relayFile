@@ -47,7 +47,11 @@ void DoubleLinker::SetControlSession(std::shared_ptr<ControlSession> session)
     connect(cliCore, &ClientCore::signalDeliverFrame, this, &DoubleLinker::onDeliverControl);
     connect(this, &DoubleLinker::signalSendControl, cliCore, [this, cliCore](FramePtr frame) {
         if (!cliCore->Send(frame)) {
-            qWarning() << "控制连接发送失败, type=" << static_cast<int>(frame->type);
+            qWarning() << "[TRACE-SID] 控制连接发送失败 sid=" << frame->sessionId
+                       << "type=" << static_cast<int>(frame->type);
+        } else if (frame->type != FrameType::kMsgType_Ask_Heart) {
+            qDebug() << "[TRACE-SID] sent to socket sid=" << frame->sessionId
+                     << "type=" << static_cast<int>(frame->type);
         }
     });
     connect(controlSession_.get(), &ControlSession::signalRequestSend, this, &DoubleLinker::onSendControl);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Protocol/FileMeta.h>
+#include <Protocol/Message.h>
 #include <memory>
 #include <string>
 #include <vector>
@@ -21,6 +22,7 @@ public:
     virtual bool AskHome(std::string& home) = 0;
     virtual bool AskHomeAndDriver(std::vector<std::string>& drivers, std::string& home) = 0;
     virtual bool AskFileMeta(const std::string& path, FileMeta& meta) = 0;
+    virtual bool AskFileSamples(const std::string& path, std::vector<SampleBlock>& samples) = 0;
     virtual bool AskDelete(const std::vector<std::string>& fileList, std::vector<std::string>& failedList) = 0;
     virtual bool AskSha256(const std::string& path, std::string& sha256) = 0;
     virtual bool AskRename(const std::string& oldName, const std::string& newName) = 0;

@@ -27,7 +27,7 @@ MessageBoxHelper::Result MessageBoxHelper::questionThreeButtons(QWidget* parent,
     return Exit;
 }
 
-MessageBoxHelper::Result MessageBoxHelper::questionFourButtons(QWidget* parent, const QString& title, const QString& text)
+MessageBoxHelper::Result MessageBoxHelper::questionFiveButtons(QWidget* parent, const QString& title, const QString& text)
 {
     QMessageBox msgBox(parent);
     msgBox.setWindowTitle(title);
@@ -37,6 +37,7 @@ MessageBoxHelper::Result MessageBoxHelper::questionFourButtons(QWidget* parent, 
     QPushButton* yesBtn = msgBox.addButton("是", QMessageBox::YesRole);
     QPushButton* allBtn = msgBox.addButton("全是", QMessageBox::AcceptRole);
     QPushButton* noBtn = msgBox.addButton("否", QMessageBox::NoRole);
+    QPushButton* allNoBtn = msgBox.addButton("全否", QMessageBox::NoRole);
     QPushButton* exitBtn = msgBox.addButton("退出", QMessageBox::RejectRole);
 
     msgBox.exec();
@@ -49,6 +50,9 @@ MessageBoxHelper::Result MessageBoxHelper::questionFourButtons(QWidget* parent, 
     }
     if (msgBox.clickedButton() == noBtn) {
         return No;
+    }
+    if (msgBox.clickedButton() == allNoBtn) {
+        return ALL_NO;
     }
     return Exit;
 }

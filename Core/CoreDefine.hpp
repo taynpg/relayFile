@@ -15,3 +15,7 @@ constexpr int defDirectChuckAck = 600;
 constexpr std::uint64_t defBlockSize = 256 * 1024;
 constexpr std::uint64_t defWindowSize = 32;
 constexpr int defRetransLimit = 3;
+
+// 覆盖前内容粗判：均匀抽取的采样点数与每点读取大小
+constexpr int defSampleCount = 10;
+constexpr std::uint64_t defSampleBlockSize = 4 * 1024;

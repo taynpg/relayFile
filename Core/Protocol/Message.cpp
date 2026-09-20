@@ -12,6 +12,7 @@ Message::Message(const Message& o)
     mark = o.mark;
     clientList = o.clientList;
     mapData = o.mapData;
+    samples = o.samples;
 }
 
 Message& Message::operator=(const Message& o)
@@ -31,6 +32,7 @@ Message& Message::operator=(const Message& o)
     mark = o.mark;
     clientList = o.clientList;
     mapData = o.mapData;
+    samples = o.samples;
     return *this;
 }
 

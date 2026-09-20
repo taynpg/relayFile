@@ -9,12 +9,13 @@ public:
         Yes = QDialog::Accepted + 1,
         No,
         ALL,
+        ALL_NO,
         Exit,
         NotAnswer
     };
 
     static Result questionThreeButtons(QWidget* parent, const QString& title, const QString& text);
-    static Result questionFourButtons(QWidget* parent, const QString& title, const QString& text);
+    static Result questionFiveButtons(QWidget* parent, const QString& title, const QString& text);
     static bool questionYesNo(QWidget* parent, const QString& title, const QString& text);
     static bool getTextInput(QWidget* parent, const QString& title, const QString& label, QString& outText,
                              const QString& defaultValue = QString());

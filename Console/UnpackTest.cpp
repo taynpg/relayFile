@@ -1,8 +1,10 @@
 // 协议解包健壮性对比测试：原 UnPack vs 新 UnPack
 // 验证数据体中含 0xFFFE 时是否会解析失败/卡死
+#include <File/LocalHandle.h>
 #include <Protocol/Protocol.h>
 #include <Utils/miniUtil.h>
 #include <QCoreApplication>
+#include <QDir>
 #include <cstring>
 #include <iostream>
 #include <vector>
@@ -197,6 +199,61 @@ int main(int argc, char* argv[])
                   << "  new_partial_ok=" << newPartial
                   << " new_full_ok=" << newFull << "\n";
         if (!oldFull || !newFull) fails++;
+    }
+
+    // 8. 内容粗判采样：相同文件应判一致，修改后应判不一致
+    {
+        QString dir = QDir::tempPath();
+        QString pA = dir + "/sample_a.bin";
+        QString pB = dir + "/sample_b.bin";
+        QString pEmpty = dir + "/sample_empty.bin";
+        const size_t fsz = 100 * 1024;
+        std::vector<char> base(fsz);
+        for (size_t i = 0; i < fsz; ++i) {
+            base[i] = static_cast<char>(i % 251);
+        }
+        base[0] = '\xFF'; base[1] = '\xFE';   // 含 BOM 序列
+
+        QFile::remove(pA); QFile::remove(pB); QFile::remove(pEmpty);
+        {
+            QFile fa(pA); if (!fa.open(QIODevice::WriteOnly)) { fails++; } else fa.write(base.data(), fsz);
+            QFile fb(pB); if (!fb.open(QIODevice::WriteOnly)) { fails++; } else fb.write(base.data(), fsz);
+            QFile fe(pEmpty); (void)fe.open(QIODevice::WriteOnly);   // 空文件
+        }
+
+        auto cmpSamples = [](const std::vector<SampleBlock>& a, const std::vector<SampleBlock>& b) {
+            if (a.size() != b.size()) return false;
+            for (size_t i = 0; i < a.size(); ++i) {
+                if (a[i].offset != b[i].offset || a[i].data != b[i].data) return false;
+            }
+            return true;
+        };
+
+        std::vector<SampleBlock> sA, sB, sEmpty;
+        bool okA = LocalHandle::AskFileSamples(pA.toStdString(), sA);
+        bool okB = LocalHandle::AskFileSamples(pB.toStdString(), sB);
+        bool sameEq = okA && okB && cmpSamples(sA, sB);
+
+        // 修改 B 的偏移 0 处（第一个采样点必覆盖）
+        {
+            QFile fb(pB);
+            if (fb.open(QIODevice::ReadWrite)) {
+                fb.seek(0); char c = 0x41; fb.write(&c, 1);
+            }
+        }
+        std::vector<SampleBlock> sB2;
+        LocalHandle::AskFileSamples(pB.toStdString(), sB2);
+        bool diffDetected = !cmpSamples(sA, sB2);
+
+        bool emptyOk = LocalHandle::AskFileSamples(pEmpty.toStdString(), sEmpty) && sEmpty.empty();
+
+        std::cout << "[sample_compare] same_equal=" << sameEq
+                  << " diff_detected=" << diffDetected
+                  << " empty_ok=" << emptyOk
+                  << " block_count=" << sA.size() << "\n";
+        if (!sameEq || !diffDetected || !emptyOk) fails++;
+
+        QFile::remove(pA); QFile::remove(pB); QFile::remove(pEmpty);
     }
 
     std::cout << "\n=== TOTAL FAILS: " << fails << " ===\n";

@@ -13,3 +13,6 @@ build*
 gmk_cache
 gmk_temp
 log/
+# ---> cmk
+cmk_cache
+cmk_temp

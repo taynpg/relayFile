@@ -16,6 +16,11 @@ bool LocalAskDF::AskFileMeta(const std::string& path, FileMeta& meta)
     return LocalHandle::AskFileMeta(path, meta);
 }
 
+bool LocalAskDF::AskFileSamples(const std::string& path, std::vector<SampleBlock>& samples)
+{
+    return LocalHandle::AskFileSamples(path, samples);
+}
+
 bool LocalAskDF::AskDelete(const std::vector<std::string>& fileList, std::vector<std::string>& failedList)
 {
     return LocalHandle::AskDelete(fileList, failedList);

@@ -60,6 +60,9 @@ public:
         CallType callType{};
         TimerPoolStd::TimerId timerId{};
         std::function<void(std::any)> call;
+        int ftype{};
+        std::string target;
+        std::string path;
     };
 
     struct TaskWorker {

@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "Protocol/FileMeta.h"
+#include "Protocol/Message.h"
 #define MINIZ_NO_ZLIB_APIS
 #include "miniz.h"
 
@@ -19,6 +20,7 @@ public:
     static bool AskFileList(const std::string& path, std::vector<FileMeta>& fileList, bool recursive);
     static bool AskHome(std::string& home);
     static bool AskFileMeta(const std::string& path, FileMeta& meta);
+    static bool AskFileSamples(const std::string& path, std::vector<SampleBlock>& samples);
     static bool AskDelete(const std::vector<std::string>& fileList, std::vector<std::string>& failedList);
     static bool AskSha256(const std::string& path, std::string& sha256);
     static bool AskRename(const std::string& oldName, const std::string& newName);
