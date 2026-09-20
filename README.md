@@ -22,6 +22,8 @@
 
 ## 其他
 
+从`v0.4`版本开始，功能优化和新增主要由AI进行维护。
+
 `relayFile`是 [frelay传输工具 (XP支持)](https://github.com/taynpg/frelay) 的重新整理优化版本并去除了XP支持，以便可以更好的使用新标准和语法。
 
 `relayFile`是跨平台的，由于Linux环境难以统一，仅预编译Windows版本，`v1.0`及其以后会编译流行Linux发行版包。
