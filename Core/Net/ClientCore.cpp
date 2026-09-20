@@ -156,9 +156,16 @@ bool ClientCore::Send(FramePtr frame)
 bool ClientCore::Send(const char* data, size_t size)
 {
     if (tcp_->state() != QAbstractSocket::ConnectedState) {
+        qWarning() << "ClientCore::Send 失败：连接已断开, size=" << size;
         return false;
     }
-    return tcp_->write(data, size) == size;
+    qint64 written = tcp_->write(data, static_cast<qint64>(size));
+    if (written != static_cast<qint64>(size)) {
+        qWarning() << "ClientCore::Send 写入不完整: expected=" << size << "written=" << written
+                   << "state=" << static_cast<int>(tcp_->state());
+        return false;
+    }
+    return true;
 }
 
 uint64_t ClientCore::GetSessionId()

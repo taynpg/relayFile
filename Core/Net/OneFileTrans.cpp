@@ -17,7 +17,7 @@ void OneFileTrans::initSignals()
 
 void OneFileTrans::onSendOrRecvTimeout()
 {
-    if (state_ == TransStatus::Sending) {
+    if (state_.load() == TransStatus::Sending) {
         if (sentIndex_ > ackIndex_ && retransCount_ < defRetransLimit) {
             // 滑动窗口下偶发 ACK 迟到：重传最早未确认块，恢复发送指针
             ++retransCount_;
@@ -37,7 +37,7 @@ void OneFileTrans::onSendOrRecvTimeout()
         emit signalFailed(ownId_, "超时");
         qWarning() << "发送超时:" << QString::fromStdString(ownId_);
         handleInterrupt(nullptr);
-    } else if (state_ == TransStatus::Receving) {
+    } else if (state_.load() == TransStatus::Receving) {
         emit signalFailed(ownId_, "超时");
         qWarning() << "接收超时:" << QString::fromStdString(ownId_);
         handleInterrupt(nullptr);
@@ -71,7 +71,7 @@ bool OneFileTrans::initTransfer(TransMode mode, const Message& msg, const std::s
 
     qDebug() << "处理文件路径：" << filePath_;
 
-    if (state_ != TransStatus::Idle) {
+    if (state_.load() != TransStatus::Idle) {
         return false;
     }
 
@@ -81,14 +81,14 @@ bool OneFileTrans::initTransfer(TransMode mode, const Message& msg, const std::s
             qWarning() << "打开发送文件失败:" << filePath_ << sendFile_.errorString();
             return false;
         }
-        state_ = TransStatus::Sending;
+        state_.store(TransStatus::Sending, std::memory_order_release);
     } else {
         recvFile_.setFileName(filePath_);
         if (!FileDir::EnsureDir(FileDir::cdUp(filePath_)) || !recvFile_.open(QIODevice::WriteOnly)) {
             qWarning() << "打开接收文件失败:" << filePath_ << recvFile_.errorString();
             return false;
         }
-        state_ = TransStatus::Receving;
+        state_.store(TransStatus::Receving, std::memory_order_release);
     }
 
     return true;
@@ -106,7 +106,7 @@ void OneFileTrans::setTargetControlId(const std::string& targetControlId)
 
 bool OneFileTrans::nextSend()
 {
-    if (TransStatus::Sending != state_) {
+    if (TransStatus::Sending != state_.load()) {
         return false;
     }
     // 滑动窗口：窗口未满则连续发送，无需等待每块 ACK
@@ -139,7 +139,7 @@ bool OneFileTrans::nextSend()
         auto frame = CreateFrame(FrameType::kFileType_Request_Complete);
         frame->to = targetControlId_;
         emit signalRequestSend(frame);
-        state_ = TransStatus::Finished;
+        state_.store(TransStatus::Finished, std::memory_order_release);
         emit signalProcess(totalSize_, totalSize_);
         emit signalFinished(ownId_);
         return true;
@@ -152,7 +152,7 @@ bool OneFileTrans::nextSend()
 
 bool OneFileTrans::handleAck(FramePtr frame)
 {
-    if (TransStatus::Sending != state_) {
+    if (TransStatus::Sending != state_.load()) {
         return false;
     }
     auto idx = static_cast<std::uint64_t>(frame->index);
@@ -168,7 +168,7 @@ bool OneFileTrans::handleAck(FramePtr frame)
 
 bool OneFileTrans::handleRecvChuck(FramePtr frame)
 {
-    if (state_ != TransStatus::Receving) {
+    if (state_.load() != TransStatus::Receving) {
         return false;
     }
     auto idx = static_cast<std::uint64_t>(frame->index);
@@ -183,20 +183,25 @@ bool OneFileTrans::handleRecvChuck(FramePtr frame)
         return false;
     }
     sendOrRecvTimeout_->stop();
-    qint64 written = recvFile_.write(frame->data.data(), static_cast<qint64>(frame->data.size()));
-    if (written != static_cast<qint64>(frame->data.size())) {
-        qWarning() << "写入文件失败";
-    }
-    transSize_ += frame->data.size();
     auto ackIdx = curBlockIndex_;
     curBlockIndex_++;
+    transSize_ += frame->data.size();
+
+    // 关键优化：先立即回 ACK，再写盘。
+    // 否则写盘慢（尤其网络盘）会阻塞主线程，ACK 延迟触发发送方超时重传死循环。
+    auto f = CreateFrame(FrameType::kFileType_Request_Ack);
+    f->index = static_cast<int64_t>(ackIdx);
+    emit signalRequestSend(f);
 
     if (curBlockIndex_ % 10 == 0 || transSize_ >= totalSize_) {
         emit signalProcess(transSize_, totalSize_);
     }
-    auto f = CreateFrame(FrameType::kFileType_Request_Ack);
-    f->index = static_cast<int64_t>(ackIdx);
-    emit signalRequestSend(f);
+
+    qint64 written = recvFile_.write(frame->data.data(), static_cast<qint64>(frame->data.size()));
+    if (written != static_cast<qint64>(frame->data.size())) {
+        qWarning() << "写入文件失败, expected:" << frame->data.size() << "written:" << written
+                   << "file:" << filePath_;
+    }
     sendOrRecvTimeout_->start(defRecvTimeout);
     return true;
 }
@@ -238,28 +243,24 @@ bool OneFileTrans::handleFinish(FramePtr frame)
                     << ", permission:" << msg_.ff.permission << ", ret:" << ret;
         }
         emit signalFinished(ownId_);
-        state_ = TransStatus::Finished;
+        state_.store(TransStatus::Finished, std::memory_order_release);
     }
     return true;
-}
-
-OneFileTrans::TransStatus OneFileTrans::getTransStatus() const
-{
-    return state_;
 }
 
 void OneFileTrans::onFrameReceive(FramePtr frame)
 {
     // qDebug() << "收到消息:" << static_cast<int>(frame->type) << "，from:" << frame->from << "，to:" << frame->to
     //          << "，index:" << frame->index;
-    if (state_ == TransStatus::Finished || state_ == TransStatus::Interrupted) {
+    TransStatus st = state_.load();
+    if (st == TransStatus::Finished || st == TransStatus::Interrupted) {
         // 正常完成后，窗口内迟到的 ACK/Complete 属预期，静默忽略；
         // 其余（如对方仍在发数据块）回 Cancel 终止对方
-        if (state_ == TransStatus::Finished && (frame->type == FrameType::kFileType_Request_Ack
+        if (st == TransStatus::Finished && (frame->type == FrameType::kFileType_Request_Ack
                 || frame->type == FrameType::kFileType_Request_Complete)) {
             return;
         }
-        qWarning() << "文件传输已结束，无法处理消息, state is:" << static_cast<int>(state_);
+        qWarning() << "文件传输已结束，无法处理消息, state is:" << static_cast<int>(st);
         auto f = CreateFrame(FrameType::kFileType_Request_Cancel);
         f->to = targetControlId_;
         emit signalRequestSend(f);
@@ -309,20 +310,21 @@ void OneFileTrans::onFrameReceive(FramePtr frame)
 bool OneFileTrans::handleInterrupt(FramePtr frame)
 {
     QMutexLocker locker(&qMut_);
-    if (state_ == TransStatus::Finished) {
+    TransStatus st = state_.load();
+    if (st == TransStatus::Finished) {
         return true;
     }
-    if (tMode_ == TransMode::Receive && state_ == TransStatus::Receving) {
+    if (tMode_ == TransMode::Receive && st == TransStatus::Receving) {
         auto f = CreateFrame(FrameType::kFileType_Request_Cancel);
         f->to = targetControlId_;
         emit signalRequestSend(f);
     }
-    if (tMode_ == TransMode::Send && state_ == TransStatus::Sending) {
+    if (tMode_ == TransMode::Send && st == TransStatus::Sending) {
         auto f = CreateFrame(FrameType::kFileType_Request_Cancel);
         f->to = targetControlId_;
         emit signalRequestSend(f);
     }
-    state_ = TransStatus::Interrupted;
+    state_.store(TransStatus::Interrupted, std::memory_order_release);
     if (recvFile_.isOpen()) {
         qWarning() << "关闭接收文件" << filePath_;
         recvFile_.close();

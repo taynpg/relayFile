@@ -45,62 +45,71 @@ std::shared_ptr<OneFrame> Protocol::UnPack(miniBuffer& buffer)
     constexpr size_t HEADER_SIZE = 2 + 2 + 2 + 8 + 8 + 32 + 32 + 36 + 4;
 
     const auto& data = buffer.GetBuffer();
-    if (data.size() < HEADER_SIZE) {
-        return nullptr;
+
+    // 顺序解析：从 buffer 头部开始找帧头，避免在数据体内部盲搜导致假帧头卡死。
+    size_t offset = 0;
+    while (offset + HEADER_SIZE <= data.size()) {
+        // 1) 校验帧头
+        if (data[offset] != HEADER[0] || data[offset + 1] != HEADER[1]) {
+            // 前导垃圾字节，跳过 1 字节继续找
+            ++offset;
+            continue;
+        }
+
+        int16_t type{};
+        int16_t mark{};
+        int64_t sessionId{};
+        int64_t index{};
+        int32_t len{};
+
+        std::memcpy(&type, data.data() + offset + 2, sizeof(type));
+        std::memcpy(&mark, data.data() + offset + 4, sizeof(mark));
+        std::memcpy(&sessionId, data.data() + offset + 6, sizeof(sessionId));
+        std::memcpy(&index, data.data() + offset + 6 + 8, sizeof(index));
+        std::memcpy(&len, data.data() + offset + 6 + 8 + 8 + 32 + 32 + 36, sizeof(len));
+
+        // 2) 长度非法（数据体里误匹配到的假帧头常出现巨大 len）→ 跳过该帧头继续找
+        if (len < 0) {
+            offset += 2;
+            continue;
+        }
+
+        // 3) 帧体还没收全，等待更多数据（不消费 buffer）
+        if (offset + HEADER_SIZE + static_cast<size_t>(len) + 2 > data.size()) {
+            return nullptr;
+        }
+
+        // 4) 校验帧尾；不匹配说明这是数据体里的假帧头，跳过继续找
+        size_t tailPos = offset + HEADER_SIZE + static_cast<size_t>(len);
+        if (data[tailPos] != TAIL[0] || data[tailPos + 1] != TAIL[1]) {
+            offset += 2;
+            continue;
+        }
+
+        // 5) 解析成功，消费 buffer
+        auto frame = std::make_shared<OneFrame>();
+        frame->type = static_cast<FrameType>(type);
+        frame->mark = mark;
+        frame->sessionId = sessionId;
+        frame->index = index;
+        frame->from.assign(data.data() + offset + 6 + 8 + 8, 32);
+        frame->to.assign(data.data() + offset + 6 + 8 + 8 + 32, 32);
+        frame->fuuid.assign(data.data() + offset + 6 + 8 + 8 + 32 + 32, 36);
+        frame->from.erase(frame->from.find_last_not_of('\0') + 1);
+        frame->to.erase(frame->to.find_last_not_of('\0') + 1);
+        frame->fuuid.erase(frame->fuuid.find_last_not_of('\0') + 1);
+
+        if (len > 0) {
+            frame->data.resize(len);
+            std::memcpy(frame->data.data(), data.data() + offset + HEADER_SIZE, len);
+        }
+
+        buffer.RemoveOf(0, static_cast<int>(offset + HEADER_SIZE + static_cast<size_t>(len) + 2));
+
+        return frame;
     }
 
-    auto it = std::search(data.begin(), data.end(), std::begin(HEADER), std::end(HEADER));
-    if (it == data.end()) {
-        return nullptr;
-    }
-
-    size_t offset = std::distance(data.begin(), it);
-
-    if (offset + HEADER_SIZE > data.size()) {
-        return nullptr;
-    }
-
-    int16_t type{};
-    int16_t mark{};
-    int64_t sessionId{};
-    int64_t index{};
-    int32_t len{};
-
-    std::memcpy(&type, data.data() + offset + 2, sizeof(type));
-    std::memcpy(&mark, data.data() + offset + 4, sizeof(mark));
-    std::memcpy(&sessionId, data.data() + offset + 6, sizeof(sessionId));
-    std::memcpy(&index, data.data() + offset + 6 + 8, sizeof(index));
-    std::memcpy(&len, data.data() + offset + 6 + 8 + 8 + 32 + 32 + 36, sizeof(len));
-
-    if (len < 0 || offset + HEADER_SIZE + static_cast<size_t>(len) > data.size()) {
-        return nullptr;
-    }
-
-    size_t tailPos = offset + HEADER_SIZE + len;
-    if (std::memcmp(data.data() + tailPos, TAIL, 2) != 0) {
-        return nullptr;
-    }
-
-    auto frame = std::make_shared<OneFrame>();
-    frame->type = static_cast<FrameType>(type);
-    frame->mark = mark;
-    frame->sessionId = sessionId;
-    frame->index = index;
-    frame->from.assign(data.data() + offset + 6 + 8 + 8, 32);
-    frame->to.assign(data.data() + offset + 6 + 8 + 8 + 32, 32);
-    frame->fuuid.assign(data.data() + offset + 6 + 8 + 8 + 32 + 32, 36);
-    frame->from.erase(frame->from.find_last_not_of('\0') + 1);
-    frame->to.erase(frame->to.find_last_not_of('\0') + 1);
-    frame->fuuid.erase(frame->fuuid.find_last_not_of('\0') + 1);
-
-    if (len > 0) {
-        frame->data.resize(len);
-        std::memcpy(frame->data.data(), data.data() + offset + HEADER_SIZE, len);
-    }
-
-    buffer.RemoveOf(0, static_cast<int>(offset + HEADER_SIZE + len + 2));
-
-    return frame;
+    return nullptr;
 }
 
 std::vector<char> Protocol::Pack(const std::shared_ptr<OneFrame>& frame)

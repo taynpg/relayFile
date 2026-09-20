@@ -45,7 +45,11 @@ void DoubleLinker::SetControlSession(std::shared_ptr<ControlSession> session)
     controlSession_ = session;
     auto* cliCore = controlSession_->getClientCore();
     connect(cliCore, &ClientCore::signalDeliverFrame, this, &DoubleLinker::onDeliverControl);
-    connect(this, &DoubleLinker::signalSendControl, cliCore, [this, cliCore](FramePtr frame) { cliCore->Send(frame); });
+    connect(this, &DoubleLinker::signalSendControl, cliCore, [this, cliCore](FramePtr frame) {
+        if (!cliCore->Send(frame)) {
+            qWarning() << "控制连接发送失败, type=" << static_cast<int>(frame->type);
+        }
+    });
     connect(controlSession_.get(), &ControlSession::signalRequestSend, this, &DoubleLinker::onSendControl);
 }
 
@@ -54,7 +58,12 @@ void DoubleLinker::SetFileSession(std::shared_ptr<FileSession> session)
     fileSession_ = session;
     auto* cliCore = fileSession_->getClientCore();
     connect(cliCore, &ClientCore::signalDeliverFrame, this, &DoubleLinker::onDeliverFile);
-    connect(this, &DoubleLinker::signalSendFile, cliCore, [this, cliCore](FramePtr frame) { cliCore->Send(frame); });
+    connect(this, &DoubleLinker::signalSendFile, cliCore, [this, cliCore](FramePtr frame) {
+        if (!cliCore->Send(frame)) {
+            qWarning() << "文件连接发送失败, type=" << static_cast<int>(frame->type)
+                       << "index=" << frame->index;
+        }
+    });
     connect(fileSession_.get(), &FileSession::signalRequestSend, this, &DoubleLinker::onSendFile);
     connect(this, &DoubleLinker::signalAskFileID, fileSession_.get(), &FileSession::AskOwnID);
     connect(this, &DoubleLinker::signalFileDoConnect, cliCore, &ClientCore::connectToServer);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <QFile>
 #include <QMutex>
 #include <QObject>
@@ -53,7 +54,7 @@ public:
     bool handleInterrupt(FramePtr frame);
     bool handleFinish(FramePtr frame);
     TransMode getTransMode();
-    TransStatus getTransStatus() const;
+    TransStatus getTransStatus() const { return state_.load(std::memory_order_acquire); }
     QString getTransName() const;
 
     void onSendOrRecvTimeout();
@@ -64,7 +65,7 @@ private:
     TransMode tMode_{};
     QMutex qMut_;
     QTimer* sendOrRecvTimeout_{};
-    TransStatus state_{};
+    std::atomic<TransStatus> state_{TransStatus::Idle};
 
     FileMeta meta_;
     Message msg_;
