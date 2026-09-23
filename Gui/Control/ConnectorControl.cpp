@@ -2,6 +2,7 @@
 
 #include <Net/ClientHelper.h>
 #include <QAbstractItemView>
+#include <QApplication>
 #include <QMenu>
 
 #include "Base/BaseHelper.h"
@@ -104,6 +105,7 @@ void ConnectorControl::initSignals()
         emit signalDoDisConnect();
     });
     connect(ui->btnRefresh, &QPushButton::clicked, this, &ConnectorControl::onRefresh);
+    connect(ui->btnAboutQt, &QPushButton::clicked, this, []() { QApplication::aboutQt(); });
 
     auto* cliCore = doubleLinker_->GetControlSession()->getClientCore();
     connect(cliCore, &ClientCore::signalConnectting, this, &ConnectorControl::onConnectting);

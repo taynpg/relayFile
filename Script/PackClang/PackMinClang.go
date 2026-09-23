@@ -75,7 +75,7 @@ func main() {
 		filepath.Join(binDir, "relayFileServer.exe"),
 	}
 
-	if err := Common.CreateZip(zipPath, exes, v); err != nil {
+	if err := Common.CreateZip(zipPath, exes, root, v); err != nil {
 		panic(err)
 	}
 }

@@ -155,7 +155,7 @@ func RemoveBuildDir(buildDir string) {
 	}
 }
 
-func CreateZip(zipPath string, files []string, v VersionInfo) error {
+func CreateZip(zipPath string, files []string, root string, v VersionInfo) error {
 	zf, err := os.Create(zipPath)
 	if err != nil {
 		return err
@@ -168,6 +168,34 @@ func CreateZip(zipPath string, files []string, v VersionInfo) error {
 	vw, _ := zw.Create("version.txt")
 	fmt.Fprintf(vw, "COMMIT=%s\nVERSION=%s\nDEV=%s\n",
 		v.Commit, v.Num, v.Dev)
+
+	// 添加项目自身的 LICENSE 文件
+	licensePath := filepath.Join(root, "LICENSE")
+	if f, err := os.Open(licensePath); err == nil {
+		w, _ := zw.Create("LICENSE")
+		io.Copy(w, f)
+		f.Close()
+		fmt.Println("  ✓ LICENSE")
+	}
+
+	// 添加 licenses/ 目录下的第三方协议文件（如 Qt 的 LGPL）
+	licensesDir := filepath.Join(root, "licenses")
+	if entries, err := os.ReadDir(licensesDir); err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			src := filepath.Join(licensesDir, entry.Name())
+			f, err := os.Open(src)
+			if err != nil {
+				continue
+			}
+			w, _ := zw.Create(filepath.Join("licenses", entry.Name()))
+			io.Copy(w, f)
+			f.Close()
+			fmt.Println("  ✓ licenses/" + entry.Name())
+		}
+	}
 
 	for _, exe := range files {
 		f, err := os.Open(exe)
