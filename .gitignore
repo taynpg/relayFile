@@ -16,6 +16,3 @@ log/
 # ---> cmk
 cmk_cache
 cmk_temp
-
-# ---> vendored third-party (liblzma source tree)
-Third/xz/
