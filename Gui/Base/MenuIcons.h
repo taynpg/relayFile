@@ -466,6 +466,50 @@ inline QIcon unselectAll()
     return QIcon(pm);
 }
 
+// 粗校验：文档 + 放大镜 + 勾
+inline QIcon check()
+{
+    auto pm = makePixmap();
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    auto c = cCheck();
+    // 文档（带折角）
+    p.setPen(QPen(cInfo(), 1.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    p.setBrush(QColor("#F8FAFC"));
+    QPainterPath doc;
+    doc.moveTo(3.5, 2.5);
+    doc.lineTo(11, 2.5);
+    doc.lineTo(13, 4.5);
+    doc.lineTo(13, 13.5);
+    doc.lineTo(3.5, 13.5);
+    doc.closeSubpath();
+    p.drawPath(doc);
+    // 折角
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor("#E2E8F0"));
+    QPainterPath fold;
+    fold.moveTo(11, 2.5);
+    fold.lineTo(13, 4.5);
+    fold.lineTo(11, 4.5);
+    fold.closeSubpath();
+    p.drawPath(fold);
+    // 放大镜
+    auto glass = cCheck();
+    p.setPen(QPen(glass, 1.5, Qt::SolidLine, Qt::RoundCap));
+    p.setBrush(Qt::NoBrush);
+    p.drawEllipse(QPointF(7.5, 8), 3.6, 3.6);
+    p.drawLine(QPointF(10.1, 10.6), QPointF(12, 12.5));
+    // 镜内勾
+    p.setPen(QPen(glass, 1.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    QPainterPath tick;
+    tick.moveTo(QPointF(5.8, 8));
+    tick.lineTo(QPointF(7, 9.2));
+    tick.lineTo(QPointF(9.2, 6.8));
+    p.drawPath(tick);
+    p.end();
+    return QIcon(pm);
+}
+
 // 与该客户端通信：两端节点 + 双向链路
 inline QIcon communicate()
 {

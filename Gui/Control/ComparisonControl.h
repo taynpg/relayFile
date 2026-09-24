@@ -5,6 +5,7 @@
 #include <QListWidgetItem>
 
 #include "Base/GuiDefine.h"
+#include "Base/WorkerThread.hpp"
 #include "OwnTableWidget.h"
 #include "Sqlite/ComparisonSql.h"
 
@@ -41,6 +42,7 @@ private:
     void initControls();
     void initSignals();
     void onTableContextMenu(const QPoint& pos);
+    void onRoughCheck(const QList<QTableWidgetItem*>& items);
     void onTrans(const QList<QTableWidgetItem*>& items, bool isSend);
     void onNewConfig();
     void onRefreshMark();
@@ -57,6 +59,7 @@ private:
     QVector<CompDataItem> curItems_;
     bool autoChange_{};
     std::shared_ptr<ComparisonSql> comparisonSql_;
+    std::shared_ptr<WorkerThread<ComparisonControl>> workerThread_{};
 };
 
 #endif   // COMPARISONCONTROL_H

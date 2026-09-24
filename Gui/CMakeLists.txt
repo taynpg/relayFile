@@ -27,6 +27,7 @@ set(CONTROL_SOURCES
     Form/RelayTask.h Form/RelayTask.cpp Form/RelayTask.ui
     Control/LogControl.h Control/LogControl.cpp Control/LogControl.ui
     Base/MessageBoxHelper.h Base/MessageBoxHelper.cpp
+    Base/SampleCompare.h Base/SampleCompare.cpp
     Control/OwnTableWidget.h Control/OwnTableWidget.cpp
     Base/InfoDrop.h Base/InfoDrop.cpp
     Form/WaitDialog.h Form/WaitDialog.cpp

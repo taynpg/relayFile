@@ -1,5 +1,6 @@
 #include "ComparisonControl.h"
 
+#include <File/FileDir.h>
 #include <QDesktopServices>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -11,6 +12,7 @@
 #include "Base/BaseHelper.h"
 #include "Base/MenuIcons.h"
 #include "Base/MessageBoxHelper.h"
+#include "Base/SampleCompare.h"
 #include "Form/ReplaceArea.h"
 #include "ui_ComparisonControl.h"
 
@@ -27,10 +29,16 @@ ComparisonControl::ComparisonControl(QWidget* parent) : QDialog(parent), ui(new 
 
     ui->edFrom->setMaximumWidth(200);
     ui->edTo->setMaximumWidth(200);
+
+    workerThread_ = std::make_shared<WorkerThread<ComparisonControl>>(this);
+    workerThread_->start();
 }
 
 ComparisonControl::~ComparisonControl()
 {
+    if (workerThread_) {
+        workerThread_->stop();
+    }
     comparisonSql_->close();
     delete ui;
 }
@@ -332,6 +340,7 @@ void ComparisonControl::onTableContextMenu(const QPoint& pos)
     QAction* accessDirAction{};
     QAction* accessRemoteDirAction{};
     QAction* openDirAction{};
+    QAction* checkAction{};
     QAction* uploadAction = menu.addAction(MenuIcons::upload(), "上传");
     QAction* newLineAction = menu.addAction(MenuIcons::newRow(), "新行");
     QAction* deleteAction = menu.addAction(MenuIcons::del(), "删除");
@@ -342,6 +351,10 @@ void ComparisonControl::onTableContextMenu(const QPoint& pos)
         accessDirAction = menu.addAction(MenuIcons::accessLocal(), "访问本地目录");
         accessRemoteDirAction = menu.addAction(MenuIcons::accessRemote(), "访问远程目录");
         openDirAction = menu.addAction(MenuIcons::openDir(), "打开本地所在目录");
+        // 仅文件类型支持粗校验
+        if (datas[2]->text() == GUI_FILE_TYPE_FILE) {
+            checkAction = menu.addAction(MenuIcons::check(), "粗校验");
+        }
     }
 
     auto* selectAction = menu.exec(tableWidget_->viewport()->mapToGlobal(pos));
@@ -363,6 +376,10 @@ void ComparisonControl::onTableContextMenu(const QPoint& pos)
             return;
         }
         QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+        return;
+    }
+    if (selectAction == checkAction) {
+        onRoughCheck(datas);
         return;
     }
     if (selectAction == newLineAction) {
@@ -392,6 +409,51 @@ void ComparisonControl::onTableContextMenu(const QPoint& pos)
         onTrans(datas, false);
         return;
     }
+}
+
+void ComparisonControl::onRoughCheck(const QList<QTableWidgetItem*>& items)
+{
+    // 先检查是否已经连接了服务器和选择了对方ID
+    auto controlSession = GlobalData::getInstance()->getControlSession();
+    if (!controlSession->getClientCore()->isConnected()) {
+        QMessageBox::warning(this, "提示", "请先连接服务器");
+        return;
+    }
+    if (controlSession->getOtherInfo().clientId.empty()) {
+        QMessageBox::warning(this, "提示", "请先选择通信对象");
+        return;
+    }
+
+    auto name = items[1]->text().trimmed();
+    auto localDir = items[4]->text().trimmed();
+    auto remoteDir = items[5]->text().trimmed();
+    if (name.isEmpty() || localDir.isEmpty() || remoteDir.isEmpty()) {
+        QMessageBox::warning(this, "提示", "文件名或本地/远程目录不能为空");
+        return;
+    }
+
+    auto localPath = FileDir::Join(localDir, name).toStdString();
+    auto remotePath = FileDir::Join(remoteDir, name).toStdString();
+    auto localDf = BaseAskDF::Create(AskType::ASK_TYPE_LOCAL);
+    auto remoteDf = BaseAskDF::Create(AskType::ASK_TYPE_REMOTE);
+
+    workerThread_->invoke([this, localPath, remotePath, localDf, remoteDf, name]() {
+        auto r = SampleCompare::Compare(localDf, localPath, remoteDf, remotePath);
+        QString msg;
+        if (!r.ok) {
+            msg = QString("粗校验失败：%1").arg(QString::fromStdString(r.errMsg));
+        } else if (!r.aExist) {
+            msg = QString("本地文件不存在：%1").arg(name);
+        } else if (!r.bExist) {
+            msg = QString("远端文件不存在：%1").arg(name);
+        } else if (r.aSize != r.bSize) {
+            msg = QString("大小不一致：本地=%1 字节，远端=%2 字节").arg(r.aSize).arg(r.bSize);
+        } else {
+            msg = r.same ? QString("内容粗判一致（%1 字节）").arg(r.aSize)
+                         : QString("大小一致但内容粗判不一致（%1 字节）").arg(r.aSize);
+        }
+        QMetaObject::invokeMethod(this, [this, msg]() { MessageBoxHelper::information(this, "粗校验", msg); });
+    });
 }
 
 void ComparisonControl::onTrans(const QList<QTableWidgetItem*>& items, bool isSend)
