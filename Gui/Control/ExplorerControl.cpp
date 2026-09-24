@@ -18,6 +18,7 @@
 #include <algorithm>
 
 #include "Base/GuiDefine.h"
+#include "Base/MenuIcons.h"
 #include "Base/MessageBoxHelper.h"
 #include "Form/FileMetaInfo.h"
 #include "ui_ExplorerControl.h"
@@ -493,26 +494,26 @@ void ExplorerControl::onTableContextMenu(const QPoint& pos)
     QAction* mkdirDirAction{};
 
     if (askType_ == AskType::ASK_TYPE_LOCAL && datas.size() <= headers_.size()) {
-        explorerAction = new QAction(style()->standardIcon(QStyle::SP_DirIcon), "在资源管理器中打开");
+        explorerAction = new QAction(MenuIcons::explorer(), "在资源管理器中打开");
     }
 
     if (!datas.isEmpty()) {
-        transAction = menu.addAction(style()->standardIcon(QStyle::SP_FileDialogStart), "传输");
+        transAction = menu.addAction(MenuIcons::transfer(), "传输");
 
         // 超过1组选中，不显示单项菜单。
         if (datas.size() <= headers_.size()) {
             if (auto type = tableWidget_->item(datas[0]->row(), 3); type->text() == GUI_FILE_TYPE_FILE) {
-                sha256Action = menu.addAction("SHA256");
-                extractAction = menu.addAction("解压缩");
+                sha256Action = menu.addAction(MenuIcons::sha256(), "SHA256");
+                extractAction = menu.addAction(MenuIcons::extract(), "解压缩");
             }
-            copyPathAction = menu.addAction(style()->standardIcon(QStyle::SP_CommandLink), "复制全路径");
-            renameAction = menu.addAction(style()->standardIcon(QStyle::SP_FileLinkIcon), "重命名");
-            detailAction = menu.addAction("详细信息");
+            copyPathAction = menu.addAction(MenuIcons::copyPath(), "复制全路径");
+            renameAction = menu.addAction(MenuIcons::rename(), "重命名");
+            detailAction = menu.addAction(MenuIcons::detail(), "详细信息");
         }
 
-        deleteAction = menu.addAction(style()->standardIcon(QStyle::SP_TrashIcon), "删除");
-        compressAction = menu.addAction("压缩");
-        mkdirDirAction = menu.addAction(style()->standardIcon(QStyle::SP_DirOpenIcon), "新建文件夹");
+        deleteAction = menu.addAction(MenuIcons::del(), "删除");
+        compressAction = menu.addAction(MenuIcons::compress(), "压缩");
+        mkdirDirAction = menu.addAction(MenuIcons::newFolder(), "新建文件夹");
         if (explorerAction) {
             menu.addAction(explorerAction);
         }

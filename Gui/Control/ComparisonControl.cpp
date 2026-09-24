@@ -9,6 +9,7 @@
 #include <QUrl>
 
 #include "Base/BaseHelper.h"
+#include "Base/MenuIcons.h"
 #include "Base/MessageBoxHelper.h"
 #include "Form/ReplaceArea.h"
 #include "ui_ComparisonControl.h"
@@ -45,8 +46,8 @@ void ComparisonControl::initControls()
 void ComparisonControl::onListContextMenu(const QPoint& pos)
 {
     QMenu menu(ui->listWidget);
-    QAction* actionAll = menu.addAction("全选");
-    QAction* actionClear = menu.addAction("取消全选");
+    QAction* actionAll = menu.addAction(MenuIcons::selectAll(), "全选");
+    QAction* actionClear = menu.addAction(MenuIcons::unselectAll(), "取消全选");
 
     QAction* ret = menu.exec(ui->listWidget->mapToGlobal(pos));
     if (!ret) {
@@ -331,16 +332,16 @@ void ComparisonControl::onTableContextMenu(const QPoint& pos)
     QAction* accessDirAction{};
     QAction* accessRemoteDirAction{};
     QAction* openDirAction{};
-    QAction* uploadAction = menu.addAction(style()->standardIcon(QStyle::SP_ArrowUp), "上传");
-    QAction* newLineAction = menu.addAction("新行");
-    QAction* deleteAction = menu.addAction(style()->standardIcon(QStyle::SP_TrashIcon), "删除");
-    QAction* downloadAction = menu.addAction(style()->standardIcon(QStyle::SP_ArrowDown), "下载");
+    QAction* uploadAction = menu.addAction(MenuIcons::upload(), "上传");
+    QAction* newLineAction = menu.addAction(MenuIcons::newRow(), "新行");
+    QAction* deleteAction = menu.addAction(MenuIcons::del(), "删除");
+    QAction* downloadAction = menu.addAction(MenuIcons::download(), "下载");
 
     // 有的菜单项单行选中时才显示
     if (datas.size() / headers_.size() == 1) {
-        accessDirAction = menu.addAction(style()->standardIcon(QStyle::SP_DirLinkIcon), "访问本地目录");
-        accessRemoteDirAction = menu.addAction(style()->standardIcon(QStyle::SP_DriveNetIcon), "访问远程目录");
-        openDirAction = menu.addAction(style()->standardIcon(QStyle::SP_DirIcon), "打开本地所在目录");
+        accessDirAction = menu.addAction(MenuIcons::accessLocal(), "访问本地目录");
+        accessRemoteDirAction = menu.addAction(MenuIcons::accessRemote(), "访问远程目录");
+        openDirAction = menu.addAction(MenuIcons::openDir(), "打开本地所在目录");
     }
 
     auto* selectAction = menu.exec(tableWidget_->viewport()->mapToGlobal(pos));
