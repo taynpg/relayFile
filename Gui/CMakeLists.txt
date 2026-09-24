@@ -47,7 +47,7 @@ set(BASE_SOURCES
 )
 
 set(RESOURCE_SOURCES
-    Resource/relayFileC.rc relayFile.qrc
+    Resource/relayFileG.rc relayFile.qrc
 )
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})

@@ -55,7 +55,7 @@ void relayFile::initAfter()
 {
     auto size = baseConfig_->getWidthHeight();
     resize(size.first, size.second);
-    setWindowIcon(QIcon("://Resource/Client.ico"));
+    setWindowIcon(QIcon("://Resource/Gui.ico"));
 
     auto ver = QString("relayFile v%1 %2 %3").arg(VERSION_NUM, VERSION_GIT_COMMIT, VERSION_DEV);
     setWindowTitle(ver);
