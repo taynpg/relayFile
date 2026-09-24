@@ -497,9 +497,15 @@ void ExplorerControl::onTableContextMenu(const QPoint& pos)
         explorerAction = new QAction(MenuIcons::explorer(), "在资源管理器中打开");
     }
 
+    // 传输永远在第一项（仅当有选中项时，无选中则无可传输内容）
     if (!datas.isEmpty()) {
         transAction = menu.addAction(MenuIcons::transfer(), "传输");
+    }
 
+    // 新建文件夹默认都显示
+    mkdirDirAction = menu.addAction(MenuIcons::newFolder(), "新建文件夹");
+
+    if (!datas.isEmpty()) {
         // 超过1组选中，不显示单项菜单。
         if (datas.size() <= headers_.size()) {
             if (auto type = tableWidget_->item(datas[0]->row(), 3); type->text() == GUI_FILE_TYPE_FILE) {
@@ -513,7 +519,6 @@ void ExplorerControl::onTableContextMenu(const QPoint& pos)
 
         deleteAction = menu.addAction(MenuIcons::del(), "删除");
         compressAction = menu.addAction(MenuIcons::compress(), "压缩");
-        mkdirDirAction = menu.addAction(MenuIcons::newFolder(), "新建文件夹");
         if (explorerAction) {
             menu.addAction(explorerAction);
         }
@@ -567,7 +572,8 @@ void ExplorerControl::onTableContextMenu(const QPoint& pos)
         return;
     }
     if (selectAction == mkdirDirAction) {
-        onNewDir(datas[1]->row());
+        int row = datas.isEmpty() ? tableWidget_->rowCount() - 1 : datas[1]->row();
+        onNewDir(row);
         return;
     }
     if (selectAction == detailAction) {
