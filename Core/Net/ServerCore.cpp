@@ -42,32 +42,41 @@ void ServerCore::stopListen()
 
 void ServerCore::onNewConnection()
 {
-    auto* socket = nextPendingConnection();
-    QHostAddress peerAddress = socket->peerAddress();
-    quint32 ipv4 = peerAddress.toIPv4Address();
-    QString ipStr = QHostAddress(ipv4).toString();
-    QString clientId = QString("%1:%2").arg(ipStr).arg(socket->peerPort());
+    try {
+        auto* socket = nextPendingConnection();
+        if (!socket) {
+            return;
+        }
+        QHostAddress peerAddress = socket->peerAddress();
+        quint32 ipv4 = peerAddress.toIPv4Address();
+        QString ipStr = QHostAddress(ipv4).toString();
+        QString clientId = QString("%1:%2").arg(ipStr).arg(socket->peerPort());
 
-    if (clientMap_.size() >= 30) {
-        qWarning() << "客户端连接数已达上限，拒绝连接：" << clientId;
-        socket->disconnectFromHost();
-        return;
-    }
-    qInfo() << "客户端连接成功：" << clientId;
+        if (clientMap_.size() >= 30) {
+            qWarning() << "客户端连接数已达上限，拒绝连接：" << clientId;
+            socket->disconnectFromHost();
+            return;
+        }
+        qInfo() << "客户端连接成功：" << clientId;
 
-    connect(socket, &QTcpSocket::readyRead, this, &ServerCore::onRead);
-    connect(socket, &QTcpSocket::disconnected, this, &ServerCore::onClearClient);
+        connect(socket, &QTcpSocket::readyRead, this, &ServerCore::onRead);
+        connect(socket, &QTcpSocket::disconnected, this, &ServerCore::onClearClient);
 
-    auto clientInfo = std::make_shared<ClientInfo>();
-    clientInfo->socket = socket;
-    clientInfo->id = clientId;
-    clientInfo->socket->setProperty("ID", clientId);
-    clientInfo->socket->setProperty("INFO", QVariant::fromValue(clientInfo.get()));
-    clientInfo->connectTime = QDateTime::currentMSecsSinceEpoch() / 1000;
+        auto clientInfo = std::make_shared<ClientInfo>();
+        clientInfo->socket = socket;
+        clientInfo->id = clientId;
+        clientInfo->socket->setProperty("ID", clientId);
+        clientInfo->socket->setProperty("INFO", QVariant::fromValue(clientInfo.get()));
+        clientInfo->connectTime = QDateTime::currentMSecsSinceEpoch() / 1000;
 
-    {
-        QWriteLocker locker(&tempLock_);
-        tempMap_[clientId.toStdString()] = clientInfo;
+        {
+            QWriteLocker locker(&tempLock_);
+            tempMap_[clientId.toStdString()] = clientInfo;
+        }
+    } catch (const std::exception& e) {
+        qWarning() << "onNewConnection 异常:" << e.what();
+    } catch (...) {
+        qWarning() << "onNewConnection 未知异常，已忽略";
     }
 }
 
@@ -78,20 +87,34 @@ void ServerCore::onRead()
         return;
     }
 
-    auto* cli = socket->property("INFO").value<ClientInfo*>();
-    auto data = socket->readAll();
+    try {
+        auto* cli = socket->property("INFO").value<ClientInfo*>();
+        if (!cli) {
+            qWarning() << "onRead: 客户端上下文缺失，忽略本次数据";
+            return;
+        }
+        auto data = socket->readAll();
 
-    cli->buffer.Append(data.data(), data.size());
-    while (true) {
-        auto frame = Protocol::UnPack(cli->buffer);
-        if (frame == nullptr) {
-            break;
+        cli->buffer.Append(data.data(), data.size());
+        while (true) {
+            auto frame = Protocol::UnPack(cli->buffer);
+            if (frame == nullptr) {
+                break;
+            }
+            if (frame->type == FrameType::kMsgType_Ask_Heart) {
+                onUseHeart(cli, frame);
+                continue;
+            }
+            useFrame(frame, socket, cli);
         }
-        if (frame->type == FrameType::kMsgType_Ask_Heart) {
-            onUseHeart(cli, frame);
-            continue;
-        }
-        useFrame(frame, socket, cli);
+    } catch (const std::exception& e) {
+        // 协议解析可失败，但绝不允许异常逃逸进 Qt 事件循环（否则连接/锁状态未定义）
+        qWarning() << "onRead 解析帧异常（可能是旧客户端协议不兼容）:" << e.what();
+        qWarning() << "踢掉异常客户端，断开连接";
+        socket->abort();
+    } catch (...) {
+        qWarning() << "onRead 未知异常，踢掉客户端";
+        socket->abort();
     }
 }
 
@@ -104,44 +127,50 @@ void ServerCore::onMonitorHeart()
         QTcpSocket* socketControl{};
         QTcpSocket* socketFile{};
     };
-    std::vector<RemoveInfo> removeIds;
-    {
-        QWriteLocker locker(&tempLock_);
-        for (auto& cli : tempMap_) {
-            if (cli->connectTime < (QDateTime::currentMSecsSinceEpoch() / 1000 - 5)) {
-                qWarning() << "客户端" << cli->id << "超时未发送心跳包";
-                removeIds.push_back({cli->id.toStdString(), cli->transId.toStdString(), cli->socket, nullptr, nullptr});
+    try {
+        std::vector<RemoveInfo> removeIds;
+        {
+            QWriteLocker locker(&tempLock_);
+            for (auto& cli : tempMap_) {
+                if (cli->connectTime < (QDateTime::currentMSecsSinceEpoch() / 1000 - 5)) {
+                    qWarning() << "客户端" << cli->id << "超时未发送心跳包";
+                    removeIds.push_back({cli->id.toStdString(), cli->transId.toStdString(), cli->socket, nullptr, nullptr});
+                }
             }
         }
-    }
-    {
-        QWriteLocker locker(&rwLock_);
-        for (auto& cli : clientMap_) {
-            if (cli->connectTime < (QDateTime::currentMSecsSinceEpoch() / 1000 - 5)) {
-                qWarning() << "客户端" << cli->id << "超时未发送心跳包";
-                removeIds.push_back({cli->id.toStdString(), cli->transId.toStdString(), cli->socket, nullptr});
+        {
+            QWriteLocker locker(&rwLock_);
+            for (auto& cli : clientMap_) {
+                if (cli->connectTime < (QDateTime::currentMSecsSinceEpoch() / 1000 - 5)) {
+                    qWarning() << "客户端" << cli->id << "超时未发送心跳包";
+                    removeIds.push_back({cli->id.toStdString(), cli->transId.toStdString(), cli->socket, nullptr});
+                }
             }
         }
-    }
-    {
-        QWriteLocker locker(&transLock_);
+        {
+            QWriteLocker locker(&transLock_);
+            for (auto& info : removeIds) {
+                if (transMap_.contains(info.transId)) {
+                    auto cli = transMap_[info.transId];
+                    info.socketFile = cli->socket;
+                }
+            }
+        }
         for (auto& info : removeIds) {
-            if (transMap_.contains(info.transId)) {
-                auto cli = transMap_[info.transId];
-                info.socketFile = cli->socket;
+            if (info.socketTmp) {
+                info.socketTmp->disconnectFromHost();
+            }
+            if (info.socketControl) {
+                info.socketControl->disconnectFromHost();
+            }
+            if (info.socketFile) {
+                info.socketFile->disconnectFromHost();
             }
         }
-    }
-    for (auto& info : removeIds) {
-        if (info.socketTmp) {
-            info.socketTmp->disconnectFromHost();
-        }
-        if (info.socketControl) {
-            info.socketControl->disconnectFromHost();
-        }
-        if (info.socketFile) {
-            info.socketFile->disconnectFromHost();
-        }
+    } catch (const std::exception& e) {
+        qWarning() << "onMonitorHeart 异常:" << e.what();
+    } catch (...) {
+        qWarning() << "onMonitorHeart 未知异常，已忽略";
     }
 }
 
@@ -288,47 +317,53 @@ void ServerCore::onClearClient()
     if (!socket) {
         return;
     }
-    auto* cli = socket->property("INFO").value<ClientInfo*>();
-    if (!cli) {
-        return;
-    }
-    bool isRemove = false;
-    {
+    try {
+        auto* cli = socket->property("INFO").value<ClientInfo*>();
+        if (!cli) {
+            return;
+        }
+        bool isRemove = false;
+        {
+            QWriteLocker locker(&rwLock_);
+            if (clientMap_.contains(cli->id.toStdString())) {
+                qDebug() << "clientMap_移除客户端：" << cli->id;
+                clientMap_.remove(cli->id.toStdString());
+                isRemove = true;
+            }
+        }
+        if (!isRemove) {
+            QWriteLocker locker(&tempLock_);
+            if (tempMap_.contains(cli->id.toStdString())) {
+                qDebug() << "tempMap_移除客户端：" << cli->id;
+                tempMap_.remove(cli->id.toStdString());
+                isRemove = true;
+            }
+        }
+        if (!isRemove) {
+            QWriteLocker locker(&transLock_);
+            if (transMap_.contains(cli->id.toStdString())) {
+                qDebug() << "transMap_移除客户端：" << cli->id;
+                transMap_.remove(cli->id.toStdString());
+                isRemove = true;
+            }
+        }
+        socket->deleteLater();
+
+        // 通知在线客户端，有变动。
+        Message tellMsg;
+        GetClientList(tellMsg);
+
+        auto f = OneFrame::Create();
+        f->type = FrameType::kMsgType_Notify_ClientList;
+        f->data = serializeStruct(tellMsg);
+
         QWriteLocker locker(&rwLock_);
-        if (clientMap_.contains(cli->id.toStdString())) {
-            qDebug() << "clientMap_移除客户端：" << cli->id;
-            clientMap_.remove(cli->id.toStdString());
-            isRemove = true;
+        for (auto& cli : clientMap_) {
+            sendData(f, cli->socket);
         }
-    }
-    if (!isRemove) {
-        QWriteLocker locker(&tempLock_);
-        if (tempMap_.contains(cli->id.toStdString())) {
-            qDebug() << "tempMap_移除客户端：" << cli->id;
-            tempMap_.remove(cli->id.toStdString());
-            isRemove = true;
-        }
-    }
-    if (!isRemove) {
-        QWriteLocker locker(&transLock_);
-        if (transMap_.contains(cli->id.toStdString())) {
-            qDebug() << "transMap_移除客户端：" << cli->id;
-            transMap_.remove(cli->id.toStdString());
-            isRemove = true;
-        }
-    }
-    socket->deleteLater();
-
-    // 通知在线客户端，有变动。
-    Message tellMsg;
-    GetClientList(tellMsg);
-
-    auto f = OneFrame::Create();
-    f->type = FrameType::kMsgType_Notify_ClientList;
-    f->data = serializeStruct(tellMsg);
-
-    QWriteLocker locker(&rwLock_);
-    for (auto& cli : clientMap_) {
-        sendData(f, cli->socket);
+    } catch (const std::exception& e) {
+        qWarning() << "onClearClient 异常:" << e.what();
+    } catch (...) {
+        qWarning() << "onClearClient 未知异常，已忽略";
     }
 }

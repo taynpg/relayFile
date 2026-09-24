@@ -186,8 +186,8 @@ void FileSession::handleFrame(FramePtr frame)
 
         fileTrans->setTargetControlId(frame->from);
         pushTask(fileTrans, msg, "文件任务初始化失败（Answer_Send）。", FrameType::kFileType_Request_Start, ret, true);
-        qDebug() << QString::fromStdString(msg.from.clientId)
-                 << "kFileType_Answer_Send:" << QString::fromStdString(msg.ff.fullPath) << "，结果：" << ret;
+        // qDebug() << QString::fromStdString(msg.from.clientId)
+        //          << "kFileType_Answer_Send:" << QString::fromStdString(msg.ff.fullPath) << "，结果：" << ret;
         break;
     }
     // case FrameType::kFileType_Answer_Start: {

@@ -67,8 +67,8 @@ template <typename Callback> bool ControlSession::SendCall(FramePtr frame, Callb
     frame->sessionId = sid;
 
     emit signalRequestSend(frame);
-    qDebug() << "ControlSession::SendCall [TRACE-SID] sid=" << sid << "type=" << static_cast<int>(frame->type)
-             << "to=" << QString::fromStdString(frame->to) << "path=" << traceSafeComStr(frame);
+    // qDebug() << "ControlSession::SendCall [TRACE-SID] sid=" << sid << "type=" << static_cast<int>(frame->type)
+    //          << "to=" << QString::fromStdString(frame->to) << "path=" << traceSafeComStr(frame);
 
     // 这里不能用QTimer，因为QTimer依赖事件循环，而阻塞需求常常会阻塞事件循环，导致定时器失效
     auto timeoutHandler = [this, sid]() {
@@ -171,17 +171,17 @@ void ControlSession::dispatchMessage(FramePtr frame, FrameType answerType,
         if (!responseWaitWorker_.contains(worker->frame->sessionId)) {
             responseWaitWorker_.insert(worker->frame->sessionId, worker);
         } else {
-            qWarning() << "[TRACE-SID] DEDUP DROP sid=" << worker->frame->sessionId
-                       << "type=" << static_cast<int>(worker->frame->type)
-                       << "from=" << QString::fromStdString(worker->frame->from)
-                       << "path=" << traceSafeComStr(worker->frame) << "(request silently dropped!)";
+            // qWarning() << "[TRACE-SID] DEDUP DROP sid=" << worker->frame->sessionId
+            //            << "type=" << static_cast<int>(worker->frame->type)
+            //            << "from=" << QString::fromStdString(worker->frame->from)
+            //            << "path=" << traceSafeComStr(worker->frame) << "(request silently dropped!)";
             return;
         }
     }
-    qDebug() << "[TRACE-SID] dispatch enqueue sid=" << frame->sessionId
-             << "type=" << static_cast<int>(frame->type) << "path=" << traceSafeComStr(frame);
+    // qDebug() << "[TRACE-SID] dispatch enqueue sid=" << frame->sessionId
+    //          << "type=" << static_cast<int>(frame->type) << "path=" << traceSafeComStr(frame);
     workerPool_->enqueue([this, worker, answerType, handler]() {
-        qDebug() << "[TRACE-SID] task BEGIN sid=" << worker->sessionId;
+        // qDebug() << "[TRACE-SID] task BEGIN sid=" << worker->sessionId;
         auto t0 = std::chrono::steady_clock::now();
         Message sourceMsg;
         deserializeStruct(worker->frame->data, sourceMsg);
@@ -193,8 +193,8 @@ void ControlSession::dispatchMessage(FramePtr frame, FrameType answerType,
         auto costMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
         answerFrame->data = serializeStruct(m);
         answerFrame->type = answerType;
-        qDebug() << "[TRACE-SID] task HANDLER DONE sid=" << worker->sessionId << "cost=" << costMs
-                 << "ms, answer type=" << static_cast<int>(answerType) << "bytes=" << answerFrame->data.size();
+        // qDebug() << "[TRACE-SID] task HANDLER DONE sid=" << worker->sessionId << "cost=" << costMs
+        //          << "ms, answer type=" << static_cast<int>(answerType) << "bytes=" << answerFrame->data.size();
         emit signalRequestSend(answerFrame);
         worker->isDone = true;
     });
@@ -202,8 +202,8 @@ void ControlSession::dispatchMessage(FramePtr frame, FrameType answerType,
 
 void ControlSession::handleFrame(FramePtr frame)
 {
-    qDebug() << "[TRACE-SID] recv frame sid=" << frame->sessionId << "type=" << static_cast<int>(frame->type)
-             << "from=" << QString::fromStdString(frame->from) << "to=" << QString::fromStdString(frame->to);
+    // qDebug() << "[TRACE-SID] recv frame sid=" << frame->sessionId << "type=" << static_cast<int>(frame->type)
+    //          << "from=" << QString::fromStdString(frame->from) << "to=" << QString::fromStdString(frame->to);
     MessagePtr answerMsg = Message::Create();
     deserializeStruct(frame->data, *answerMsg);
 
@@ -292,7 +292,7 @@ void ControlSession::handleFrame(FramePtr frame)
         }
         QMutexLocker locker(&requestWaitLock_);
         if (auto it = requestWaitFrame_.find(frame->sessionId); it != requestWaitFrame_.end()) {
-            qDebug() << "[TRACE-SID] matched waiter sid=" << frame->sessionId << "type=" << static_cast<int>(frame->type);
+            // qDebug() << "[TRACE-SID] matched waiter sid=" << frame->sessionId << "type=" << static_cast<int>(frame->type);
             auto& callType = it.value()->callType;
             switch (callType) {
             case CallType::CT_Message: {

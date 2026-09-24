@@ -69,7 +69,7 @@ bool OneFileTrans::initTransfer(TransMode mode, const Message& msg, const std::s
     // filePath_ = QString::fromStdString(miniPath::Join(meta_.dir, meta_.name));
     filePath_ = QString::fromStdString(meta_.fullPath);
 
-    qDebug() << "处理文件路径：" << filePath_;
+    // qDebug() << "处理文件路径：" << filePath_;
 
     if (state_.load() != TransStatus::Idle) {
         return false;
@@ -290,13 +290,13 @@ void OneFileTrans::onFrameReceive(FramePtr frame)
         if (tMode_ == TransMode::Receive) {
             std::swap(frame->from, frame->to);
             frame->mark = frame->mark == 0 ? 1 : 0;
-            qDebug() << QString::fromStdString(frame->from) << ", kFileType_Request_Start.";
+            // qDebug() << QString::fromStdString(frame->from) << ", kFileType_Request_Start.";
             emit signalRequestSend(frame);
             break;
         }
         // 如果自己是发送方，那么继续发送。
         if (tMode_ == TransMode::Send) {
-            qDebug() << QString::fromStdString(frame->from) << ", nextSend.";
+            // qDebug() << QString::fromStdString(frame->from) << ", nextSend.";
             nextSend();
         }
         break;

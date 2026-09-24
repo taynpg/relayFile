@@ -90,8 +90,33 @@ void RelayTask::initControl()
     tableWidget_->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Fixed);
     tableWidget_->horizontalHeader()->setSectionResizeMode(5, QHeaderView::Fixed);
 
+    // 分页导航条
+    btnFirst_ = new QPushButton("首页", this);
+    btnPrev_ = new QPushButton("上一页", this);
+    btnNext_ = new QPushButton("下一页", this);
+    btnLast_ = new QPushButton("末页", this);
+    pageLabel_ = new QLabel("第 1/1 页", this);
+    pageLabel_->setAlignment(Qt::AlignCenter);
+    auto* pageSizeLabel = new QLabel("每页:", this);
+    pageSizeCombo_ = new QComboBox(this);
+    pageSizeCombo_->addItems({"50", "100", "200", "500", "全部"});
+    pageSizeCombo_->setCurrentText("100");
+
+    auto* navLayout = new QHBoxLayout();
+    navLayout->addWidget(btnFirst_);
+    navLayout->addWidget(btnPrev_);
+    navLayout->addStretch();
+    navLayout->addWidget(pageLabel_);
+    navLayout->addStretch();
+    navLayout->addWidget(btnNext_);
+    navLayout->addWidget(btnLast_);
+    navLayout->addSpacing(24);
+    navLayout->addWidget(pageSizeLabel);
+    navLayout->addWidget(pageSizeCombo_);
+
     auto* layout = new QVBoxLayout();
     layout->addWidget(tableWidget_);
+    layout->addLayout(navLayout);
     layout->setContentsMargins(0, 0, 0, 0);
     ui->widget->setLayout(layout);
 }
@@ -113,6 +138,11 @@ void RelayTask::initSignals()
     connect(this, &RelayTask::signalTransing, this, &RelayTask::onTransing);
     connect(this, &RelayTask::signalCancelWaitMsg, doubleLinker_.get(), &DoubleLinker::onCancelWaitMsg);
     connect(this, &RelayTask::signalCheckUnComplete, this, &RelayTask::onCheckUnComplete);
+    connect(btnFirst_, &QPushButton::clicked, this, &RelayTask::onFirstPage);
+    connect(btnPrev_, &QPushButton::clicked, this, &RelayTask::onPrevPage);
+    connect(btnNext_, &QPushButton::clicked, this, &RelayTask::onNextPage);
+    connect(btnLast_, &QPushButton::clicked, this, &RelayTask::onLastPage);
+    connect(pageSizeCombo_, &QComboBox::currentTextChanged, this, [this]() { onPageSizeChanged(); });
 }
 
 void RelayTask::onTransComplete()
@@ -142,19 +172,25 @@ void RelayTask::onStartRun()
     }
     disableControls();
     speedTimer_->start();
-    workerThread_->invoke([this]() {
+    // 主线程快照待处理项（状态为 WAIT 的数据索引），避免 worker 线程直接读模型产生竞态
+    std::vector<int> todo;
+    todo.reserve(fileList_.size());
+    for (int id = 0; id < (int)fileList_.size(); ++id) {
+        if (rowDisplay_[id].status == GUI_FILE_TRAN_STATE_WAIT) {
+            todo.push_back(id);
+        }
+    }
+    workerThread_->invoke([this, todo]() {
         bool allSuccess = true;
-        auto rows = tableWidget_->rowCount();
         emit signalTransing();
-        for (int i = 0; i < rows; ++i) {
-            auto* itemState = tableWidget_->item(i, 3);
-            if (itemState->text() != GUI_FILE_TRAN_STATE_WAIT) {
+        for (int id : todo) {
+            if (rowDisplay_[id].status != GUI_FILE_TRAN_STATE_WAIT) {
                 continue;
             }
             clearData();
-            onStartFresh(i);
+            onStartFresh(id);
             startTime_ = std::chrono::steady_clock::now();
-            bool handleSuccess = handleOneLine(i);
+            bool handleSuccess = handleOneLine(id);
             doubleLinker_->clearCurrentTaskItem();
             if (!handleSuccess) {
                 allSuccess = false;
@@ -166,7 +202,6 @@ void RelayTask::onStartRun()
         } else {
             emit signalTransFail();
         }
-        int a = 0;
     });
 }
 
@@ -180,50 +215,56 @@ void RelayTask::GenOtherMetaPath(const FileMeta& in, FileMeta& out, bool isSend,
     out.dir = FileDir::cdUp(fullPath).toStdString();
 }
 
-bool RelayTask::handleOneLine(int row)
+bool RelayTask::handleOneLine(int id)
 {
-    int id = tableWidget_->item(row, 0)->text().toInt();
-    if (id >= fileList_.size()) {
+    if (id < 0 || id >= (int)fileList_.size()) {
         return false;
     }
 
     //  等待Server通知结果
     //  根据结果进行放弃或者传输
     auto execRet = doubleLinker_->RunTaskItem(transItems_[id]);
-    qDebug() << "handleOneLine: " << execRet;
 
     if (execRet) {
         emit signalLog("传输执行成功。");
-        onSuccessFresh(row);
+        onSuccessFresh(id);
         return true;
     } else {
         emit signalLog("传输执行失败。");
-        onFailFresh(row);
+        onFailFresh(id);
         return false;
     }
 }
 
-void RelayTask::onStartFresh(int row)
+void RelayTask::onStartFresh(int id)
 {
-    QMetaObject::invokeMethod(this, [this, row]() { tableWidget_->item(row, 3)->setText(GUI_FILE_TRAN_STATE_TRANS); });
+    QMetaObject::invokeMethod(this, [this, id]() {
+        rowDisplay_[id].status = GUI_FILE_TRAN_STATE_TRANS;
+        refreshVisibleCell(id);
+    });
 }
 
-void RelayTask::onFailFresh(int row)
+void RelayTask::onFailFresh(int id)
 {
-    QMetaObject::invokeMethod(this, [this, row]() { tableWidget_->item(row, 3)->setText(GUI_FILE_TRAN_STATE_FAILED); });
+    QMetaObject::invokeMethod(this, [this, id]() {
+        rowDisplay_[id].status = GUI_FILE_TRAN_STATE_FAILED;
+        refreshVisibleCell(id);
+    });
 }
 
-void RelayTask::onSuccessFresh(int row)
+void RelayTask::onSuccessFresh(int id)
 {
     auto stopPoint = std::chrono::steady_clock::now();
     auto useTime = std::chrono::duration_cast<std::chrono::milliseconds>(stopPoint - startTime_);
     auto speedSize = totalSize_ * 1.0 / useTime.count();
     auto speedStr = getSpeedStr(speedSize * 1000);
     auto useTimeStr = miniUtil::GetTimeInfo(useTime.count());
-    QMetaObject::invokeMethod(this, [this, row, speedStr]() { tableWidget_->item(row, 4)->setText(speedStr); });
-    QMetaObject::invokeMethod(
-        this, [this, row, useTimeStr]() { tableWidget_->item(row, 5)->setText(QString::fromStdString(useTimeStr)); });
-    QMetaObject::invokeMethod(this, [this, row]() { tableWidget_->item(row, 3)->setText(GUI_FILE_TRAN_STATE_DONE); });
+    QMetaObject::invokeMethod(this, [this, id, speedStr, useTimeStr]() {
+        rowDisplay_[id].speedStr = speedStr;
+        rowDisplay_[id].useTimeStr = QString::fromStdString(useTimeStr);
+        rowDisplay_[id].status = GUI_FILE_TRAN_STATE_DONE;
+        refreshVisibleCell(id);
+    });
 }
 
 void RelayTask::setData(std::shared_ptr<RelayTaskData> data)
@@ -408,10 +449,10 @@ void RelayTask::onConfirmFiles()
     }
     for (const auto& item : needRemoveTaskFiles_) {
         auto fileName = QString::fromStdString(item.name);
-        for (const auto& mapItem : curTableData_) {
-            if (mapItem.second.second == fileName) {
-                auto* item = tableWidget_->item(mapItem.second.first, 3);
-                item->setText(GUI_FILE_TRAN_STATE_SKIP);
+        for (int id = 0; id < (int)fileList_.size(); ++id) {
+            if (QString::fromStdString(fileList_[id].name) == fileName) {
+                rowDisplay_[id].status = GUI_FILE_TRAN_STATE_SKIP;
+                refreshVisibleCell(id);
                 break;
             }
         }
@@ -460,18 +501,121 @@ void RelayTask::onCheckUnComplete()
 
 void RelayTask::updateTable()
 {
-    tableWidget_->clearContents();
-    tableWidget_->setRowCount(0);
-    curTableData_.clear();
+    // 重建显示模型（按数据索引），与可见页解耦
+    rowDisplay_.assign(fileList_.size(), RowDisplay{});
+    curPage_ = 0;
+    renderPage();
+}
 
-    for (int i = 0; i < fileList_.size(); ++i) {
-        auto row = tableWidget_->rowCount();
-        tableWidget_->insertRow(row);
-        setFileItem(fileList_[i], row, i);
-        if (i != 0 && i % 30 == 0) {
+void RelayTask::renderRow(int viewRow, int id)
+{
+    const auto& meta = fileList_[id];
+    const auto& d = rowDisplay_[id];
+
+    auto mkItem = [](const QString& text) {
+        auto* it = new QTableWidgetItem(text);
+        it->setFlags(it->flags() & ~Qt::ItemIsEditable);
+        return it;
+    };
+
+    tableWidget_->setItem(viewRow, 0, mkItem(QString::number(id)));
+    tableWidget_->setItem(viewRow, 1, mkItem(QString::fromStdString(meta.fullPath)));
+    tableWidget_->setItem(viewRow, 2, mkItem(QString::fromStdString(miniUtil::GetSizeInfo(meta.size))));
+    tableWidget_->setItem(viewRow, 3, mkItem(d.status));
+    tableWidget_->setItem(viewRow, 4, mkItem(d.speedStr));
+    tableWidget_->setItem(viewRow, 5, mkItem(d.useTimeStr));
+}
+
+void RelayTask::renderPage()
+{
+    int total = (int)fileList_.size();
+    int pages = (total <= 0) ? 1 : (total + pageSize_ - 1) / pageSize_;
+    if (curPage_ >= pages) curPage_ = pages - 1;
+    if (curPage_ < 0) curPage_ = 0;
+
+    tableWidget_->setRowCount(0);
+    tableWidget_->clearContents();
+
+    if (total <= 0) {
+        updatePageLabel();
+        return;
+    }
+
+    int start = curPage_ * pageSize_;
+    int end = std::min(start + pageSize_, total);
+    tableWidget_->setRowCount(end - start);
+
+    bool paginate = pageSize_ < total;
+    for (int id = start; id < end; ++id) {
+        renderRow(id - start, id);
+        if (paginate && (id - start) % 30 == 29) {
             QGuiApplication::processEvents();
         }
     }
+    updatePageLabel();
+}
+
+void RelayTask::gotoPage(int page)
+{
+    int total = (int)fileList_.size();
+    int pages = (total <= 0) ? 1 : (total + pageSize_ - 1) / pageSize_;
+    if (page < 0) page = 0;
+    if (page >= pages) page = pages - 1;
+    if (page == curPage_) return;
+    curPage_ = page;
+    renderPage();
+}
+
+void RelayTask::updatePageLabel()
+{
+    int total = (int)fileList_.size();
+    int pages = (total <= 0) ? 1 : (total + pageSize_ - 1) / pageSize_;
+    if (curPage_ >= pages) curPage_ = pages - 1;
+    if (curPage_ < 0) curPage_ = 0;
+    int start = (total == 0) ? 0 : curPage_ * pageSize_ + 1;
+    int end = (total == 0) ? 0 : std::min((curPage_ + 1) * pageSize_, total);
+    pageLabel_->setText(QString("第 %1/%2 页 ｜ 条目 %3-%4 / 共 %5").arg(curPage_ + 1).arg(pages).arg(start).arg(end).arg(total));
+    btnFirst_->setEnabled(curPage_ > 0);
+    btnPrev_->setEnabled(curPage_ > 0);
+    btnNext_->setEnabled(curPage_ < pages - 1);
+    btnLast_->setEnabled(curPage_ < pages - 1);
+}
+
+void RelayTask::refreshVisibleCell(int id)
+{
+    if (id < 0 || id >= (int)rowDisplay_.size()) return;
+    int start = curPage_ * pageSize_;
+    int end = start + pageSize_;
+    if (id < start || id >= end) return;  // 不在当前页：只更新模型，切到该页时 renderPage 会渲染
+    int viewRow = id - start;
+    if (viewRow >= tableWidget_->rowCount()) return;
+    const auto& d = rowDisplay_[id];
+    if (auto* it = tableWidget_->item(viewRow, 3)) it->setText(d.status);
+    if (auto* it = tableWidget_->item(viewRow, 4)) it->setText(d.speedStr);
+    if (auto* it = tableWidget_->item(viewRow, 5)) it->setText(d.useTimeStr);
+}
+
+void RelayTask::onFirstPage() { gotoPage(0); }
+void RelayTask::onPrevPage() { gotoPage(curPage_ - 1); }
+void RelayTask::onNextPage() { gotoPage(curPage_ + 1); }
+void RelayTask::onLastPage()
+{
+    int total = (int)fileList_.size();
+    int pages = (total <= 0) ? 1 : (total + pageSize_ - 1) / pageSize_;
+    gotoPage(pages - 1);
+}
+
+void RelayTask::onPageSizeChanged()
+{
+    QString text = pageSizeCombo_->currentText();
+    if (text == "全部") {
+        pageSize_ = 1000000000;  // 实际全部
+    } else {
+        pageSize_ = text.toInt();
+        if (pageSize_ <= 0) pageSize_ = 100;
+    }
+    curPage_ = 0;
+    renderPage();
 }
 
 void RelayTask::onCurFileProgress(std::uint64_t transed, std::uint64_t total)
@@ -522,34 +666,4 @@ void RelayTask::onRefreshSpeed()
     auto speedStr = getSpeedStr((curTransed_ - preTransed_) * (1000 / SPEED_TIMER_INTERVAL));
     ui->lbSpeed->setText(speedStr);
     preTransed_ = curTransed_;
-}
-
-void RelayTask::setFileItem(const FileMeta& meta, int row, int index)
-{
-    curTableData_[QString::fromStdString(meta.fullPath)] = std::make_pair(row, QString::fromStdString(meta.name));
-
-    auto* indexItem = new QTableWidgetItem(QString::number(index));
-    indexItem->setFlags(indexItem->flags() & ~Qt::ItemIsEditable);
-    tableWidget_->setItem(row, 0, indexItem);
-
-    auto* nameItem = new QTableWidgetItem(QString::fromStdString(meta.fullPath));
-    nameItem->setFlags(indexItem->flags() & ~Qt::ItemIsEditable);
-    tableWidget_->setItem(row, 1, nameItem);
-
-    auto sizeStr = miniUtil::GetSizeInfo(meta.size);
-    auto* sizeItem = new QTableWidgetItem(QString::fromStdString(sizeStr));
-    sizeItem->setFlags(indexItem->flags() & ~Qt::ItemIsEditable);
-    tableWidget_->setItem(row, 2, sizeItem);
-
-    auto* stateItem = new QTableWidgetItem(GUI_FILE_TRAN_STATE_WAIT);
-    stateItem->setFlags(indexItem->flags() & ~Qt::ItemIsEditable);
-    tableWidget_->setItem(row, 3, stateItem);
-
-    auto* speedItem = new QTableWidgetItem("N/A");
-    speedItem->setFlags(indexItem->flags() & ~Qt::ItemIsEditable);
-    tableWidget_->setItem(row, 4, speedItem);
-
-    auto* useItem = new QTableWidgetItem("N/A");
-    useItem->setFlags(indexItem->flags() & ~Qt::ItemIsEditable);
-    tableWidget_->setItem(row, 5, useItem);
 }

@@ -6,6 +6,7 @@
 #include <QMenu>
 
 #include "Base/BaseHelper.h"
+#include "Base/MenuIcons.h"
 #include "Protocol/Serialize.hpp"
 #include "ui_ConnectorControl.h"
 
@@ -293,7 +294,7 @@ void ConnectorControl::onTableContextMenu(const QPoint& pos)
     auto name = ui->tableClients->item(item->row(), 1)->text();
 
     QMenu menu(this);
-    QAction* useAction = menu.addAction("与该客户端通信");
+    QAction* useAction = menu.addAction(MenuIcons::communicate(), "与该客户端通信");
     auto* selectAction = menu.exec(ui->tableClients->viewport()->mapToGlobal(pos));
 
     if (selectAction == useAction) {

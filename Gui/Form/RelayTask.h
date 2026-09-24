@@ -4,7 +4,10 @@
 #include <File/FileDir.h>
 #include <Net/ClientCore.h>
 #include <Net/ClientHelper.h>
+#include <QComboBox>
 #include <QDialog>
+#include <QLabel>
+#include <QPushButton>
 #include <QTableWidget>
 
 #include "Base/AskDirFile/BaseAskDF.h"
@@ -53,9 +56,13 @@ protected:
 
     void onAppendLog(const QString& log);
     void updateTable();
-    void setFileItem(const FileMeta& meta, int row, int index);
+    void renderRow(int viewRow, int id);
+    void renderPage();
+    void gotoPage(int page);
+    void updatePageLabel();
+    void refreshVisibleCell(int id);
     void onStartRun();
-    bool handleOneLine(int row);
+    bool handleOneLine(int id);
     void onTransComplete();
     void onTransFail();
     void onTransing();
@@ -63,9 +70,9 @@ protected:
     void onCurFileProgress(std::uint64_t transed, std::uint64_t total);
     void onCurFileItem(const QString& from, const QString& to);
     void onRefreshSpeed();
-    void onSuccessFresh(int row);
-    void onFailFresh(int row);
-    void onStartFresh(int row);
+    void onSuccessFresh(int id);
+    void onFailFresh(int id);
+    void onStartFresh(int id);
     void onConfirmFiles();
 
     bool normalCheckFileExist();
@@ -108,7 +115,31 @@ private:
 
     std::vector<std::shared_ptr<TransItem>> transItems_;
     std::shared_ptr<WorkerThread<RelayTask>> workerThread_{};
-    std::map<QString, std::pair<int, QString>> curTableData_;
+
+    // ---- 分页显示相关 ----
+    // 每行显示状态（与 fileList_ 一一对应，按数据索引寻址，与当前可见页解耦）
+    struct RowDisplay {
+        QString status{GUI_FILE_TRAN_STATE_WAIT};
+        QString speedStr{"N/A"};
+        QString useTimeStr{"N/A"};
+    };
+    std::vector<RowDisplay> rowDisplay_;
+    int curPage_{0};
+    int pageSize_{100};
+
+    // 分页导航控件
+    QPushButton* btnFirst_{};
+    QPushButton* btnPrev_{};
+    QPushButton* btnNext_{};
+    QPushButton* btnLast_{};
+    QLabel* pageLabel_{};
+    QComboBox* pageSizeCombo_{};
+
+    void onFirstPage();
+    void onPrevPage();
+    void onNextPage();
+    void onLastPage();
+    void onPageSizeChanged();
 };
 
 #endif   // RELAYTASK_H

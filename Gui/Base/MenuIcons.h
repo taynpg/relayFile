@@ -466,4 +466,25 @@ inline QIcon unselectAll()
     return QIcon(pm);
 }
 
+// 与该客户端通信：两端节点 + 双向链路
+inline QIcon communicate()
+{
+    auto pm = makePixmap();
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    auto c = cTransfer();
+    // 两端节点
+    p.setBrush(c);
+    p.setPen(Qt::NoPen);
+    p.drawEllipse(QPointF(3, 8), 2.2, 2.2);
+    p.drawEllipse(QPointF(13, 8), 2.2, 2.2);
+    // 中间双向链路：线 + 两端箭头
+    p.setPen(QPen(c, 1.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    p.drawLine(QPointF(5.6, 8), QPointF(10.4, 8));
+    drawArrowHead(p, QPointF(10.4, 8), QPointF(1, 0), 2.4, c);  // 指向右
+    drawArrowHead(p, QPointF(5.6, 8), QPointF(-1, 0), 2.4, c); // 指向左
+    p.end();
+    return QIcon(pm);
+}
+
 } // namespace MenuIcons
