@@ -36,6 +36,10 @@ include_directories(${CMAKE_CURRENT_LIST_DIR} ${THIRD_PATH})
 add_library(relayFileCore STATIC ${SOURCE_FILES})
 target_include_directories(relayFileCore PUBLIC ${CMAKE_CURRENT_LIST_DIR} ${THIRD_PATH})
 target_link_libraries(relayFileCore PUBLIC Qt${QT_VERSION_MAJOR}::Core Qt${QT_VERSION_MAJOR}::Network)
+# Vendored liblzma provides LZMA2/XZ compression for archive transfer.
+target_link_libraries(relayFileCore PUBLIC liblzma)
+# Expose vendored liblzma public headers (#include <lzma.h>) to Core.
+target_include_directories(relayFileCore PUBLIC ${LZMA_API_INCLUDE_DIR})
 
 if (COMPILE_NAME MATCHES "MINGW")
     target_link_libraries(relayFileCore PUBLIC ws2_32 mswsock)

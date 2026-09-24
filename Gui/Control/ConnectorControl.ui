@@ -63,7 +63,7 @@
      <item>
       <widget class="QPushButton" name="btnLock">
        <property name="text">
-        <string>锁定</string>
+        <string>设定</string>
        </property>
       </widget>
      </item>

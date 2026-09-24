@@ -82,6 +82,17 @@ void to_json(nlohmann::json& j, const RetryCon& con)
     j = nlohmann::json{{"interval", con.interval}, {"count", con.count}, {"useRecon", con.useRecon}};
 }
 
+void from_json(const nlohmann::json& j, CompressConfig& cfg)
+{
+    cfg.enabled = j.value("enabled", false);
+    cfg.thresholdMB = j.value("thresholdMB", 2048);
+}
+
+void to_json(nlohmann::json& j, const CompressConfig& cfg)
+{
+    j = nlohmann::json{{"enabled", cfg.enabled}, {"thresholdMB", cfg.thresholdMB}};
+}
+
 void BaseConfig::genPath()
 {
     configDir_ = miniPath::Join(miniPath::GetHome().second, ".config", "relayFile");
@@ -214,6 +225,25 @@ bool BaseConfig::saveReconInterval(const RetryCon& con)
     QMutexLocker locker(&mutex_);
     nlohmann::json j = loadJson();
     j["reconInterval"] = con;
+    return saveJson(j);
+}
+
+bool BaseConfig::getCompress(CompressConfig& cfg)
+{
+    QMutexLocker locker(&mutex_);
+    nlohmann::json j = loadJson();
+    if (j.contains("compress") && !j["compress"].is_null()) {
+        cfg = j["compress"].get<CompressConfig>();
+        return true;
+    }
+    return false;
+}
+
+bool BaseConfig::saveCompress(const CompressConfig& cfg)
+{
+    QMutexLocker locker(&mutex_);
+    nlohmann::json j = loadJson();
+    j["compress"] = cfg;
     return saveJson(j);
 }
 

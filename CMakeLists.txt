@@ -35,6 +35,28 @@ include(CMake/Compile.cmake)
 include_directories(${PROJECT_BINARY_DIR})
 set(THIRD_PATH ${CMAKE_CURRENT_LIST_DIR}/Third)
 
+# --- Vendored liblzma (from XZ Utils) ---
+# Static lib, disable all command-line tools, scripts, docs, NLS, doxygen.
+# Only liblzma target is built and linked transitively by Core.
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build liblzma static" FORCE)
+set(XZ_TOOL_XZ OFF CACHE BOOL "" FORCE)
+set(XZ_TOOL_XZDEC OFF CACHE BOOL "" FORCE)
+set(XZ_TOOL_LZMADEC OFF CACHE BOOL "" FORCE)
+set(XZ_TOOL_LZMAINFO OFF CACHE BOOL "" FORCE)
+set(XZ_TOOL_SCRIPTS OFF CACHE BOOL "" FORCE)
+set(XZ_DOC OFF CACHE BOOL "" FORCE)
+set(XZ_DOXYGEN OFF CACHE BOOL "" FORCE)
+set(XZ_NLS OFF CACHE BOOL "" FORCE)
+set(BUILD_TESTING OFF CACHE BOOL "Disable xz tests" FORCE)
+add_subdirectory(Third/xz)
+# liblzma only declares PRIVATE include dirs; the public API headers live
+# under Third/xz/src/liblzma/api and are exposed to Core via its own include
+# path (cannot be attached to liblzma INTERFACE because that target is
+# exported and CMake rejects source-tree paths in INTERFACE_INCLUDE_DIRECTORIES).
+set(LZMA_API_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/Third/xz/src/liblzma/api)
+# Keep liblzma symbols private to relayFileCore to avoid symbol clashes.
+set_target_properties(liblzma PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 function(enable_win_clang_pdb TARGET)
     if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND WIN32)
         target_compile_options(${TARGET} PUBLIC

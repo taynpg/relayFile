@@ -16,6 +16,8 @@ struct TransItem {
     FileMeta from;
     FileMeta to;
     bool isSend;
+    // 压缩传输：true 表示 from 是一个自描述 tar.xz 归档，接收方收完即解包。
+    bool isArchive{false};
 };
 
 /*

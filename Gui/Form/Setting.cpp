@@ -31,6 +31,7 @@ void Setting::InitUi()
     auto* validator = new QIntValidator(0, INT_MAX, this);
     ui->edReconInterval->setValidator(validator);
     ui->edMaxRetry->setValidator(validator);
+    ui->edThreshold->setValidator(new QIntValidator(1, INT_MAX, this));
 
     connect(ui->btnSave, &QPushButton::clicked, this, &Setting::onSave);
     connect(ui->btnExit, &QPushButton::clicked, this, &Setting::onExit);
@@ -63,6 +64,14 @@ void Setting::onLoadDefault()
     } else {
         ui->rbNoRecon->setChecked(true);
     }
+
+    CompressConfig ccfg;
+    if (!config_->getCompress(ccfg)) {
+        ccfg.enabled = false;
+        ccfg.thresholdMB = 2048;
+    }
+    ui->cbCompress->setChecked(ccfg.enabled);
+    ui->edThreshold->setText(QString::number(ccfg.thresholdMB));
 }
 
 void Setting::onSave()
@@ -76,6 +85,15 @@ void Setting::onSave()
     con.count = ui->edMaxRetry->text().toInt();
     con.interval = ui->edReconInterval->text().toInt();
     if (!config_->saveReconInterval(con)) {
+        MessageBoxHelper::information(this, "提示", "保存失败");
+        return;
+    }
+
+    CompressConfig ccfg;
+    ccfg.enabled = ui->cbCompress->isChecked();
+    ccfg.thresholdMB = ui->edThreshold->text().toInt();
+    if (ccfg.thresholdMB <= 0) ccfg.thresholdMB = 2048;
+    if (!config_->saveCompress(ccfg)) {
         MessageBoxHelper::information(this, "提示", "保存失败");
         return;
     }

@@ -106,4 +106,8 @@ private:
     bool eofReached_{};
     int retransCount_{};
     std::uint64_t blockSize_{defBlockSize};
+
+    // 压缩传输：msg.mark==2 表示本传输为一个自描述 tar.xz 归档包，
+    // 接收方收完后就地解包并按内嵌清单写入各目的路径，随后删除临时归档。
+    bool isArchive_{};
 };

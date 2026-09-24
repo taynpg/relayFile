@@ -1,7 +1,9 @@
 #include "OneFileTrans.h"
 
 #include <File/FileDir.h>
+#include <QDir>
 
+#include "Compress/TarXzPacker.h"
 #include "Protocol/Serialize.hpp"
 
 OneFileTrans::OneFileTrans(QObject* parent) : QObject(parent)
@@ -56,6 +58,9 @@ bool OneFileTrans::initTransfer(TransMode mode, const Message& msg, const std::s
     tMode_ = mode;
     targetId_ = targetId;
     msg_ = msg;
+    // mark==2 标记本传输为自描述 tar.xz 归档包（仅对接收侧生效：发送侧仅读取
+    // 归档作为普通文件发出，isArchive_ 在 Send 分支无副作用）。
+    isArchive_ = (msg_.mark == 2);
     totalSize_ = (tMode_ == TransMode::Send ? msg.ff.size : msg.ft.size);
     meta_ = (tMode_ == TransMode::Send ? msg.ff : msg.ft);
     transSize_ = 0;
@@ -68,6 +73,11 @@ bool OneFileTrans::initTransfer(TransMode mode, const Message& msg, const std::s
     ownId_ = ownId;
     // filePath_ = QString::fromStdString(miniPath::Join(meta_.dir, meta_.name));
     filePath_ = QString::fromStdString(meta_.fullPath);
+    // 归档接收：忽略发送方给定的 ft.fullPath（发送方无法预知本机临时目录），
+    // 改写到本机临时目录，收完后再解包到清单指定的真实目的路径。
+    if (isArchive_ && tMode_ == TransMode::Receive) {
+        filePath_ = QDir::tempPath() + QString("/relay_archive_%1.tar.xz").arg(QString::fromStdString(uuid));
+    }
 
     // qDebug() << "处理文件路径：" << filePath_;
 
@@ -232,7 +242,25 @@ bool OneFileTrans::handleFinish(FramePtr frame)
         if (recvFile_.isOpen()) {
             recvFile_.close();
         }
-        // 查看是否需要同步权限
+        if (isArchive_) {
+            // 压缩传输：归档收完后就地解包，按内嵌清单写入各目的路径并应用
+            // 各自权限，随后删除临时归档。归档本身不需要单文件权限同步。
+            std::vector<std::string> outPaths;
+            std::string err;
+            if (!TarXzPacker::extract(filePath_.toStdString(), outPaths, err)) {
+                qWarning() << "归档解包失败:" << filePath_ << "err:" << QString::fromStdString(err);
+                QFile::remove(filePath_);
+                emit signalFailed(ownId_, "归档解包失败: " + err);
+                state_.store(TransStatus::Interrupted, std::memory_order_release);
+                return true;
+            }
+            qInfo() << "归档解包完成，文件数:" << outPaths.size() << "归档:" << filePath_;
+            QFile::remove(filePath_);
+            emit signalFinished(ownId_);
+            state_.store(TransStatus::Finished, std::memory_order_release);
+            return true;
+        }
+        // 普通传输：查看是否需要同步权限
         auto ownMark = FileDir::GetMark();
         if (ownMark != msg_.ff.mark) {
             qInfo() << "不同系统，不同步权限，ownMark:" << ownMark << "，msgMark:" << msg_.ff.mark;

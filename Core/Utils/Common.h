@@ -16,6 +16,12 @@ struct RetryCon {
     int count{1};
 };
 
+// 压缩传输配置：开启后多文件/文件夹打包为单个 tar.xz 传输。
+struct CompressConfig {
+    bool enabled{false};
+    int thresholdMB{2048};   // 单包超出此阈值（MB）则放弃本次传输
+};
+
 class Common
 {
 private:
@@ -43,6 +49,8 @@ public:
     bool saveWidthHeight(int width, int height);
     bool getReconInterval(RetryCon& con);
     bool saveReconInterval(const RetryCon& con);
+    bool getCompress(CompressConfig& cfg);
+    bool saveCompress(const CompressConfig& cfg);
 
 private:
     bool saveJson(const nlohmann::json& j);

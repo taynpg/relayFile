@@ -1,12 +1,15 @@
 #include "RelayTask.h"
 
 #include <QDateTime>
+#include <QDir>
+#include <QFile>
 #include <QHeaderView>
 #include <Utils/Common.h>
 
 #include "Base/BaseHelper.h"
 #include "Base/GuiDefine.h"
 #include "Base/MessageBoxHelper.h"
+#include "Compress/TarXzPacker.h"
 #include "Protocol/Serialize.hpp"
 #include "ui_RelayTask.h"
 
@@ -183,6 +186,97 @@ void RelayTask::onStartRun()
     workerThread_->invoke([this, todo]() {
         bool allSuccess = true;
         emit signalTransing();
+
+        // 压缩传输：启用压缩且为上传（本地为发送方）时，将所有待传文件打包为
+        // 单个 tar.xz 归档，通过 mark=2 通知接收方收完即解包。
+        // 下载模式下发送方为远端，本地无法打包，走普通逐文件传输。
+        CompressConfig cfg;
+        GlobalData::getInstance()->getBaseConfig()->getCompress(cfg);
+
+        if (cfg.enabled && data_->isUpload && !todo.empty()) {
+            std::vector<PackItem> packItems;
+            packItems.reserve(todo.size());
+            for (int id : todo) {
+                const auto& item = transItems_[id];
+                PackItem pi;
+                pi.srcPath = item->from.fullPath;
+                pi.destPath = item->to.fullPath;
+                pi.permission = item->from.permission;
+                packItems.push_back(pi);
+            }
+
+            QString archivePath =
+                QDir::tempPath() + QString("/relay_archive_%1.tar.xz").arg(Common::GetUUID());
+            std::string err;
+            std::uint64_t archiveSize = 0;
+            emit signalLog(QString("开始打包 %1 个文件到归档...").arg(todo.size()));
+            if (!TarXzPacker::pack(packItems, archivePath.toStdString(), archiveSize, err)) {
+                emit signalLog(QString("打包归档失败: %1").arg(QString::fromStdString(err)));
+                for (int id : todo) {
+                    onFailFresh(id);
+                }
+                emit signalTransFail();
+                return;
+            }
+            emit signalLog(QString("归档打包完成，大小: %1")
+                               .arg(QString::fromStdString(miniUtil::GetSizeInfo(archiveSize))));
+
+            // 阈值检测：超阈值则放弃本次传输（不拆分、不回退到直传）
+            std::uint64_t thresholdBytes = static_cast<std::uint64_t>(cfg.thresholdMB) * 1024 * 1024;
+            if (archiveSize > thresholdBytes) {
+                emit signalLog(
+                    QString("归档大小 %1MB 超过阈值 %2MB，放弃本次传输。")
+                        .arg(archiveSize / (1024 * 1024))
+                        .arg(cfg.thresholdMB));
+                QFile::remove(archivePath);
+                for (int id : todo) {
+                    onFailFresh(id);
+                }
+                emit signalTransFail();
+                return;
+            }
+
+            auto archiveItem = std::make_shared<TransItem>();
+            archiveItem->isSend = true;
+            archiveItem->isArchive = true;
+            archiveItem->from.fullPath = archivePath.toStdString();
+            archiveItem->from.size = archiveSize;
+            archiveItem->from.name = FileDir::GenFileName(archivePath).toStdString();
+            archiveItem->from.dir = QDir::tempPath().toStdString();
+            archiveItem->from.exist = 1;
+            archiveItem->to.fullPath = "relay_archive.tar.xz";
+            archiveItem->to.size = archiveSize;
+            archiveItem->to.name = "relay_archive.tar.xz";
+            archiveItem->to.exist = 0;
+
+            clearData();
+            for (int id : todo) {
+                onStartFresh(id);
+            }
+            startTime_ = std::chrono::steady_clock::now();
+
+            emit signalLog("开始传输归档...");
+            auto execRet = doubleLinker_->RunTaskItem(archiveItem);
+            doubleLinker_->clearCurrentTaskItem();
+
+            QFile::remove(archivePath);
+
+            if (execRet) {
+                emit signalLog(QString("归档传输成功，共 %1 个文件。").arg(todo.size()));
+                for (int id : todo) {
+                    onSuccessFresh(id);
+                }
+                emit signalTransComplete();
+            } else {
+                emit signalLog("归档传输失败。");
+                for (int id : todo) {
+                    onFailFresh(id);
+                }
+                emit signalTransFail();
+            }
+            return;
+        }
+
         for (int id : todo) {
             if (rowDisplay_[id].status != GUI_FILE_TRAN_STATE_WAIT) {
                 continue;

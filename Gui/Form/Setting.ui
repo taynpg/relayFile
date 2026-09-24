@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>580</width>
-    <height>307</height>
+    <height>400</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -72,6 +72,36 @@
         </item>
         <item>
          <widget class="QLineEdit" name="edMaxRetry"/>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="gbCompress">
+     <property name="title">
+      <string>压缩传输</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_3">
+      <item>
+       <widget class="QCheckBox" name="cbCompress">
+        <property name="text">
+         <string>启用压缩传输（多文件/文件夹打包为单个 tar.xz 传输）</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_4">
+        <item>
+         <widget class="QLabel" name="lbThreshold">
+          <property name="text">
+           <string>单包阈值(MB)，超出则放弃本次传输：</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="edThreshold"/>
         </item>
        </layout>
       </item>

@@ -7,6 +7,7 @@
 
 #include "Base/BaseHelper.h"
 #include "Base/MenuIcons.h"
+#include "Form/Setting.h"
 #include "Protocol/Serialize.hpp"
 #include "ui_ConnectorControl.h"
 
@@ -107,6 +108,10 @@ void ConnectorControl::initSignals()
     });
     connect(ui->btnRefresh, &QPushButton::clicked, this, &ConnectorControl::onRefresh);
     connect(ui->btnAboutQt, &QPushButton::clicked, this, []() { QApplication::aboutQt(); });
+    connect(ui->btnLock, &QPushButton::clicked, this, [this]() {
+        Setting setting(this);
+        setting.exec();
+    });
 
     auto* cliCore = doubleLinker_->GetControlSession()->getClientCore();
     connect(cliCore, &ClientCore::signalConnectting, this, &ConnectorControl::onConnectting);
