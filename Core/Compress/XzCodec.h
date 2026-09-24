@@ -21,9 +21,9 @@ public:
     XzEncoder& operator=(const XzEncoder&) = delete;
 
     // Begin a new .xz stream; compressed bytes are pushed to sink.
-    // preset: 0..9 (6 = default, good ratio/speed balance).
+    // preset: 0..9 (3 = default, good speed/ratio balance for file transfer).
     bool open(const std::function<bool(const uint8_t*, size_t)>& sink,
-              uint32_t preset = 6, std::string* err = nullptr);
+              uint32_t preset = 3, std::string* err = nullptr);
     // Feed raw (uncompressed) bytes to be compressed.
     bool write(const uint8_t* data, size_t len);
     // Finalize the .xz stream and flush all remaining compressed bytes.

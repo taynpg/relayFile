@@ -1,8 +1,11 @@
 #include "ControlSession.h"
 
 #include <QDebug>
+#include <QDir>
+#include <QFile>
 #include <chrono>
 
+#include "Compress/TarXzPacker.h"
 #include "CoreDefine.hpp"
 #include "File/LocalHandle.h"
 #include "Protocol/Message.h"
@@ -242,6 +245,111 @@ void ControlSession::handleFrame(FramePtr frame)
         });
         break;
     }
+    case FrameType::kMsgType_Ask_ArchivePack: {
+        qInfo() << "收到 Ask_ArchivePack 请求，strVec 大小:" << answerMsg->strVec.size();
+        // 压缩下载：请求方要求将多个文件打包为单个 tar.xz 归档。
+        // 立即回 Answer（"开始打包"），实际打包丢到线程池，完成后再发 Ask_ArchiveReady。
+        Message packingAns(*answerMsg);
+        std::swap(packingAns.from, packingAns.to);
+        packingAns.msgStateCode = MessageStateCode::kMessageStateCodeSuccess;
+        packingAns.comStr = "packing";
+        auto packingFrame = OneFrame::Create(frame);
+        packingFrame->data = serializeStruct(packingAns);
+        packingFrame->type = FrameType::kMsgType_Answer_ArchivePack;
+        emit signalRequestSend(packingFrame);
+
+        // 异步打包
+        auto sessionId = frame->sessionId;
+        auto from = frame->from;
+        auto to = frame->to;
+        workerPool_->enqueue([this, frame, sessionId, from, to]() {
+            Message sourceMsg;
+            deserializeStruct(frame->data, sourceMsg);
+
+            std::vector<PackItem> packItems;
+            packItems.reserve(sourceMsg.strVec.size() / 2);
+            for (size_t i = 0; i + 1 < sourceMsg.strVec.size(); i += 2) {
+                PackItem pi;
+                pi.srcPath = sourceMsg.strVec[i];
+                pi.destPath = sourceMsg.strVec[i + 1];
+                packItems.push_back(std::move(pi));
+            }
+            QString archivePath =
+                QDir::tempPath() + QString("/relay_archive_%1.tar.xz").arg(QString::fromStdString(sourceMsg.uuid));
+            std::string err;
+            std::uint64_t archiveSize = 0;
+            qInfo() << "压缩下载：开始打包" << packItems.size() << "个文件";
+            bool ok = TarXzPacker::pack(packItems, archivePath.toStdString(), archiveSize, err);
+            std::uint64_t threshold = 0;
+            try {
+                threshold = std::stoull(sourceMsg.comStr);
+            } catch (...) {
+                threshold = 0;
+            }
+            if (ok && threshold > 0 && archiveSize > threshold) {
+                qWarning() << "压缩下载：归档大小" << archiveSize << "超过阈值" << threshold;
+                QFile::remove(archivePath);
+                ok = false;
+                err = "归档大小超过阈值，已放弃传输";
+            }
+
+            // 打包结果通过 Ask_ArchiveReady 通知请求方。
+            Message readyMsg(sourceMsg);
+            std::swap(readyMsg.from, readyMsg.to);
+            if (ok) {
+                qInfo() << "压缩下载：打包完成，大小" << archiveSize;
+                readyMsg.msgStateCode = MessageStateCode::kMessageStateCodeSuccess;
+                readyMsg.ff.fullPath = archivePath.toStdString();
+                readyMsg.ff.name = "relay_archive.tar.xz";
+                readyMsg.ff.size = archiveSize;
+                readyMsg.ff.exist = 1;
+                readyMsg.ff.dir = QDir::tempPath().toStdString();
+            } else {
+                qWarning() << "压缩下载：打包失败" << QString::fromStdString(err);
+                readyMsg.msgStateCode = MessageStateCode::kMessageStateCodeFailed;
+                readyMsg.errMsg = err;
+            }
+            auto readyFrame = OneFrame::Create();
+            readyFrame->sessionId = sessionId;
+            readyFrame->from = to;
+            readyFrame->to = from;
+            readyFrame->data = serializeStruct(readyMsg);
+            readyFrame->type = FrameType::kMsgType_Ask_ArchiveReady;
+            readyFrame->fuuid = sourceMsg.uuid;
+            emit signalRequestSend(readyFrame);
+
+            // 若请求方超时未下载，自动清理归档。
+            if (ok) {
+                timerPoolStd_->start_once(std::chrono::seconds(120), [this, archivePath]() {
+                    if (QFile::exists(archivePath)) {
+                        qInfo() << "压缩下载：归档超时未下载，清理:" << archivePath;
+                        QFile::remove(archivePath);
+                    }
+                });
+            }
+        });
+        break;
+    }
+    case FrameType::kMsgType_Ask_ArchiveReady: {
+        // 打包方通知请求方归档已就绪。请求方在此回 Answer，业务逻辑由 pubCall 处理。
+        Message readyAns(*answerMsg);
+        std::swap(readyAns.from, readyAns.to);
+        readyAns.msgStateCode = MessageStateCode::kMessageStateCodeSuccess;
+        auto readyAnsFrame = OneFrame::Create(frame);
+        readyAnsFrame->data = serializeStruct(readyAns);
+        readyAnsFrame->type = FrameType::kMsgType_Answer_ArchiveReady;
+        emit signalRequestSend(readyAnsFrame);
+
+        // 交给注册的 pubCall 处理（发起普通下载等）。
+        {
+            QMutexLocker locker(&pubCallLock_);
+            auto it = pubCall_.find(frame->type);
+            if (it != pubCall_.end() && it.value()) {
+                it.value()(frame);
+            }
+        }
+        break;
+    }
     case FrameType::kMsgType_Ask_Delete: {
         dispatchMessage(frame, FrameType::kMsgType_Answer_Delete, [](const Message& sourceMsg, Message& ansMsg) {
             LocalHandle::AskDelete(sourceMsg.strVec, ansMsg.strVec);
@@ -286,9 +394,13 @@ void ControlSession::handleFrame(FramePtr frame)
         break;
     }
     default: {
-        if (pubCall_.contains(frame->type)) {
-            pubCall_[frame->type](frame);
-            break;
+        {
+            QMutexLocker locker(&pubCallLock_);
+            auto it = pubCall_.find(frame->type);
+            if (it != pubCall_.end() && it.value()) {
+                it.value()(frame);
+                break;
+            }
         }
         QMutexLocker locker(&requestWaitLock_);
         if (auto it = requestWaitFrame_.find(frame->sessionId); it != requestWaitFrame_.end()) {
@@ -321,7 +433,12 @@ void ControlSession::handleFrame(FramePtr frame)
 
 void ControlSession::RegisterPubCall(FrameType type, std::function<void(FramePtr frame)> callback)
 {
-    pubCall_[type] = std::move(callback);
+    QMutexLocker locker(&pubCallLock_);
+    if (callback) {
+        pubCall_[type] = std::move(callback);
+    } else {
+        pubCall_.remove(type);
+    }
 }
 
 bool ControlSession::SendWithCall(const Message& msg, FrameType type, std::function<void(FramePtr)> callback)

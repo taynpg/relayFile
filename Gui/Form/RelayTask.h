@@ -9,6 +9,7 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QTableWidget>
+#include <QWaitCondition>
 
 #include "Base/AskDirFile/BaseAskDF.h"
 #include "Base/GuiDefine.h"
@@ -140,6 +141,16 @@ private:
     void onNextPage();
     void onLastPage();
     void onPageSizeChanged();
+
+    // 压缩下载：等待远端打包完成的同步状态
+    struct ArchiveWaitState {
+        QMutex mutex;
+        QWaitCondition cond;
+        bool ready{false};
+        bool cancelled{false};
+        FramePtr frame;
+    };
+    std::shared_ptr<ArchiveWaitState> archiveWaitState_{};
 };
 
 #endif   // RELAYTASK_H

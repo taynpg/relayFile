@@ -4,12 +4,15 @@
 #include <QDir>
 #include <QFile>
 #include <QHeaderView>
+#include <QUuid>
+#include <future>
 #include <Utils/Common.h>
 
 #include "Base/BaseHelper.h"
 #include "Base/GuiDefine.h"
 #include "Base/MessageBoxHelper.h"
 #include "Compress/TarXzPacker.h"
+#include "Protocol/Message.h"
 #include "Protocol/Serialize.hpp"
 #include "ui_RelayTask.h"
 
@@ -31,7 +34,12 @@ RelayTask::~RelayTask()
 
 void RelayTask::Quit()
 {
-    //emit signalCancelWaitMsg();
+    // 取消压缩下载的打包等待
+    if (archiveWaitState_) {
+        QMutexLocker locker(&archiveWaitState_->mutex);
+        archiveWaitState_->cancelled = true;
+        archiveWaitState_->cond.wakeAll();
+    }
     doubleLinker_->GetControlSession()->onCancelWaitMsg();
     workerThread_->stop();
     workerThread_->quit();
@@ -187,94 +195,216 @@ void RelayTask::onStartRun()
         bool allSuccess = true;
         emit signalTransing();
 
-        // 压缩传输：启用压缩且为上传（本地为发送方）时，将所有待传文件打包为
-        // 单个 tar.xz 归档，通过 mark=2 通知接收方收完即解包。
-        // 下载模式下发送方为远端，本地无法打包，走普通逐文件传输。
+        // 压缩传输：启用压缩时，将所有待传文件打包为单个 tar.xz 归档。
+        //   - 上传：本地为发送方，本地打包后发出，mark=2 通知远端收完即解包。
+        //   - 下载：远端为发送方，本地通过 mark=2 请求远端打包后发出，远端收完
+        //     解包。压缩意图按请求（UUID）传递，同一远端可对不同请求方区别响应。
         CompressConfig cfg;
         GlobalData::getInstance()->getBaseConfig()->getCompress(cfg);
 
-        if (cfg.enabled && data_->isUpload && !todo.empty()) {
-            std::vector<PackItem> packItems;
-            packItems.reserve(todo.size());
-            for (int id : todo) {
-                const auto& item = transItems_[id];
-                PackItem pi;
-                pi.srcPath = item->from.fullPath;
-                pi.destPath = item->to.fullPath;
-                pi.permission = item->from.permission;
-                packItems.push_back(pi);
-            }
-
-            QString archivePath =
-                QDir::tempPath() + QString("/relay_archive_%1.tar.xz").arg(Common::GetUUID());
-            std::string err;
-            std::uint64_t archiveSize = 0;
-            emit signalLog(QString("开始打包 %1 个文件到归档...").arg(todo.size()));
-            if (!TarXzPacker::pack(packItems, archivePath.toStdString(), archiveSize, err)) {
-                emit signalLog(QString("打包归档失败: %1").arg(QString::fromStdString(err)));
-                for (int id : todo) {
-                    onFailFresh(id);
-                }
-                emit signalTransFail();
-                return;
-            }
-            emit signalLog(QString("归档打包完成，大小: %1")
-                               .arg(QString::fromStdString(miniUtil::GetSizeInfo(archiveSize))));
-
-            // 阈值检测：超阈值则放弃本次传输（不拆分、不回退到直传）
+        if (cfg.enabled && !todo.empty()) {
             std::uint64_t thresholdBytes = static_cast<std::uint64_t>(cfg.thresholdMB) * 1024 * 1024;
-            if (archiveSize > thresholdBytes) {
-                emit signalLog(
-                    QString("归档大小 %1MB 超过阈值 %2MB，放弃本次传输。")
-                        .arg(archiveSize / (1024 * 1024))
-                        .arg(cfg.thresholdMB));
-                QFile::remove(archivePath);
+
+            if (data_->isUpload) {
+                // 上传：本地打包
+                std::vector<PackItem> packItems;
+                packItems.reserve(todo.size());
                 for (int id : todo) {
-                    onFailFresh(id);
+                    const auto& item = transItems_[id];
+                    PackItem pi;
+                    pi.srcPath = item->from.fullPath;
+                    pi.destPath = item->to.fullPath;
+                    pi.permission = item->from.permission;
+                    packItems.push_back(pi);
                 }
-                emit signalTransFail();
+
+                QString archivePath =
+                    QDir::tempPath() + QString("/relay_archive_%1.tar.xz").arg(Common::GetUUID());
+                std::string err;
+                std::uint64_t archiveSize = 0;
+                emit signalLog(QString("开始打包 %1 个文件到归档...").arg(todo.size()));
+                if (!TarXzPacker::pack(packItems, archivePath.toStdString(), archiveSize, err)) {
+                    emit signalLog(QString("打包归档失败: %1").arg(QString::fromStdString(err)));
+                    for (int id : todo) {
+                        onFailFresh(id);
+                    }
+                    emit signalTransFail();
+                    return;
+                }
+                emit signalLog(QString("归档打包完成，大小: %1")
+                                   .arg(QString::fromStdString(miniUtil::GetSizeInfo(archiveSize))));
+
+                // 阈值检测：超阈值则放弃本次传输（不拆分、不回退到直传）
+                if (archiveSize > thresholdBytes) {
+                    emit signalLog(
+                        QString("归档大小 %1MB 超过阈值 %2MB，放弃本次传输。")
+                            .arg(archiveSize / (1024 * 1024))
+                            .arg(cfg.thresholdMB));
+                    QFile::remove(archivePath);
+                    for (int id : todo) {
+                        onFailFresh(id);
+                    }
+                    emit signalTransFail();
+                    return;
+                }
+
+                auto archiveItem = std::make_shared<TransItem>();
+                archiveItem->isSend = true;
+                archiveItem->isArchive = true;
+                archiveItem->from.fullPath = archivePath.toStdString();
+                archiveItem->from.size = archiveSize;
+                archiveItem->from.name = FileDir::GenFileName(archivePath).toStdString();
+                archiveItem->from.dir = QDir::tempPath().toStdString();
+                archiveItem->from.exist = 1;
+                archiveItem->to.fullPath = "relay_archive.tar.xz";
+                archiveItem->to.size = archiveSize;
+                archiveItem->to.name = "relay_archive.tar.xz";
+                archiveItem->to.exist = 0;
+
+                clearData();
+                for (int id : todo) {
+                    onStartFresh(id);
+                }
+                startTime_ = std::chrono::steady_clock::now();
+
+                emit signalLog("开始传输归档...");
+                auto execRet = doubleLinker_->RunTaskItem(archiveItem);
+                doubleLinker_->clearCurrentTaskItem();
+
+                QFile::remove(archivePath);
+
+                if (execRet) {
+                    emit signalLog(QString("归档传输成功，共 %1 个文件。").arg(todo.size()));
+                    for (int id : todo) {
+                        onSuccessFresh(id);
+                    }
+                    emit signalTransComplete();
+                } else {
+                    emit signalLog("归档传输失败。");
+                    for (int id : todo) {
+                        onFailFresh(id);
+                    }
+                    emit signalTransFail();
+                }
+                return;
+            } else {
+                // 下载：通过控制消息请求远端打包，打包完成后复用普通下载流程。
+                std::vector<std::string> packList;
+                packList.reserve(todo.size() * 2);
+                for (int id : todo) {
+                    const auto& item = transItems_[id];
+                    packList.push_back(item->from.fullPath);   // 远端源路径
+                    packList.push_back(item->to.fullPath);     // 本地目的路径
+                }
+
+                clearData();
+                for (int id : todo) {
+                    onStartFresh(id);
+                }
+                startTime_ = std::chrono::steady_clock::now();
+
+                auto controlSession = doubleLinker_->GetControlSession();
+
+                // 注册远端打包完成通知的处理。
+                archiveWaitState_ = std::make_shared<ArchiveWaitState>();
+                auto waitState = archiveWaitState_;
+                controlSession->RegisterPubCall(FrameType::kMsgType_Ask_ArchiveReady,
+                                                [waitState](FramePtr frame) {
+                                                    QMutexLocker locker(&waitState->mutex);
+                                                    if (waitState->cancelled) {
+                                                        return;
+                                                    }
+                                                    waitState->ready = true;
+                                                    waitState->frame = frame;
+                                                    waitState->cond.wakeAll();
+                                                });
+
+                emit signalLog(QString("请求远端打包 %1 个文件...").arg(todo.size()));
+
+                // 第一回合：发送打包请求，等待"开始打包"确认。
+                Message packMsg;
+                packMsg.strVec = packList;
+                packMsg.comStr = std::to_string(thresholdBytes);
+                packMsg.uuid = QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString();
+                auto promise = std::make_shared<std::promise<MessagePtr>>();
+                auto future = promise->get_future();
+                controlSession->SendWithCall(packMsg, FrameType::kMsgType_Ask_ArchivePack,
+                                             [promise](MessagePtr ans) { promise->set_value(ans); });
+
+                MessagePtr packAns = future.get();
+                if (!packAns || packAns->msgStateCode != MessageStateCode::kMessageStateCodeSuccess) {
+                    emit signalLog("远端拒绝打包请求。");
+                    controlSession->RegisterPubCall(FrameType::kMsgType_Ask_ArchiveReady, nullptr);
+                    archiveWaitState_.reset();
+                    for (int id : todo) {
+                        onFailFresh(id);
+                    }
+                    emit signalTransFail();
+                    return;
+                }
+                emit signalLog("远端正在打包归档...");
+
+                // 第二回合：等待远端打包完成通知（可被 Quit 取消）。
+                FramePtr readyFrame;
+                {
+                    QMutexLocker locker(&waitState->mutex);
+                    while (!waitState->ready && !waitState->cancelled) {
+                        waitState->cond.wait(&waitState->mutex, 1000);
+                    }
+                    if (waitState->cancelled || !waitState->ready) {
+                        controlSession->RegisterPubCall(FrameType::kMsgType_Ask_ArchiveReady, nullptr);
+                        archiveWaitState_.reset();
+                        emit signalLog("打包等待已取消。");
+                        for (int id : todo) {
+                            onFailFresh(id);
+                        }
+                        emit signalTransFail();
+                        return;
+                    }
+                    readyFrame = waitState->frame;
+                }
+                controlSession->RegisterPubCall(FrameType::kMsgType_Ask_ArchiveReady, nullptr);
+                archiveWaitState_.reset();
+
+                Message readyMsg;
+                deserializeStruct(readyFrame->data, readyMsg);
+                if (readyMsg.msgStateCode != MessageStateCode::kMessageStateCodeSuccess) {
+                    emit signalLog(QString("远端打包失败: %1").arg(QString::fromStdString(readyMsg.errMsg)));
+                    for (int id : todo) {
+                        onFailFresh(id);
+                    }
+                    emit signalTransFail();
+                    return;
+                }
+
+                // 第三回合：复用普通下载流程下载归档文件（mark=2 通知本地解包）。
+                auto archiveItem = std::make_shared<TransItem>();
+                archiveItem->isSend = false;
+                archiveItem->isArchive = true;
+                archiveItem->from = readyMsg.ff;
+                archiveItem->to.fullPath = "relay_archive.tar.xz";
+                archiveItem->to.name = "relay_archive.tar.xz";
+
+                emit signalLog(QString("归档打包完成，大小: %1，开始下载...")
+                                   .arg(QString::fromStdString(miniUtil::GetSizeInfo(readyMsg.ff.size))));
+                auto execRet = doubleLinker_->RunTaskItem(archiveItem);
+                doubleLinker_->clearCurrentTaskItem();
+
+                if (execRet) {
+                    emit signalLog(QString("归档下载成功，共 %1 个文件。").arg(todo.size()));
+                    for (int id : todo) {
+                        onSuccessFresh(id);
+                    }
+                    emit signalTransComplete();
+                } else {
+                    emit signalLog("归档下载失败。");
+                    for (int id : todo) {
+                        onFailFresh(id);
+                    }
+                    emit signalTransFail();
+                }
                 return;
             }
-
-            auto archiveItem = std::make_shared<TransItem>();
-            archiveItem->isSend = true;
-            archiveItem->isArchive = true;
-            archiveItem->from.fullPath = archivePath.toStdString();
-            archiveItem->from.size = archiveSize;
-            archiveItem->from.name = FileDir::GenFileName(archivePath).toStdString();
-            archiveItem->from.dir = QDir::tempPath().toStdString();
-            archiveItem->from.exist = 1;
-            archiveItem->to.fullPath = "relay_archive.tar.xz";
-            archiveItem->to.size = archiveSize;
-            archiveItem->to.name = "relay_archive.tar.xz";
-            archiveItem->to.exist = 0;
-
-            clearData();
-            for (int id : todo) {
-                onStartFresh(id);
-            }
-            startTime_ = std::chrono::steady_clock::now();
-
-            emit signalLog("开始传输归档...");
-            auto execRet = doubleLinker_->RunTaskItem(archiveItem);
-            doubleLinker_->clearCurrentTaskItem();
-
-            QFile::remove(archivePath);
-
-            if (execRet) {
-                emit signalLog(QString("归档传输成功，共 %1 个文件。").arg(todo.size()));
-                for (int id : todo) {
-                    onSuccessFresh(id);
-                }
-                emit signalTransComplete();
-            } else {
-                emit signalLog("归档传输失败。");
-                for (int id : todo) {
-                    onFailFresh(id);
-                }
-                emit signalTransFail();
-            }
-            return;
         }
 
         for (int id : todo) {

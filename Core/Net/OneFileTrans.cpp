@@ -238,6 +238,14 @@ FramePtr OneFileTrans::CreateFrame(FrameType type)
 bool OneFileTrans::handleFinish(FramePtr frame)
 {
     sendOrRecvTimeout_->stop();
+    if (tMode_ == TransMode::Send) {
+        // 压缩传输：发送方发送的是临时归档，发送完毕后清理。
+        if (isArchive_) {
+            qInfo() << "归档发送完成，清理临时归档:" << filePath_;
+            QFile::remove(filePath_);
+        }
+        return true;
+    }
     if (tMode_ == TransMode::Receive) {
         if (recvFile_.isOpen()) {
             recvFile_.close();

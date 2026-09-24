@@ -101,6 +101,7 @@ private:
     QTimer* clearWorkerTimer_{};
     QMutex requestWaitLock_;
     QMutex responseWaitLock_;
+    QMutex pubCallLock_;
     ClientWorker* clientWorker_{};
     std::shared_ptr<ThreadPool> workerPool_{};
     std::shared_ptr<TimerPoolStd> timerPoolStd_{};

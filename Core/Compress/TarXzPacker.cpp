@@ -90,10 +90,25 @@ bool TarXzPacker::pack(const std::vector<PackItem>& items, const std::string& ou
     TarWriter tw;
     tw.open(tarSink);
 
+    // 先解析每个文件的权限：未显式指定则从源文件自身读取。
+    std::vector<std::uint16_t> perms;
+    perms.reserve(items.size());
+    for (const auto& it : items) {
+        if (it.permission != 0) {
+            perms.push_back(it.permission);
+        } else {
+            RFileMeta rmeta;
+            FileDir::GetFileRFileMeta(QString::fromStdString(it.srcPath), rmeta);
+            perms.push_back(rmeta.permission);
+        }
+    }
+
     // Embed manifest as the first entry.
     std::vector<ManifestEntry> manifest;
     manifest.reserve(items.size());
-    for (const auto& it : items) manifest.push_back({it.destPath, it.permission});
+    for (size_t i = 0; i < items.size(); ++i) {
+        manifest.push_back({items[i].destPath, perms[i]});
+    }
     auto mb = serializeManifest(manifest);
     if (!tw.addBuffer(kManifestName, 0,
                       reinterpret_cast<const uint8_t*>(mb.data()), mb.size())) {
@@ -117,7 +132,7 @@ bool TarXzPacker::pack(const std::vector<PackItem>& items, const std::string& ou
         std::uint64_t size = static_cast<std::uint64_t>(src.size());
         auto srcFn = [&src](uint8_t* d, size_t n) -> size_t { return fileSource(src, d, n); };
         std::string entryName = std::to_string(i);
-        if (!tw.addStream(entryName, items[i].permission, size, srcFn)) {
+        if (!tw.addStream(entryName, perms[i], size, srcFn)) {
             err = "failed to stream file: " + items[i].srcPath;
             tw.close();
             enc.close();

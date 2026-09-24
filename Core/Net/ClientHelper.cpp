@@ -115,9 +115,9 @@ bool DoubleLinker::RunTaskItem(const std::shared_ptr<TransItem>& item)
     reqMsg.ft = item->to;
     reqMsg.from.clientId = controlSession_->getOwnInfo().clientId;
     reqMsg.to.clientId = controlSession_->getOtherInfo().clientId;
-    // mark=2：归档传输（接收方收完即解包）；mark=1：普通单文件传输。
+    // mark=2：归档传输，接收方收完即解包。
     reqMsg.mark = item->isArchive ? 2 : 1;
-    
+
     auto requestFrame = OneFrame::Create();
     requestFrame->data = serializeStruct(reqMsg);
     requestFrame->type = item->isSend ? FrameType::kFileType_Request_Send : FrameType::kFileType_Request_Down;
