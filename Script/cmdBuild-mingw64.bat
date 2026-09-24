@@ -4,7 +4,7 @@ setlocal enabledelayedexpansion
 rem ============================================================
 rem relayFile one-shot packaging script
 rem Usage: cmdBuild.bat <cmake-build-dir>
-rem   e.g. cmdBuild.bat D:\360Downloads\relayFile\build-release
+rem   e.g. cmdBuild.bat D:\relayFile\build-release
 rem Steps:
 rem   1. Find relayFileGui.exe under the build dir, locate its folder
 rem   2. Run windeployqt to deploy Qt runtime into that folder
@@ -14,7 +14,7 @@ rem   5. Run makensis to build the installer into the build dir root
 rem ============================================================
 
 rem ---- Qt root used to locate windeployqt (override via env or edit here) ----
-if not defined QT_LIB_ROOT set "QT_LIB_ROOT=C:\Qt\6.10.3\msvc2022_64"
+if not defined QT_LIB_ROOT set "QT_LIB_ROOT=C:\msys64\ucrt64\"
 
 set "SCRIPT_DIR=%~dp0"
 set "REPO_ROOT=%SCRIPT_DIR%.."
@@ -57,6 +57,12 @@ echo [2/5] windeployqt: %WINDEPLOYQT%
 "%WINDEPLOYQT%" "%GUI_EXE%"
 if errorlevel 1 (
     echo [ERROR] windeployqt failed
+    exit /b 1
+)
+
+clangPack -e "%GUI_EXE%" -r -c C:\msys64\ucrt64\bin
+if errorlevel 1 (
+    echo [ERROR] clangPack failed
     exit /b 1
 )
 
