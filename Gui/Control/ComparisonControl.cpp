@@ -119,10 +119,10 @@ void ComparisonControl::initTableWidget()
     tableWidget_->setContextMenuPolicy(Qt::CustomContextMenu);
 
     tableWidget_->setColumnWidth(0, 50);
-    tableWidget_->setColumnWidth(1, 280);
+    tableWidget_->setColumnWidth(1, 200);
     tableWidget_->setColumnWidth(2, 50);
     tableWidget_->setColumnWidth(3, 80);
-    tableWidget_->setColumnWidth(6, 120);
+    tableWidget_->setColumnWidth(6, 80);
 
     tableWidget_->viewport()->setAcceptDrops(true);
     tableWidget_->setSelectionMode(QAbstractItemView::ExtendedSelection);
