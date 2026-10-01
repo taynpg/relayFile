@@ -9,9 +9,9 @@ import (
 )
 
 const (
-	QtDeploy = `C:\Qt\6.10.3\mingw_64\bin\windeployqt.exe`
+	QtDeploy = `C:\msys64\ucrt64\bin\windeployqt.exe`
 	Config   = `Release`
-	BuildDev = `build-dev-mingw`
+	BuildDev = `build-mingw`
 )
 
 func main() {
