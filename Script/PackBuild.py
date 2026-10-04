@@ -145,8 +145,15 @@ DRY_RUN = False
 COLOR = sys.stdout.isatty()
 
 
-def run(cmd: list[str], what: str, cwd: Path | None = None, env: dict | None = None) -> None:
-    """执行外部命令；dry-run 只打印不执行。"""
+def run(cmd: list[str], what: str, cwd: Path | None = None, env: dict | None = None,
+        raw_console: bool = False) -> None:
+    """执行外部命令；dry-run 只打印不执行。
+
+    raw_console=True：子进程直接继承当前控制台句柄（用于 clangPack/windeployqt 等
+        自行 isatty() 判定彩色的终端工具，管道会让它们误判为非终端而关掉颜色）。
+    raw_console=False（默认，用于 cmake/make）：始终经管道实时透传，把进度刷新用的
+        裸回车 \\r 规范成 \\n（ANSI 色码原样透传，由最终终端决定是否着色）。
+        这样无论宿主终端如何处理子进程直写的 \\r，都不会出现 ◙ 裸字符。"""
     shown = " ".join(f'"{c}"' if " " in str(c) else str(c) for c in cmd)
     prefix = f"[DRY-RUN] " if DRY_RUN else "    > "
     print(f"{prefix}{shown}" + (f"   (dir={cwd})" if cwd else ""))
@@ -159,10 +166,8 @@ def run(cmd: list[str], what: str, cwd: Path | None = None, env: dict | None = N
     argv = [str(c) for c in cmd]
     cwd_s = str(cwd) if cwd else None
 
-    if COLOR:
-        # 交互终端：子进程直接继承当前控制台句柄（stdout/stderr 不经管道）。
-        # 这样 spdlog 等自行 isatty() 判定的工具能检测到真控制台而输出彩色
-        # （它不看 CLICOLOR_FORCE）；make 的 \r 进度刷新也由终端原生正确渲染。
+    if raw_console and COLOR:
+        # 交互终端：继承控制台句柄，spdlog 等工具可自行检测到真终端而输出彩色
         try:
             code = subprocess.call(argv, cwd=cwd_s, env=env)
             if code != 0:
@@ -171,10 +176,10 @@ def run(cmd: list[str], what: str, cwd: Path | None = None, env: dict | None = N
             die(f"{what} 未找到或不在 PATH 中: {cmd[0]}")
         return
 
-    # 非交互（重定向/管道）：用管道实时透传，并把进度刷新用的裸回车 \r 转成 \n：
-    # CMake/Make 生成器靠 \r 让 [xx%] 在同一行原地刷新，一旦输出经子进程管道中转，
-    # \r 不被解释为“回到行首”，终端会把它显示成 ◙ 之类的裸字符。
+    # 管道透传：ANSI 色码原样保留；裸 \r 一律规范为 \n（跨读取块用 pending 拼接，
+    # 避免 \r\n 被 256 字节边界切开时误判）。
     proc = None
+    pending_cr = False
     try:
         proc = subprocess.Popen(
             argv,
@@ -189,11 +194,22 @@ def run(cmd: list[str], what: str, cwd: Path | None = None, env: dict | None = N
         while True:
             chunk = proc.stdout.read(256)
             if not chunk:
+                if pending_cr:
+                    out.write(b"\n")
+                    pending_cr = False
                 break
-            # 先保留正常的 CRLF，再把单独的 CR 转成 LF
+            if pending_cr:
+                # 上一块结尾是 \r：本块以 \n 开头则二者合为一个换行，否则补上一个换行
+                chunk = (b"" if chunk.startswith(b"\n") else b"\n") + chunk
+                pending_cr = False
+            if chunk.endswith(b"\r"):
+                # 可能与下一块开头的 \n 成对，先摘出来等下一块
+                pending_cr = True
+                chunk = chunk[:-1]
             chunk = chunk.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
-            out.write(chunk)
-            out.flush()
+            if chunk:
+                out.write(chunk)
+                out.flush()
         code = proc.wait()
         if code != 0:
             die(f"{what} 失败 (exit {code})")
@@ -444,12 +460,13 @@ def pack(build_dir: Path, preset: Preset, is_release: bool) -> None:
     windeployqt = Path(preset.qt_lib_root) / "bin" / "windeployqt.exe"
     if not DRY_RUN and not windeployqt.is_file():
         die(f"windeployqt 不存在: {windeployqt}\n[HINT] 检查 Qt/工具链根目录（当前: {preset.qt_lib_root}）")
-    run([windeployqt, gui_exe], "windeployqt")
+    run([windeployqt, gui_exe], "windeployqt", raw_console=True)
 
     # 3. clangPack（仅 MinGW/Clang）
     if preset.use_clangpack:
         step("clangPack 收集工具链运行依赖")
-        run(["clangPack", "-e", gui_exe, "-r", "-c", str(Path(preset.qt_lib_root) / "bin")], "clangPack")
+        run(["clangPack", "-e", gui_exe, "-r", "-c", str(Path(preset.qt_lib_root) / "bin")],
+            "clangPack", raw_console=True)
 
     # 4. licenses
     step("拷贝 licenses")
@@ -493,6 +510,7 @@ def pack(build_dir: Path, preset: Preset, is_release: bool) -> None:
             nsi_file,
         ],
         "makensis",
+        raw_console=True,
     )
     setup_name = f"relayFile-setup-x64-v{version}-{build_mark}-{commit}.exe"
     print(f"Done: {build_dir / setup_name}")
