@@ -7,6 +7,7 @@ set(PROJECT_URL "https://github.com/taynpg/relayFile")
 option(RF_USE_GTEST "Use Test." OFF)
 option(RF_USE_MINGW "Use MinGW." OFF)
 option(RF_USE_GUI "Use Gui." ON)
+option(RF_BUILD_TESTS "Build Console test executables (TransTest/ZipTest/UnpackTest)." OFF)
 
 if(DEFINED RELEASE_MARK)
 message(STATUS "Set RELEASE_MARK => ${RELEASE_MARK}.")

@@ -1,13 +1,13 @@
 ﻿; ============================================================
 ; relayFile NSIS 打包脚本 (需要 NSIS 3.x, Unicode)
 ;
-; 用法(四个参数均必填, 未传入时编译报错退出):
-;   makensis.exe /DSRC_BIN_DIR="<exe所在目录>" /DOUT_DIR="<安装包输出目录>" /DPRODUCT_VERSION="<版本号>" /DCOMMIT_ID="<commit短哈希,8位>" relayFile.nsi
+; 用法(五个参数均必填, 未传入时编译报错退出):
+;   makensis.exe /DSRC_BIN_DIR="<exe所在目录>" /DOUT_DIR="<安装包输出目录>" /DPRODUCT_VERSION="<版本号>" /DBUILD_MARK="<release或dev>" /DCOMMIT_ID="<commit短哈希,8位>" relayFile.nsi
 ;
 ;   例(写在一行, 路径含空格时加引号):
-;     makensis.exe /DSRC_BIN_DIR="D:\360Downloads\relayFile\build-release\bin\Release" /DOUT_DIR="D:\out" /DPRODUCT_VERSION="1.0.0" /DCOMMIT_ID="abc12345" relayFile.nsi
+;     makensis.exe /DSRC_BIN_DIR="D:\360Downloads\relayFile\build-release\bin\Release" /DOUT_DIR="D:\out" /DPRODUCT_VERSION="1.0.0" /DBUILD_MARK="release" /DCOMMIT_ID="abc12345" relayFile.nsi
 ;
-; 产物: OUT_DIR\relayFile-setup-<版本>-<commit>.exe
+; 产物: OUT_DIR\relayFile-setup-x64-v<版本>-<release或dev>-<commit>.exe
 ;
 ; 安装行为:
 ;   - 用户级安装, 不需要管理员权限(RequestExecutionLevel user)
@@ -32,18 +32,24 @@ ManifestDPIAware true
 !ifndef COMMIT_ID
   !define COMMIT_ID ""
 !endif
+!ifndef BUILD_MARK
+  !define BUILD_MARK ""
+!endif
 
 !if "${SRC_BIN_DIR}" == ""
-  !error "缺少 SRC_BIN_DIR(exe所在目录). 用法: makensis /DSRC_BIN_DIR=<exe目录> /DOUT_DIR=<输出目录> /DPRODUCT_VERSION=<版本号> /DCOMMIT_ID=<commit8位> relayFile.nsi"
+  !error "缺少 SRC_BIN_DIR(exe所在目录). 用法: makensis /DSRC_BIN_DIR=<exe目录> /DOUT_DIR=<输出目录> /DPRODUCT_VERSION=<版本号> /DBUILD_MARK=<release或dev> /DCOMMIT_ID=<commit8位> relayFile.nsi"
 !endif
 !if "${OUT_DIR}" == ""
-  !error "缺少 OUT_DIR(安装包输出目录). 用法: makensis /DSRC_BIN_DIR=<exe目录> /DOUT_DIR=<输出目录> /DPRODUCT_VERSION=<版本号> /DCOMMIT_ID=<commit8位> relayFile.nsi"
+  !error "缺少 OUT_DIR(安装包输出目录). 用法: makensis /DSRC_BIN_DIR=<exe目录> /DOUT_DIR=<输出目录> /DPRODUCT_VERSION=<版本号> /DBUILD_MARK=<release或dev> /DCOMMIT_ID=<commit8位> relayFile.nsi"
 !endif
 !if "${PRODUCT_VERSION}" == ""
-  !error "缺少 PRODUCT_VERSION(版本号). 用法: makensis /DSRC_BIN_DIR=<exe目录> /DOUT_DIR=<输出目录> /DPRODUCT_VERSION=<版本号> /DCOMMIT_ID=<commit8位> relayFile.nsi"
+  !error "缺少 PRODUCT_VERSION(版本号). 用法: makensis /DSRC_BIN_DIR=<exe目录> /DOUT_DIR=<输出目录> /DPRODUCT_VERSION=<版本号> /DBUILD_MARK=<release或dev> /DCOMMIT_ID=<commit8位> relayFile.nsi"
+!endif
+!if "${BUILD_MARK}" == ""
+  !error "缺少 BUILD_MARK(release或dev). 用法: makensis /DSRC_BIN_DIR=<exe目录> /DOUT_DIR=<输出目录> /DPRODUCT_VERSION=<版本号> /DBUILD_MARK=<release或dev> /DCOMMIT_ID=<commit8位> relayFile.nsi"
 !endif
 !if "${COMMIT_ID}" == ""
-  !error "缺少 COMMIT_ID(commit短哈希8位). 用法: makensis /DSRC_BIN_DIR=<exe目录> /DOUT_DIR=<输出目录> /DPRODUCT_VERSION=<版本号> /DCOMMIT_ID=<commit8位> relayFile.nsi"
+  !error "缺少 COMMIT_ID(commit短哈希8位). 用法: makensis /DSRC_BIN_DIR=<exe目录> /DOUT_DIR=<输出目录> /DPRODUCT_VERSION=<版本号> /DBUILD_MARK=<release或dev> /DCOMMIT_ID=<commit8位> relayFile.nsi"
 !endif
 
 !define PRODUCT_NAME "relayFile"
@@ -52,7 +58,7 @@ ManifestDPIAware true
 
 ; ---------------- 安装包基本设置 ----------------
 Name "${PRODUCT_NAME} ${PRODUCT_VERSION}"
-OutFile "${OUT_DIR}\${PRODUCT_NAME}-x64-v${PRODUCT_VERSION}-${COMMIT_ID}.exe"
+OutFile "${OUT_DIR}\${PRODUCT_NAME}-setup-x64-v${PRODUCT_VERSION}-${BUILD_MARK}-${COMMIT_ID}.exe"
 InstallDir "$PROFILE\relayFile"          ; 默认: 当前用户目录\relayFile
 InstallDirRegKey HKCU "${APP_KEY}" "InstallDir"  ; 二次安装时记住上次目录
 RequestExecutionLevel user               ; 用户级安装, 不弹 UAC, $PROFILE/$DESKTOP 均为当前用户

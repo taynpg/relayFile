@@ -16,3 +16,4 @@ log/
 # ---> cmk
 cmk_cache
 cmk_temp
+__pycache__/
