@@ -2,6 +2,7 @@
 
 #include <Utils/miniUtil.h>
 #include <asio.hpp>
+#include <algorithm>
 #include <csignal>
 #include <cstring>
 #include <iostream>
@@ -9,6 +10,8 @@
 #include <spdlog/sinks/daily_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
+#include <thread>
+#include <vector>
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -103,11 +106,22 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    // 多线程驱动 io_context：不同连接的收发在各自 strand 上并行
+    const unsigned int threadCount = std::max(2u, std::thread::hardware_concurrency());
+    auto workGuard = asio::make_work_guard(io);
+    std::vector<std::thread> workers;
+    workers.reserve(threadCount);
+    for (unsigned int i = 0; i < threadCount; ++i) {
+        workers.emplace_back([&io] { io.run(); });
+    }
+
     // Ctrl+C 优雅退出
     asio::signal_set signals(io, SIGINT, SIGTERM);
     signals.async_wait([&io](const std::error_code&, int) { io.stop(); });
 
-    SPDLOG_INFO("relayFileServer已启动在端口: {}，按Ctrl+C退出。", kPort);
-    io.run();
+    SPDLOG_INFO("relayFileServer已启动在端口: {}，IO线程数: {}，按Ctrl+C退出。", kPort, threadCount);
+    for (auto& t : workers) {
+        t.join();
+    }
     return 0;
 }
