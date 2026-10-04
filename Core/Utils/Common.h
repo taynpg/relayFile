@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QByteArray>
 #include <QMutex>
 #include <QString>
 #include <nlohmann/json.hpp>
@@ -47,6 +48,10 @@ public:
     bool pushOneIp(const std::string& ip);
     std::pair<int, int> getWidthHeight();
     bool saveWidthHeight(int width, int height);
+    // 窗口完整几何（含位置、还原态矩形与最大化/全屏状态），由 QWidget::saveGeometry 生成，
+    // 以 base64 文本保存。解决只存宽高时最大化关闭后重开窗口偏移出屏幕的问题。
+    QByteArray getWindowGeometry();
+    bool saveWindowGeometry(const QByteArray& geometry);
     bool getReconInterval(RetryCon& con);
     bool saveReconInterval(const RetryCon& con);
     bool getCompress(CompressConfig& cfg);

@@ -209,6 +209,25 @@ bool BaseConfig::saveWidthHeight(int width, int height)
     return saveJson(j);
 }
 
+QByteArray BaseConfig::getWindowGeometry()
+{
+    QMutexLocker locker(&mutex_);
+    nlohmann::json j = loadJson();
+    if (j.contains("WindowGeometry") && j["WindowGeometry"].is_string()) {
+        const auto b64 = j["WindowGeometry"].get<std::string>();
+        return QByteArray::fromBase64(QByteArray::fromStdString(b64));
+    }
+    return {};
+}
+
+bool BaseConfig::saveWindowGeometry(const QByteArray& geometry)
+{
+    QMutexLocker locker(&mutex_);
+    nlohmann::json j = loadJson();
+    j["WindowGeometry"] = geometry.toBase64().toStdString();
+    return saveJson(j);
+}
+
 bool BaseConfig::getReconInterval(RetryCon& con)
 {
     QMutexLocker locker(&mutex_);

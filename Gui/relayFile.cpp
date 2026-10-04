@@ -2,6 +2,7 @@
 
 #include <QCloseEvent>
 #include <QDateTime>
+#include <QGuiApplication>
 #include <QMessageBox>
 #include <QScreen>
 #include <QSplitter>
@@ -53,12 +54,44 @@ relayFile::relayFile(QWidget* parent) : QWidget(parent), ui(new Ui::relayFile)
 
 void relayFile::initAfter()
 {
-    auto size = baseConfig_->getWidthHeight();
-    resize(size.first, size.second);
     setWindowIcon(QIcon("://Resource/Gui.ico"));
 
     auto ver = QString("relayFile v%1 %2 %3").arg(VERSION_NUM, VERSION_GIT_COMMIT, VERSION_DEV);
     setWindowTitle(ver);
+
+    // 优先恢复完整窗口几何（位置 + 还原态矩形 + 最大化/全屏状态）。
+    // 最大化状态由 Qt 在首次 show 时自动恢复，因此最大化关闭后重开仍是最大化，
+    // 不会出现按最大化尺寸在默认偏移位置显示、右下伸出屏幕的问题。
+    const QByteArray savedGeometry = baseConfig_->getWindowGeometry();
+    if (!savedGeometry.isEmpty() && restoreGeometry(savedGeometry)) {
+        // 防护：保存窗口位置的显示器可能已移除（如拔掉外接屏），确保窗口至少有一部分可见
+        const QRect g = geometry();
+        bool onScreen = false;
+        const auto screens = QGuiApplication::screens();
+        for (QScreen* s : screens) {
+            if (s->availableGeometry().intersects(g)) {
+                onScreen = true;
+                break;
+            }
+        }
+        if (!onScreen && !screens.isEmpty()) {
+            const QRect avail = screens.first()->availableGeometry();
+            move(avail.x() + (avail.width() - g.width()) / 2,
+                 avail.y() + (avail.height() - g.height()) / 2);
+        }
+        return;
+    }
+
+    // 回退：旧版配置只有宽高（最大化时保存的宽高可能接近整个屏幕），或几何数据失效。
+    // 将窗口限制在主屏幕可用区域的 90% 以内并居中，避免右下超出屏幕；首次启动取 70%。
+    auto size = baseConfig_->getWidthHeight();
+    const QRect avail = QGuiApplication::primaryScreen()->availableGeometry();
+    int w = size.first > 0 ? size.first : int(avail.width() * 0.7);
+    int h = size.second > 0 ? size.second : int(avail.height() * 0.7);
+    w = qMin(w, int(avail.width() * 0.9));
+    h = qMin(h, int(avail.height() * 0.9));
+    resize(w, h);
+    move(avail.x() + (avail.width() - w) / 2, avail.y() + (avail.height() - h) / 2);
 }
 
 relayFile::~relayFile()
@@ -79,7 +112,8 @@ void relayFile::Quit()
 
 void relayFile::closeEvent(QCloseEvent* event)
 {
-    baseConfig_->saveWidthHeight(width(), height());
+    // saveGeometry 会同时保存还原态矩形与最大化状态，即使当前处于最大化也安全
+    baseConfig_->saveWindowGeometry(saveGeometry());
     Quit();
     event->accept();
 }
