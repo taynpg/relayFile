@@ -203,9 +203,9 @@ void relayFile::initLayout()
     splitter->addWidget(sFile);
 
     // 暂且这样初始化尺寸
-    QList<int> sizes;
-    sizes << height() * 2 / 5 << height() * 3 / 5;
-    splitter->setSizes(sizes);
+    // QList<int> sizes;
+    // sizes << height() * 2 / 5 << height() * 3 / 5;
+    // splitter->setSizes(sizes);
 
     QVBoxLayout* layout = new QVBoxLayout();
     layout->addWidget(splitter);
@@ -227,5 +227,5 @@ void relayFile::onTransTaskRun(std::shared_ptr<RelayTaskData> data)
 
     RelayTask* relayTask = new RelayTask(this);
     relayTask->setData(data);
-    relayTask->show();
+    relayTask->exec();
 }
