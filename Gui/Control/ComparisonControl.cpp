@@ -4,6 +4,7 @@
 #include <QDesktopServices>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QInputDialog>
 #include <QMenu>
 #include <QMessageBox>
 #include <QSettings>
@@ -345,6 +346,35 @@ void ComparisonControl::onTableContextMenu(const QPoint& pos)
     QAction* newLineAction = menu.addAction(MenuIcons::newRow(), "新行");
     QAction* deleteAction = menu.addAction(MenuIcons::del(), "删除");
     QAction* downloadAction = menu.addAction(MenuIcons::download(), "下载");
+
+    // 批量填充：仅当选中多行时显示；不可编辑列（ID、类型）不列出
+    if (datas.size() / headers_.size() > 1) {
+        auto* batchMenu = menu.addMenu(MenuIcons::fillColumn(), "批量填充列");
+        const QVector<std::pair<int, QString>> batchCols = {
+            {1, "名称"},
+            {3, "标记"},
+            {4, "本地目录"},
+            {5, "远程目录"},
+            {6, "远端"},
+        };
+        for (const auto& [col, label] : batchCols) {
+            auto* act = batchMenu->addAction(label);
+            connect(act, &QAction::triggered, this, [this, col, label]() {
+                bool ok = false;
+                QString value = QInputDialog::getText(this, QString("批量填充 %1").arg(label),
+                                                      QString("将选中行的 %1 统一设为:").arg(label),
+                                                      QLineEdit::Normal, QString(), &ok);
+                if (!ok) {
+                    return;
+                }
+                for (int i = 0; i < tableWidget_->rowCount(); ++i) {
+                    if (tableWidget_->item(i, 0)->isSelected()) {
+                        tableWidget_->item(i, col)->setText(value);
+                    }
+                }
+            });
+        }
+    }
 
     // 有的菜单项单行选中时才显示
     if (datas.size() / headers_.size() == 1) {

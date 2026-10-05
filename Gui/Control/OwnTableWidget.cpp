@@ -68,6 +68,11 @@ void ComDropTable::dropEvent(QDropEvent* event)
     for (int i = 0; i < infoDrop.items.size(); i++, ++curRow) {
         if (curRow >= rowCount()) {
             insertRow(rowCount());
+            // 拖入逻辑只创建 0~5 列，补齐其余列的空单元格，
+            // 避免保存/传输时 item(row, 6) 取到空指针闪退
+            for (int col = 6; col < columnCount(); ++col) {
+                setItemData(curRow, col, "", false, false);
+            }
         }
         setItemData(curRow, 0, "", false, false);
         const auto& curItem = infoDrop.items[i];

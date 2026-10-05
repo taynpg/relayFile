@@ -34,6 +34,7 @@ inline QColor cRemote()   { return QColor("#7C3AED"); }   // 紫
 inline QColor cNew()      { return QColor("#4F46E5"); }   // 靛
 inline QColor cCheck()    { return QColor("#16A34A"); }   // 绿
 inline QColor cUncheck()  { return QColor("#64748B"); }   // 灰
+inline QColor cFill()     { return QColor("#DB2777"); }   // 玫红
 
 // 创建设备像素比感知的透明画布（逻辑 px x px）
 inline QPixmap makePixmap(int px = 16)
@@ -506,6 +507,24 @@ inline QIcon check()
     tick.lineTo(QPointF(7, 9.2));
     tick.lineTo(QPointF(9.2, 6.8));
     p.drawPath(tick);
+    p.end();
+    return QIcon(pm);
+}
+
+// 批量填充列：多行横线 + 沿列向下的长箭头
+inline QIcon fillColumn()
+{
+    auto pm = makePixmap();
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    auto c = cFill();
+    // 三条横线代表多行（长短不一，表示原有内容各不相同）
+    p.setPen(QPen(c, 1.5, Qt::SolidLine, Qt::RoundCap));
+    p.drawLine(QPointF(2, 4), QPointF(8, 4));
+    p.drawLine(QPointF(2, 8), QPointF(6.5, 8));
+    p.drawLine(QPointF(2, 12), QPointF(7.5, 12));
+    // 沿列向下的长箭头（统一填充）
+    drawArrow(p, QPointF(12, 2.5), QPointF(12, 13.5), 1.8, 3.2, c);
     p.end();
     return QIcon(pm);
 }
