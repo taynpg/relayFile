@@ -77,6 +77,8 @@ void RelayTask::initControl()
     ui->edFrom->setEnabled(false);
     ui->edTo->setEnabled(false);
     ui->pedLog->setEnabled(false);
+    // 限制最大行数，超出时自动丢弃最早的日志
+    ui->pedLog->setMaximumBlockCount(5000);
     // ui->lbSpeed->setEnabled(false);
     ui->btnStart->setEnabled(false);
     ui->curProgress->setValue(0);

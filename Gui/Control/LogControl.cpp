@@ -8,10 +8,18 @@
 #include "Form/Setting.h"
 #include "ui_LogControl.h"
 
+namespace
+{
+// 日志控件最大保留行数，超出后最早的日志被挤掉
+constexpr int kMaxLogLines = 10000;
+}
+
 LogControl::LogControl(QWidget* parent) : QDialog(parent), ui(new Ui::LogControl)
 {
     ui->setupUi(this);
     ui->pedLog->setReadOnly(true);
+    // 限制最大行数，超出时自动丢弃最早的日志
+    ui->pedLog->setMaximumBlockCount(kMaxLogLines);
     InitMenu();
 
     connect(&Logger::instance(), &Logger::signalLogTrace, this, &LogControl::ShowInfo);
