@@ -2,9 +2,11 @@
 
 #include <QCloseEvent>
 #include <QDateTime>
+#include <QDir>
 #include <QGuiApplication>
 #include <QMessageBox>
 #include <QScreen>
+#include <QStringList>
 #include <QSplitter>
 #include <QVBoxLayout>
 #include <Utils/Logger.h>
@@ -203,9 +205,9 @@ void relayFile::initLayout()
     splitter->addWidget(sFile);
 
     // 暂且这样初始化尺寸
-    // QList<int> sizes;
-    // sizes << height() * 2 / 5 << height() * 3 / 5;
-    // splitter->setSizes(sizes);
+    QList<int> sizes;
+    sizes << height() * 2 / 5 << height() * 3 / 5;
+    splitter->setSizes(sizes);
 
     QVBoxLayout* layout = new QVBoxLayout();
     layout->addWidget(splitter);
@@ -223,6 +225,36 @@ void relayFile::onTransTaskRun(std::shared_ptr<RelayTaskData> data)
     if (controlSession->getOtherInfo().clientId.empty()) {
         QMessageBox::warning(this, "提示", "请先选择通信对象");
         return;
+    }
+
+    // 与自己通信时，若源端与目标端是完全相同的文件（夹），边读边写同一文件会导致文件损坏，直接拦截
+    auto ownInfo = controlSession->getOwnInfo();
+    auto otherInfo = controlSession->getOtherInfo();
+    if (!ownInfo.clientId.empty() && ownInfo.clientId == otherInfo.clientId) {
+        QStringList sameItems;
+        for (const auto& item : data->fileList) {
+            const auto localPath = QDir::cleanPath(QDir::fromNativeSeparators(FileDir::Join(item.localRoot, item.name)));
+            const auto remotePath = QDir::cleanPath(QDir::fromNativeSeparators(FileDir::Join(item.remoteRoot, item.name)));
+#ifdef Q_OS_WIN
+            const bool isSamePath = (localPath.toLower() == remotePath.toLower());
+#else
+            const bool isSamePath = (localPath == remotePath);
+#endif
+            if (isSamePath) {
+                sameItems.push_back(item.name);
+            }
+        }
+        if (!sameItems.isEmpty()) {
+            QMessageBox::warning(
+                this, "已拦截传输",
+                QString("当前通信对象是本机自己，以下 %1 个文件（夹）的本地路径与远程路径完全相同：\n\n%2\n\n"
+                        "对同一个文件同时读写会造成文件损坏，已拦截本次传输。\n"
+                        "请修改目标目录后再试。")
+                    .arg(sameItems.size())
+                    .arg(sameItems.join("\n")));
+            qWarning() << "自发自收同一文件被拦截，数量:" << sameItems.size();
+            return;
+        }
     }
 
     RelayTask* relayTask = new RelayTask(this);
