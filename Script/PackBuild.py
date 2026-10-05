@@ -447,11 +447,14 @@ def pack(build_dir: Path, preset: Preset, is_release: bool) -> None:
     bin_dir = gui_exe.parent
     print(f"    bin dir: {bin_dir}")
 
-    # 兜底：删除开发用 *Test.exe（正常情况下 RF_BUILD_TESTS=OFF 已不会生成）
-    stale_tests = [] if DRY_RUN else list(bin_dir.glob("*Test.exe"))
+    # 兜底：删除开发用 *Test.exe / *Bench.exe（正常情况下 RF_BUILD_TESTS=OFF 已不会生成）
+    stale_dev_exes = []
+    if not DRY_RUN:
+        for pattern in ("*Test.exe", "*Bench.exe"):
+            stale_dev_exes.extend(bin_dir.glob(pattern))
     if DRY_RUN:
-        print("[DRY-RUN] 将删除 bin 目录下所有 *Test.exe")
-    for t in stale_tests:
+        print("[DRY-RUN] 将删除 bin 目录下所有 *Test.exe 与 *Bench.exe")
+    for t in stale_dev_exes:
         print(f"    remove: {t.name}")
         t.unlink()
 
