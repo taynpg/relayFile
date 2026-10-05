@@ -2,6 +2,9 @@
 
 #include <QDialog>
 #include <QTableWidget>
+#include <functional>
+
+struct InfoDrop;
 
 class ComDropTable : public QTableWidget
 {
@@ -29,6 +32,8 @@ public:
 
 public:
     void setGetOwnRoot(std::function<QString()> getOwnRoot);
+    // 从另一个文件浏览表格（本地/远端）放下拖拽项时回调，由所属 ExplorerControl 发起传输
+    void setOnInfoDropped(std::function<void(const InfoDrop&)> onDropped);
 
 protected:
     void mousePressEvent(QMouseEvent* event) override;
@@ -39,5 +44,6 @@ protected:
 
 private:
     std::function<QString()> getOwnRoot_;
+    std::function<void(const InfoDrop&)> onInfoDropped_;
     QPoint dragStart_;
 };

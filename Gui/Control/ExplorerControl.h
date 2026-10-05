@@ -22,6 +22,8 @@ struct ExplorerSharedData {
     QString currentPath_;
 };
 
+struct InfoDrop;
+
 class ExplorerControl : public QDialog
 {
     Q_OBJECT
@@ -98,6 +100,8 @@ private:
     void uiPathSet(const QString& path);
     void uiPathSet(const QString& path, const std::vector<std::string>& drivers);
     void actionTrans(const QList<QTableWidgetItem*>& datas);
+    // 从另一个浏览面板（本地<->远端）拖拽放下：构造与右键“传输”一致的任务并发出
+    void onInfoDropped(const InfoDrop& infoDrop);
     WaitDialog* newWaitDialog();
 
 private:

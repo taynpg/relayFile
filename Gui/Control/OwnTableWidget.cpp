@@ -126,6 +126,14 @@ ExpDropTable::~ExpDropTable()
 
 void ExpDropTable::dropEvent(QDropEvent* event)
 {
+    const QTableWidget* s = qobject_cast<const QTableWidget*>(event->source());
+    if (s != this && event->mimeData()->hasFormat(MY_MIME_DROP_TYPE)) {
+        if (onInfoDropped_) {
+            onInfoDropped_(infoUnpack<InfoDrop>(event->mimeData()->data(MY_MIME_DROP_TYPE)));
+        }
+        event->acceptProposedAction();
+        return;
+    }
     QTableWidget::dropEvent(event);
 }
 
@@ -195,5 +203,10 @@ void ExpDropTable::mouseMoveEvent(QMouseEvent* event)
 
 void ExpDropTable::setGetOwnRoot(std::function<QString()> getOwnRoot)
 {
-    getOwnRoot_ = getOwnRoot;
+    getOwnRoot_ = std::move(getOwnRoot);
+}
+
+void ExpDropTable::setOnInfoDropped(std::function<void(const InfoDrop&)> onDropped)
+{
+    onInfoDropped_ = std::move(onDropped);
 }

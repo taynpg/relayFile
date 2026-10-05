@@ -19,6 +19,7 @@
 
 #include "Base/BaseHelper.h"
 #include "Base/GuiDefine.h"
+#include "Base/InfoDrop.h"
 #include "Base/MenuIcons.h"
 #include "Base/MessageBoxHelper.h"
 #include "Base/SampleCompare.h"
@@ -414,6 +415,7 @@ void ExplorerControl::initControl()
     connect(tableWidget_->horizontalHeader(), &QHeaderView::sectionClicked, this, &ExplorerControl::onHeaderClicked);
 
     tableWidget_->setGetOwnRoot([this]() { return currentPath_; });
+    tableWidget_->setOnInfoDropped([this](const InfoDrop& info) { onInfoDropped(info); });
 
     layout->addWidget(tableWidget_);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -633,6 +635,48 @@ void ExplorerControl::actionTrans(const QList<QTableWidgetItem*>& datas)
         transData->fileList.push_back(itemData);
     }
     qDebug() << "初始文件个数（含文件夹）:" << transData->fileList.size();
+    emit transTaskRun(transData);
+}
+
+void ExplorerControl::onInfoDropped(const InfoDrop& infoDrop)
+{
+    if (infoDrop.items.isEmpty()) {
+        return;
+    }
+
+    // 拖拽方向由“落在哪一侧面板”决定：
+    //   落在远端面板 -> 上传（本地 -> 对方）；落在本地面板 -> 下载（对方 -> 本地）
+    // infoDrop.from 为拖起侧所在目录，currentPath_ 为放下侧（目标侧）当前目录。
+    const bool isUpload = (askType_ == AskType::ASK_TYPE_REMOTE);
+    const QString localRoot = isUpload ? infoDrop.from : currentPath_;
+    const QString remoteRoot = isUpload ? currentPath_ : infoDrop.from;
+
+    // 含文件夹需确认；仅文件直接传输
+    int dirCount = 0;
+    for (const auto& dropItem : infoDrop.items) {
+        if (dropItem.type == 0) {
+            ++dirCount;
+        }
+    }
+    if (dirCount > 0) {
+        if (!MessageBoxHelper::questionYesNo(
+                this, "确认传输",
+                QString("拖拽内容包含 %1 个文件夹，文件夹内的全部内容将一并传输，是否继续？").arg(dirCount))) {
+            return;
+        }
+    }
+
+    auto transData = std::make_shared<RelayTaskData>();
+    transData->isUpload = isUpload;
+    for (const auto& dropItem : infoDrop.items) {
+        FileItemData itemData;
+        itemData.name = dropItem.fileName;
+        itemData.localRoot = localRoot;
+        itemData.remoteRoot = remoteRoot;
+        itemData.type = (dropItem.type == 0 ? RFileType::mTypeDir : RFileType::mTypeFile);
+        transData->fileList.push_back(itemData);
+    }
+    qDebug() << "拖拽传输文件个数（含文件夹）:" << transData->fileList.size();
     emit transTaskRun(transData);
 }
 
