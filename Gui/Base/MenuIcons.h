@@ -35,6 +35,7 @@ inline QColor cNew()      { return QColor("#4F46E5"); }   // 靛
 inline QColor cCheck()    { return QColor("#16A34A"); }   // 绿
 inline QColor cUncheck()  { return QColor("#64748B"); }   // 灰
 inline QColor cFill()     { return QColor("#DB2777"); }   // 玫红
+inline QColor cTime()     { return QColor("#0891B2"); }   // 青
 
 // 创建设备像素比感知的透明画布（逻辑 px x px）
 inline QPixmap makePixmap(int px = 16)
@@ -507,6 +508,33 @@ inline QIcon check()
     tick.lineTo(QPointF(7, 9.2));
     tick.lineTo(QPointF(9.2, 6.8));
     p.drawPath(tick);
+    p.end();
+    return QIcon(pm);
+}
+
+// 时间戳校验：时钟表盘 + 上下双向箭头（比较两端文件谁更新）
+inline QIcon timeCheck()
+{
+    auto pm = makePixmap();
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    auto c = cTime();
+    // 时钟表盘
+    p.setBrush(QColor("#F8FAFC"));
+    p.setPen(QPen(c, 1.5, Qt::SolidLine, Qt::RoundCap));
+    p.drawEllipse(QPointF(6.6, 8.2), 4.6, 4.6);
+    // 中心轴点
+    p.setBrush(c);
+    p.setPen(Qt::NoPen);
+    p.drawEllipse(QPointF(6.6, 8.2), 0.7, 0.7);
+    // 时针、分针
+    p.setPen(QPen(c, 1.3, Qt::SolidLine, Qt::RoundCap));
+    p.drawLine(QPointF(6.6, 8.2), QPointF(6.6, 5.4));
+    p.drawLine(QPointF(6.6, 8.2), QPointF(8.6, 9.4));
+    // 右侧上下双向箭头
+    p.drawLine(QPointF(13.4, 4.8), QPointF(13.4, 11.6));
+    drawArrowHead(p, QPointF(13.4, 3.4), QPointF(0, -1), 2.2, c);  // 向上=更新
+    drawArrowHead(p, QPointF(13.4, 13.0), QPointF(0, 1), 2.2, c);   // 向下=更旧
     p.end();
     return QIcon(pm);
 }

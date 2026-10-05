@@ -497,6 +497,7 @@ void ExplorerControl::onTableContextMenu(const QPoint& pos)
     QAction* compressAction{};
     QAction* mkdirDirAction{};
     QAction* checkAction{};
+    QAction* timeAction{};
 
     if (askType_ == AskType::ASK_TYPE_LOCAL && datas.size() <= headers_.size()) {
         explorerAction = new QAction(MenuIcons::explorer(), "在资源管理器中打开");
@@ -517,6 +518,7 @@ void ExplorerControl::onTableContextMenu(const QPoint& pos)
                 sha256Action = menu.addAction(MenuIcons::sha256(), "SHA256");
                 extractAction = menu.addAction(MenuIcons::extract(), "解压缩");
                 checkAction = menu.addAction(MenuIcons::check(), "粗校验");
+                timeAction = menu.addAction(MenuIcons::timeCheck(), "时间戳校验");
             }
             copyPathAction = menu.addAction(MenuIcons::copyPath(), "复制全路径");
             renameAction = menu.addAction(MenuIcons::rename(), "重命名");
@@ -571,6 +573,10 @@ void ExplorerControl::onTableContextMenu(const QPoint& pos)
     }
     if (selectAction == checkAction) {
         onRoughCheck(datas[1]->row());
+        return;
+    }
+    if (selectAction == timeAction) {
+        onTimeCheck(datas[1]->row());
         return;
     }
     if (selectAction == deleteAction) {
@@ -815,6 +821,105 @@ void ExplorerControl::onRoughCheck(int row)
                          : QString("大小一致但内容粗判不一致（%1 字节）").arg(r.aSize);
         }
         QMetaObject::invokeMethod(this, [this, msg]() { MessageBoxHelper::information(this, "粗校验", msg); });
+    });
+}
+
+void ExplorerControl::onTimeCheck(int row)
+{
+    // 先检查是否已经连接了服务器和选择了对方ID
+    auto controlSession = GlobalData::getInstance()->getControlSession();
+    if (!controlSession->getClientCore()->isConnected()) {
+        QMessageBox::warning(this, "提示", "请先连接服务器");
+        return;
+    }
+    if (controlSession->getOtherInfo().clientId.empty()) {
+        QMessageBox::warning(this, "提示", "请先选择通信对象");
+        return;
+    }
+
+    auto fileName = tableWidget_->item(row, 1)->text();
+    // 获取对方当前所在目录
+    ExplorerSharedData es;
+    if (tellInfoCall_) {
+        tellInfoCall_(es);
+    }
+    if (es.currentPath_.isEmpty()) {
+        QMessageBox::warning(this, "提示", "无法获取对方当前目录");
+        return;
+    }
+
+    // 让用户输入对方目录下的文件名，默认同名
+    QString peerFileName;
+    if (!MessageBoxHelper::getTextInput(this, "时间戳校验", "请输入对方目录下的文件名", peerFileName, fileName)) {
+        return;
+    }
+    peerFileName = peerFileName.trimmed();
+    if (peerFileName.isEmpty()) {
+        return;
+    }
+
+    // 本端路径 = 当前目录/选中文件名；对端路径 = 对方当前目录/输入文件名
+    auto ownPath = FileDir::Join(currentPath_, fileName).toStdString();
+    auto peerPath = FileDir::Join(es.currentPath_, peerFileName).toStdString();
+    // 对端 askDf：与本端相反
+    auto peerAskType = (askType_ == AskType::ASK_TYPE_LOCAL ? AskType::ASK_TYPE_REMOTE : AskType::ASK_TYPE_LOCAL);
+    auto peerDf = BaseAskDF::Create(peerAskType);
+
+    const QString ownLabel = (askType_ == AskType::ASK_TYPE_LOCAL ? GUI_DIRECTION_LOCAL : GUI_DIRECTION_REMOTE);
+    const QString peerLabel = (askType_ == AskType::ASK_TYPE_LOCAL ? GUI_DIRECTION_REMOTE : GUI_DIRECTION_LOCAL);
+
+    workerThread_->invoke([this, ownPath, peerPath, peerDf, fileName, peerFileName, ownLabel, peerLabel]() {
+        QUIT_ATOMIC(isTaskRunning_);
+        auto r = SampleCompare::CompareTime(askDf_, ownPath, peerDf, peerPath);
+        QString msg;
+        if (!r.ok) {
+            msg = QString("时间戳校验失败：%1").arg(QString::fromStdString(r.errMsg));
+        } else if (!r.aExist) {
+            msg = QString("%1文件不存在：%2").arg(ownLabel).arg(fileName);
+        } else if (!r.bExist) {
+            msg = QString("%1文件不存在：%2").arg(peerLabel).arg(peerFileName);
+        } else {
+            auto fmtTime = [](std::int64_t ms) {
+                return QDateTime::fromMSecsSinceEpoch(ms).toString("yyyy-MM-dd hh:mm:ss");
+            };
+            QString conclusion;
+            if (r.aTime == r.bTime) {
+                conclusion = "两端文件时间戳相同";
+            } else if (r.aTime > r.bTime) {
+                conclusion = QString("%1文件更新（修改时间更晚）").arg(ownLabel);
+            } else {
+                conclusion = QString("%1文件更新（修改时间更晚）").arg(peerLabel);
+            }
+            msg = QString("%1\n\n%2：%3\n%4：%5")
+                      .arg(conclusion)
+                      .arg(ownLabel)
+                      .arg(fmtTime(r.aTime))
+                      .arg(peerLabel)
+                      .arg(fmtTime(r.bTime));
+            if (r.aTime != r.bTime) {
+                auto diffMs = qAbs(r.aTime - r.bTime);
+                auto diffSec = diffMs / 1000;
+                auto days = diffSec / 86400;
+                auto hours = (diffSec % 86400) / 3600;
+                auto mins = (diffSec % 3600) / 60;
+                auto secs = diffSec % 60;
+                QStringList parts;
+                if (days > 0) {
+                    parts << QString("%1天").arg(days);
+                }
+                if (hours > 0) {
+                    parts << QString("%1小时").arg(hours);
+                }
+                if (mins > 0) {
+                    parts << QString("%1分").arg(mins);
+                }
+                if (secs > 0 || parts.isEmpty()) {
+                    parts << QString("%1秒").arg(secs);
+                }
+                msg += QString("\n相差：%1").arg(parts.join(QString()));
+            }
+        }
+        QMetaObject::invokeMethod(this, [this, msg]() { MessageBoxHelper::information(this, "时间戳校验", msg); });
     });
 }
 

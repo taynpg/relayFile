@@ -66,3 +66,31 @@ CompareResult SampleCompare::Compare(const std::shared_ptr<BaseAskDF>& dfA, cons
     }
     return r;
 }
+
+TimeCompareResult SampleCompare::CompareTime(const std::shared_ptr<BaseAskDF>& dfA, const std::string& pathA,
+                                             const std::shared_ptr<BaseAskDF>& dfB, const std::string& pathB)
+{
+    TimeCompareResult r;
+    if (!dfA || !dfB) {
+        r.errMsg = "校验对象为空";
+        return r;
+    }
+
+    FileMeta metaA;
+    FileMeta metaB;
+    if (!dfA->AskFileMeta(pathA, metaA)) {
+        r.errMsg = "读取A端文件信息失败";
+        return r;
+    }
+    if (!dfB->AskFileMeta(pathB, metaB)) {
+        r.errMsg = "读取B端文件信息失败";
+        return r;
+    }
+
+    r.ok = true;
+    r.aExist = (metaA.exist != 0);
+    r.bExist = (metaB.exist != 0);
+    r.aTime = metaA.lastModified;
+    r.bTime = metaB.lastModified;
+    return r;
+}

@@ -18,6 +18,17 @@ struct CompareResult
     std::string errMsg;
 };
 
+// 时间戳校验：比对两端文件最后修改时间
+struct TimeCompareResult
+{
+    bool ok{false};         // 两端文件信息是否均可读取
+    bool aExist{false};
+    bool bExist{false};
+    std::int64_t aTime{};   // A端最后修改时间（毫秒 since epoch）
+    std::int64_t bTime{};   // B端最后修改时间（毫秒 since epoch）
+    std::string errMsg;
+};
+
 class SampleCompare
 {
 public:
@@ -25,4 +36,8 @@ public:
     // dfA/pathA 为一端，dfB/pathB 为另一端
     static CompareResult Compare(const std::shared_ptr<BaseAskDF>& dfA, const std::string& pathA,
                                  const std::shared_ptr<BaseAskDF>& dfB, const std::string& pathB);
+
+    // 读取两端文件元信息，交由调用方比较 aTime/bTime 判断谁更新或相同
+    static TimeCompareResult CompareTime(const std::shared_ptr<BaseAskDF>& dfA, const std::string& pathA,
+                                         const std::shared_ptr<BaseAskDF>& dfB, const std::string& pathB);
 };

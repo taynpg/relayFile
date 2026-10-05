@@ -76,6 +76,7 @@ private:
     void onRename(int row);
     void onSHA256(int row);
     void onRoughCheck(int row);
+    void onTimeCheck(int row);
     void onDelete(const std::vector<int>& rows);
     void onNewDir(int row);
     void onShowFileMetaInfo(int row);
