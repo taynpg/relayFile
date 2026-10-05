@@ -1,6 +1,7 @@
 #include "ClientCore.h"
 
 #include "CoreDefine.hpp"
+#include "Crypto/CryptoHelper.h"
 #include "Protocol/Serialize.hpp"
 
 ClientCore::ClientCore(QObject* parent) : QObject(parent)
@@ -94,6 +95,10 @@ void ClientCore::onReadyRead()
         if (!frame) {
             break;
         }
+        if (!CryptoHelper::instance().decryptFrame(frame)) {
+            qWarning() << "帧解密失败（未配置密钥或校验失败），丢弃, type=" << static_cast<int>(frame->type);
+            continue;
+        }
         emit signalDeliverFrame(frame);
     }
 }
@@ -136,6 +141,14 @@ bool ClientCore::Send(const Message& msg)
     return Send(frame);
 }
 
+// 判断帧是否需要加密。只加密文件传输相关帧（含数据块）：
+// 服务器对控制帧在转发前会先反序列化 data（ServerCore::useFrame / AsioServer），
+// 加密会导致服务器解析失败踢掉连接；文件帧服务器不解析 data、纯按头部转发，可安全加密。
+static bool GIsEncryptableFrame(FramePtr frame)
+{
+    return GIsFileMessageFrame(frame) || GIsChuckAckFrame(frame);
+}
+
 bool ClientCore::Send(FramePtr frame)
 {
     if (isControl_) {
@@ -148,6 +161,9 @@ bool ClientCore::Send(FramePtr frame)
         if (frame->sessionId == 0) {
             frame->sessionId = GetSessionId();
         }
+    }
+    if (GIsEncryptableFrame(frame)) {
+        CryptoHelper::instance().encryptFrame(frame);
     }
     auto data = Protocol::Pack(frame);
     return Send(data.data(), data.size());

@@ -93,6 +93,17 @@ void to_json(nlohmann::json& j, const CompressConfig& cfg)
     j = nlohmann::json{{"enabled", cfg.enabled}, {"thresholdMB", cfg.thresholdMB}};
 }
 
+void from_json(const nlohmann::json& j, EncryptConfig& cfg)
+{
+    cfg.enabled = j.value("enabled", false);
+    cfg.passphrase = QString::fromStdString(j.value("passphrase", std::string{}));
+}
+
+void to_json(nlohmann::json& j, const EncryptConfig& cfg)
+{
+    j = nlohmann::json{{"enabled", cfg.enabled}, {"passphrase", cfg.passphrase.toStdString()}};
+}
+
 void BaseConfig::genPath()
 {
     configDir_ = miniPath::Join(miniPath::GetHome().second, ".config", "relayFile");
@@ -263,6 +274,33 @@ bool BaseConfig::saveCompress(const CompressConfig& cfg)
     QMutexLocker locker(&mutex_);
     nlohmann::json j = loadJson();
     j["compress"] = cfg;
+    return saveJson(j);
+}
+
+bool BaseConfig::getEncrypt(EncryptConfig& cfg)
+{
+    QMutexLocker locker(&mutex_);
+    nlohmann::json j = loadJson();
+    if (j.contains("encrypt") && !j["encrypt"].is_null()) {
+        cfg = j["encrypt"].get<EncryptConfig>();
+        return true;
+    }
+    // 首次使用：启用默认口令并立即落盘（与 getCurrentName 同模式），
+    // Gui 和 Client 走同一路径，保证开箱即加密且重启不漂移。
+    cfg.enabled = true;
+    cfg.passphrase = QString::fromUtf8(kDefaultEncryptPassphrase);
+    j["encrypt"] = cfg;
+    if (!saveJson(j)) {
+        qWarning() << "Failed to persist default encrypt config";
+    }
+    return true;
+}
+
+bool BaseConfig::saveEncrypt(const EncryptConfig& cfg)
+{
+    QMutexLocker locker(&mutex_);
+    nlohmann::json j = loadJson();
+    j["encrypt"] = cfg;
     return saveJson(j);
 }
 

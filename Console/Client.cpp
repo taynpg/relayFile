@@ -1,5 +1,6 @@
 #include "Client.h"
 
+#include <Crypto/CryptoHelper.h>
 #include <Net/ClientHelper.h>
 #include <Utils/Logger.h>
 
@@ -16,6 +17,15 @@ BaseClient::~BaseClient()
 void BaseClient::Work(const QString& ip, int16_t port)
 {
     baseConfig_ = std::make_shared<BaseConfig>();
+
+    // 应用加密配置（密钥 + 开关）；首次使用时 getEncrypt 返回默认口令 relayFile
+    EncryptConfig ecfg;
+    baseConfig_->getEncrypt(ecfg);
+    if (!ecfg.passphrase.isEmpty()) {
+        CryptoHelper::instance().setKey(ecfg.passphrase.toStdString());
+    }
+    CryptoHelper::instance().setEnabled(ecfg.enabled);
+
     controlSession_ = std::make_shared<ControlSession>();
     fileSession_ = std::make_shared<FileSession>();
 

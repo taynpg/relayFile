@@ -23,6 +23,17 @@ struct CompressConfig {
     int thresholdMB{2048};   // 单包超出此阈值（MB）则放弃本次传输
 };
 
+// 传输加密配置：口令经 SHA-256 派生 AES-256 密钥，通信双方需配置相同口令。
+struct EncryptConfig {
+    bool enabled{false};
+    QString passphrase;
+};
+
+// 首次使用（配置文件中不存在 encrypt 段）时的默认口令：
+// 全新安装的 Gui/Client 默认即以该口令启用加密，同组机器开箱互通；
+// 用户在设置中显式修改或关闭后，以落盘配置为准，不再使用默认值。
+inline constexpr const char* kDefaultEncryptPassphrase = "relayFile";
+
 class Common
 {
 private:
@@ -56,6 +67,8 @@ public:
     bool saveReconInterval(const RetryCon& con);
     bool getCompress(CompressConfig& cfg);
     bool saveCompress(const CompressConfig& cfg);
+    bool getEncrypt(EncryptConfig& cfg);
+    bool saveEncrypt(const EncryptConfig& cfg);
 
 private:
     bool saveJson(const nlohmann::json& j);

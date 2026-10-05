@@ -79,6 +79,10 @@ struct OneFrame {
 };
 using FramePtr = std::shared_ptr<OneFrame>;
 
+// 帧加密标记：mark 的 bit8 置位表示 data 已加密（格式：nonce(12B) || ciphertext || tag(16B)）。
+// 低 8 位保留给现有业务（如文件传输方向 0/1）。
+constexpr int16_t FRAME_MARK_ENCRYPTED = 0x0100;
+
 inline bool GIsChuckAckFrame(FramePtr frame)
 {
     if (static_cast<std::uint16_t>(frame->type) >= defDirectChuckAck) {

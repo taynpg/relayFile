@@ -3,6 +3,7 @@
 #include <QIntValidator>
 
 #include "Base/MessageBoxHelper.h"
+#include "Crypto/CryptoHelper.h"
 #include "ui_Setting.h"
 
 Setting::Setting(QWidget* parent) : QDialog(parent), ui(new Ui::Setting)
@@ -72,6 +73,11 @@ void Setting::onLoadDefault()
     }
     ui->cbCompress->setChecked(ccfg.enabled);
     ui->edThreshold->setText(QString::number(ccfg.thresholdMB));
+
+    EncryptConfig ecfg;
+    config_->getEncrypt(ecfg);   // 首次使用返回默认口令 relayFile
+    ui->cbEncrypt->setChecked(ecfg.enabled);
+    ui->edEncryptKey->setText(ecfg.passphrase);
 }
 
 void Setting::onSave()
@@ -97,6 +103,22 @@ void Setting::onSave()
         MessageBoxHelper::information(this, "提示", "保存失败");
         return;
     }
+
+    EncryptConfig ecfg;
+    ecfg.enabled = ui->cbEncrypt->isChecked() && !ui->edEncryptKey->text().isEmpty();
+    ecfg.passphrase = ui->edEncryptKey->text();
+    if (!config_->saveEncrypt(ecfg)) {
+        MessageBoxHelper::information(this, "提示", "保存失败");
+        return;
+    }
+
+    // 立即生效
+    if (!ecfg.passphrase.isEmpty()) {
+        CryptoHelper::instance().setKey(ecfg.passphrase.toStdString());
+    } else {
+        CryptoHelper::instance().clearKey();
+    }
+    CryptoHelper::instance().setEnabled(ecfg.enabled);
     accept();
 }
 

@@ -39,6 +39,7 @@ if(RF_BUILD_TESTS)
     add_executable(relayFileTransTest TransTest.cpp)
     add_executable(relayFileZipTest ZipTest.cpp)
     add_executable(relayFileUnpackTest UnpackTest.cpp)
+    add_executable(relayFileCryptoBench CryptoBench.cpp)
 
     target_include_directories(relayFileTransTest PUBLIC ${CMAKE_CURRENT_LIST_DIR})
     target_link_libraries(relayFileTransTest PUBLIC relayFileCore Qt${QT_VERSION_MAJOR}::Core Qt${QT_VERSION_MAJOR}::Network)
@@ -48,6 +49,9 @@ if(RF_BUILD_TESTS)
 
     target_include_directories(relayFileUnpackTest PUBLIC ${CMAKE_CURRENT_LIST_DIR})
     target_link_libraries(relayFileUnpackTest PUBLIC relayFileCore Qt${QT_VERSION_MAJOR}::Core)
+
+    target_include_directories(relayFileCryptoBench PUBLIC ${CMAKE_CURRENT_LIST_DIR})
+    target_link_libraries(relayFileCryptoBench PUBLIC relayFileCore Qt${QT_VERSION_MAJOR}::Core)
 
     enable_win_clang_pdb(relayFileTransTest)
     enable_win_clang_pdb(relayFileZipTest)

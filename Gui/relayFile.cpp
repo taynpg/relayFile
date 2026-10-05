@@ -8,6 +8,7 @@
 #include <QSplitter>
 #include <QVBoxLayout>
 #include <Utils/Logger.h>
+#include <Crypto/CryptoHelper.h>
 #include <relayFileVersion.h>
 
 #include "ui_relayFile.h"
@@ -33,6 +34,14 @@ relayFile::relayFile(QWidget* parent) : QWidget(parent), ui(new Ui::relayFile)
     doubleLinker_->SetFileSession(fileSession);
     GlobalData::getInstance()->setDoubleLinker(doubleLinker_);
     GlobalData::getInstance()->setBaseConfig(baseConfig_);
+
+    // 应用加密配置（密钥 + 开关）；首次使用时 getEncrypt 返回默认口令 relayFile
+    EncryptConfig ecfg;
+    baseConfig_->getEncrypt(ecfg);
+    if (!ecfg.passphrase.isEmpty()) {
+        CryptoHelper::instance().setKey(ecfg.passphrase.toStdString());
+    }
+    CryptoHelper::instance().setEnabled(ecfg.enabled);
     connect(this, &relayFile::signalCancelWaitMsg, doubleLinker_.get(), &DoubleLinker::onCancelWaitMsg);
 
     Logger& logger = Logger::instance();
