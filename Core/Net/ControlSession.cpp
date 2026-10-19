@@ -42,20 +42,46 @@ ClientCore* ControlSession::getClientCore()
 
 ControlSession::~ControlSession()
 {
+    Quit();
     timerPoolStd_->stop();
-    delete clientCore_;
-    delete clientWorker_;
+    if (clientWorker_) {
+        delete clientWorker_;
+        clientWorker_ = nullptr;
+    }
 }
 
 void ControlSession::Quit()
 {
+    if (quit_.exchange(true)) {
+        return;
+    }
     qDebug() << "等待线程池完成...";
     workerPool_->Quit();
     qDebug() << "线程池完成";
 
     clearWorkerTimer_->stop();
-    clientWorker_->quit();
-    clientWorker_->wait();
+    if (!clientCore_) {
+        return;
+    }
+    // 与 FileSession 同理：ClientCore/QTcpSocket 属于 worker 线程，必须在线程内销毁
+    if (clientWorker_->isRunning() && QThread::currentThread() != clientWorker_) {
+        QMetaObject::invokeMethod(
+            clientCore_,
+            [this]() {
+                delete clientCore_;
+                clientCore_ = nullptr;
+            },
+            Qt::BlockingQueuedConnection);
+        clientWorker_->quit();
+        clientWorker_->wait();
+    } else {
+        delete clientCore_;
+        clientCore_ = nullptr;
+        if (clientWorker_->isRunning()) {
+            clientWorker_->quit();
+            clientWorker_->wait();
+        }
+    }
 }
 
 void ControlSession::initSignals()
@@ -78,29 +104,40 @@ template <typename Callback> bool ControlSession::SendCall(FramePtr frame, Callb
         QMetaObject::invokeMethod(
             this,
             [this, sid]() {
-                QMutexLocker locker(&requestWaitLock_);
-                auto it = requestWaitFrame_.find(sid);
-                if (it != requestWaitFrame_.end()) {
-                    auto& waiter = *it.value();
-                    qDebug() << "ControlSession::SendCall timeout [TRACE-SID] sid=" << sid
-                             << "type=" << waiter.ftype << "to=" << QString::fromStdString(waiter.target)
-                             << "path=" << QString::fromStdString(waiter.path);
-                    switch (waiter.callType) {
-                    case CallType::CT_Message: {
-                        MessagePtr msg = nullptr;
-                        waiter.call(msg);
-                        break;
+                std::shared_ptr<WaiteFrame> waiter;
+                {
+                    QMutexLocker locker(&requestWaitLock_);
+                    auto it = requestWaitFrame_.find(sid);
+                    if (it == requestWaitFrame_.end()) {
+                        return;
                     }
-                    case CallType::CT_Frame: {
-                        FramePtr f = nullptr;
-                        waiter.call(f);
-                        break;
-                    }
-                    default:
-                        break;
-                    }
-                    timerPoolStd_->stop(waiter.timerId);
+                    waiter = it.value();
                     requestWaitFrame_.erase(it);
+                }
+                if (!waiter) {
+                    return;
+                }
+                qDebug() << "ControlSession::SendCall timeout [TRACE-SID] sid=" << sid << "type=" << waiter->ftype
+                         << "to=" << QString::fromStdString(waiter->target)
+                         << "path=" << QString::fromStdString(waiter->path);
+                timerPoolStd_->stop(waiter->timerId);
+                // 回调放到锁外执行：回调可能再次进入 ControlSession，持锁调用会死锁
+                if (waiter->done.exchange(true)) {
+                    return;
+                }
+                switch (waiter->callType) {
+                case CallType::CT_Message: {
+                    MessagePtr msg = nullptr;
+                    waiter->call(msg);
+                    break;
+                }
+                case CallType::CT_Frame: {
+                    FramePtr f = nullptr;
+                    waiter->call(f);
+                    break;
+                }
+                default:
+                    break;
                 }
             },
             Qt::QueuedConnection);
@@ -133,25 +170,38 @@ template <typename Callback> bool ControlSession::SendCall(FramePtr frame, Callb
 
 void ControlSession::onCancelWaitMsg()
 {
-    QMutexLocker locker(&requestWaitLock_);
-    for (auto it = requestWaitFrame_.begin(); it != requestWaitFrame_.end(); it++) {
-        auto& waiter = *it.value();
-        switch (waiter.callType) {
+    // 先把所有等待者移出容器，再在锁外逐个回调。
+    // 原实现在持锁状态下调用用户回调（可重入），并且 erase(it) 之后继续 it++，
+    // 是对失效迭代器自增（UB）。
+    QList<std::shared_ptr<WaiteFrame>> waiters;
+    {
+        QMutexLocker locker(&requestWaitLock_);
+        for (auto it = requestWaitFrame_.begin(); it != requestWaitFrame_.end(); ++it) {
+            if (it.value()) {
+                waiters.push_back(it.value());
+            }
+        }
+        requestWaitFrame_.clear();
+    }
+    for (auto& waiter : waiters) {
+        timerPoolStd_->stop(waiter->timerId);
+        if (waiter->done.exchange(true)) {
+            continue;
+        }
+        switch (waiter->callType) {
         case CallType::CT_Message: {
             MessagePtr msg = nullptr;
-            waiter.call(msg);
+            waiter->call(msg);
             break;
         }
         case CallType::CT_Frame: {
             FramePtr f = nullptr;
-            waiter.call(f);
+            waiter->call(f);
             break;
         }
         default:
             break;
         }
-        timerPoolStd_->stop(waiter.timerId);
-        requestWaitFrame_.erase(it);
     }
 }
 
@@ -208,7 +258,13 @@ void ControlSession::handleFrame(FramePtr frame)
     // qDebug() << "[TRACE-SID] recv frame sid=" << frame->sessionId << "type=" << static_cast<int>(frame->type)
     //          << "from=" << QString::fromStdString(frame->from) << "to=" << QString::fromStdString(frame->to);
     MessagePtr answerMsg = Message::Create();
-    deserializeStruct(frame->data, *answerMsg);
+    try {
+        deserializeStruct(frame->data, *answerMsg);
+    } catch (const std::exception& e) {
+        // 任何非 Message 的帧都会走到这里；不能让异常穿透 Qt 事件循环
+        qWarning() << "解析控制帧失败（已丢弃）, type=" << static_cast<int>(frame->type) << "err:" << e.what();
+        return;
+    }
 
     switch (frame->type) {
     case FrameType::kMsgType_Answer_ID: {
@@ -230,17 +286,42 @@ void ControlSession::handleFrame(FramePtr frame)
         dispatchMessage(frame, FrameType::kMsgType_Answer_FileList, [](const Message& sourceMsg, Message& ansMsg) {
             ansMsg.mapData[""] = std::vector<FileMeta>();
             auto& stdMeta = ansMsg.mapData[""];
-            LocalHandle::AskFileList(sourceMsg.comStr, stdMeta, sourceMsg.mark == 1);
+            LocalHandle::AskFileList(sourceMsg.comStr, stdMeta, sourceMsg.hasFlag(MessageFlag::kRecursiveList));
         });
         break;
     }
     case FrameType::kMsgType_Ask_FileMeta: {
-        dispatchMessage(frame, FrameType::kMsgType_Answer_FileMeta,
-                        [](const Message& sourceMsg, Message& ansMsg) { LocalHandle::AskFileMeta(sourceMsg.comStr, ansMsg.ff); });
+        dispatchMessage(frame, FrameType::kMsgType_Answer_FileMeta, [](const Message& sourceMsg, Message& ansMsg) {
+            if (!sourceMsg.strVec.empty()) {
+                // 批量：一次请求查一批路径，结果按请求顺序返回；
+                // 单条查不到时只是 exist=0，不影响其余条目
+                ansMsg.mapData.clear();
+                auto& metas = ansMsg.mapData[""];
+                metas.reserve(sourceMsg.strVec.size());
+                for (const auto& path : sourceMsg.strVec) {
+                    FileMeta meta;
+                    LocalHandle::AskFileMeta(path, meta);
+                    if (meta.exist == 0 && meta.fullPath.empty()) {
+                        meta.fullPath = path;
+                    }
+                    metas.push_back(meta);
+                }
+                return;
+            }
+            LocalHandle::AskFileMeta(sourceMsg.comStr, ansMsg.ff);
+        });
         break;
     }
     case FrameType::kMsgType_Ask_FileSamples: {
         dispatchMessage(frame, FrameType::kMsgType_Answer_FileSamples, [](const Message& sourceMsg, Message& ansMsg) {
+            ansMsg.samples.clear();
+            ansMsg.sampleMap.clear();
+            if (!sourceMsg.strVec.empty()) {
+                for (const auto& path : sourceMsg.strVec) {
+                    LocalHandle::AskFileSamples(path, ansMsg.sampleMap[path]);
+                }
+                return;
+            }
             LocalHandle::AskFileSamples(sourceMsg.comStr, ansMsg.samples);
         });
         break;
@@ -340,13 +421,17 @@ void ControlSession::handleFrame(FramePtr frame)
         readyAnsFrame->type = FrameType::kMsgType_Answer_ArchiveReady;
         emit signalRequestSend(readyAnsFrame);
 
-        // 交给注册的 pubCall 处理（发起普通下载等）。
+        // 交给注册的 pubCall 处理（发起普通下载等）。回调在锁外执行，避免重入死锁。
+        std::function<void(FramePtr frame)> readyCall;
         {
             QMutexLocker locker(&pubCallLock_);
             auto it = pubCall_.find(frame->type);
             if (it != pubCall_.end() && it.value()) {
-                it.value()(frame);
+                readyCall = it.value();
             }
+        }
+        if (readyCall) {
+            readyCall(frame);
         }
         break;
     }
@@ -358,13 +443,16 @@ void ControlSession::handleFrame(FramePtr frame)
     }
     case FrameType::kMsgType_Ask_Rename: {
         dispatchMessage(frame, FrameType::kMsgType_Answer_Rename, [](const Message& sourceMsg, Message& ansMsg) {
-            ansMsg.mark = LocalHandle::AskRename(sourceMsg.ff.fullPath, sourceMsg.ft.fullPath);
+            ansMsg.msgStateCode = LocalHandle::AskRename(sourceMsg.ff.fullPath, sourceMsg.ft.fullPath)
+                         ? MessageStateCode::kMessageStateCodeSuccess
+                         : MessageStateCode::kMessageStateCodeFailed;
         });
         break;
     }
     case FrameType::kMsgType_Ask_CreateDir: {
         dispatchMessage(frame, FrameType::kMsgType_Answer_CreateDir, [](const Message& sourceMsg, Message& ansMsg) {
-            ansMsg.mark = LocalHandle::AskCreateDir(sourceMsg.comStr);
+            ansMsg.msgStateCode = LocalHandle::AskCreateDir(sourceMsg.comStr) ? MessageStateCode::kMessageStateCodeSuccess
+                                                                          : MessageStateCode::kMessageStateCodeFailed;
         });
         break;
     }
@@ -377,51 +465,68 @@ void ControlSession::handleFrame(FramePtr frame)
     case FrameType::kMsgType_Ask_Archive: {
         dispatchMessage(frame, FrameType::kMsgType_Answer_Archive, [](const Message& sourceMsg, Message& ansMsg) {
             const auto& fileList = sourceMsg.mapData.at("");
-            ansMsg.mark = LocalHandle::AskArchive(fileList, sourceMsg.comStr);
+            ansMsg.msgStateCode = LocalHandle::AskArchive(fileList, sourceMsg.comStr)
+                         ? MessageStateCode::kMessageStateCodeSuccess
+                         : MessageStateCode::kMessageStateCodeFailed;
         });
         break;
     }
     case FrameType::kMsgType_Ask_UnArchive: {
         dispatchMessage(frame, FrameType::kMsgType_Answer_UnArchive, [](const Message& sourceMsg, Message& ansMsg) {
-            ansMsg.mark = LocalHandle::AskUnArchive(sourceMsg.ff.fullPath, sourceMsg.ft.fullPath);
+            ansMsg.msgStateCode = LocalHandle::AskUnArchive(sourceMsg.ff.fullPath, sourceMsg.ft.fullPath)
+                         ? MessageStateCode::kMessageStateCodeSuccess
+                         : MessageStateCode::kMessageStateCodeFailed;
         });
         break;
     }
     case FrameType::kMsgType_Ask_HomeAndDriver: {
         dispatchMessage(frame, FrameType::kMsgType_Answer_HomeAndDriver, [](const Message& sourceMsg, Message& ansMsg) {
-            ansMsg.mark = LocalHandle::AskHomeAndDriver(ansMsg.strVec, ansMsg.comStr);
+            ansMsg.msgStateCode = LocalHandle::AskHomeAndDriver(ansMsg.strVec, ansMsg.comStr)
+                         ? MessageStateCode::kMessageStateCodeSuccess
+                         : MessageStateCode::kMessageStateCodeFailed;
         });
         break;
     }
     default: {
+        std::function<void(FramePtr frame)> pubCall;
         {
             QMutexLocker locker(&pubCallLock_);
             auto it = pubCall_.find(frame->type);
             if (it != pubCall_.end() && it.value()) {
-                it.value()(frame);
-                break;
+                pubCall = it.value();
             }
         }
-        QMutexLocker locker(&requestWaitLock_);
-        if (auto it = requestWaitFrame_.find(frame->sessionId); it != requestWaitFrame_.end()) {
-            // qDebug() << "[TRACE-SID] matched waiter sid=" << frame->sessionId << "type=" << static_cast<int>(frame->type);
-            auto& callType = it.value()->callType;
-            switch (callType) {
+        if (pubCall) {
+            // 回调在锁外执行，避免业务逻辑反向调用 ControlSession 时死锁
+            pubCall(frame);
+            break;
+        }
+        std::shared_ptr<WaiteFrame> waiter;
+        {
+            QMutexLocker locker(&requestWaitLock_);
+            auto it = requestWaitFrame_.find(frame->sessionId);
+            if (it != requestWaitFrame_.end()) {
+                waiter = it.value();
+                requestWaitFrame_.erase(it);
+            }
+        }
+        if (waiter) {
+            timerPoolStd_->stop(waiter->timerId);
+            if (waiter->done.exchange(true)) {
+                break;
+            }
+            switch (waiter->callType) {
             case CallType::CT_Message: {
-                it.value()->call(answerMsg);
-                callType = CallType::CT_Unknown;
+                waiter->call(answerMsg);
                 break;
             }
             case CallType::CT_Frame: {
-                it.value()->call(frame);
-                callType = CallType::CT_Unknown;
+                waiter->call(frame);
                 break;
             }
             default:
                 break;
             }
-            timerPoolStd_->stop(it.value()->timerId);
-            requestWaitFrame_.erase(it);
         } else {
             qDebug() << "[TRACE-SID] no waiter for sid=" << frame->sessionId
                      << "type=" << static_cast<int>(frame->type) << "(answer ignored)";

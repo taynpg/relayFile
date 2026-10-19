@@ -23,6 +23,11 @@ public:
     virtual bool AskHomeAndDriver(std::vector<std::string>& drivers, std::string& home) = 0;
     virtual bool AskFileMeta(const std::string& path, FileMeta& meta) = 0;
     virtual bool AskFileSamples(const std::string& path, std::vector<SampleBlock>& samples) = 0;
+    // 批量版：一次往返查一批路径。返回 false 表示整批请求失败；
+    // 单条路径查不到时该条 exist=0，不影响其余条目（调用方自行跳过）。
+    virtual bool AskFileMetaBatch(const std::vector<std::string>& paths, std::vector<FileMeta>& metas) = 0;
+    virtual bool AskFileSamplesBatch(const std::vector<std::string>& paths,
+                                     std::vector<std::vector<SampleBlock>>& samples) = 0;
     virtual bool AskDelete(const std::vector<std::string>& fileList, std::vector<std::string>& failedList) = 0;
     virtual bool AskSha256(const std::string& path, std::string& sha256) = 0;
     virtual bool AskRename(const std::string& oldName, const std::string& newName) = 0;

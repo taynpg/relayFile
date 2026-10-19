@@ -1,6 +1,7 @@
 #include "RemoteAskDF.h"
 
 #include <Protocol/Serialize.hpp>
+#include <algorithm>
 #include <future>
 
 #include "../BaseHelper.h"
@@ -36,7 +37,7 @@ bool RemoteAskDF::AskFileList(const std::string& path, std::vector<FileMeta>& fi
     msg.comStr = path;
 
     if (recursive) {
-        msg.mark = 1;
+        msg.setFlag(MessageFlag::kRecursiveList);
     }
 
     fileList.clear();
@@ -108,6 +109,72 @@ bool RemoteAskDF::AskFileSamples(const std::string& path, std::vector<SampleBloc
         FrameType::kMsgType_Ask_FileSamples);
 }
 
+bool RemoteAskDF::AskFileMetaBatch(const std::vector<std::string>& paths, std::vector<FileMeta>& metas)
+{
+    metas.clear();
+    metas.reserve(paths.size());
+    // 分片：控制帧有 32MB 上限，几千条 FileMeta 也不能无限堆在一个帧里
+    constexpr std::size_t kChunk = 400;
+    for (std::size_t begin = 0; begin < paths.size(); begin += kChunk) {
+        const auto end = std::min(begin + kChunk, paths.size());
+        Message msg;
+        msg.strVec.assign(paths.begin() + static_cast<std::ptrdiff_t>(begin),
+                          paths.begin() + static_cast<std::ptrdiff_t>(end));
+
+        const auto expect = end - begin;
+        bool ok = Request(
+            msg,
+            [&metas, expect](MessagePtr ret) {
+                if (ret == nullptr) {
+                    return false;
+                }
+                auto it = ret->mapData.find("");
+                if (it == ret->mapData.end() || it->second.size() != expect) {
+                    return false;
+                }
+                metas.insert(metas.end(), it->second.begin(), it->second.end());
+                return true;
+            },
+            FrameType::kMsgType_Ask_FileMeta);
+        if (!ok) {
+            return false;
+        }
+    }
+    return metas.size() == paths.size();
+}
+
+bool RemoteAskDF::AskFileSamplesBatch(const std::vector<std::string>& paths,
+                                      std::vector<std::vector<SampleBlock>>& samples)
+{
+    samples.clear();
+    samples.reserve(paths.size());
+    constexpr std::size_t kChunk = 200;   // 采样块数据量更大，分片小一些
+    for (std::size_t begin = 0; begin < paths.size(); begin += kChunk) {
+        const auto end = std::min(begin + kChunk, paths.size());
+        Message msg;
+        msg.strVec.assign(paths.begin() + static_cast<std::ptrdiff_t>(begin),
+                          paths.begin() + static_cast<std::ptrdiff_t>(end));
+
+        bool ok = Request(
+            msg,
+            [&samples, &paths, begin, end](MessagePtr ret) {
+                if (ret == nullptr) {
+                    return false;
+                }
+                for (auto i = begin; i < end; ++i) {
+                    auto it = ret->sampleMap.find(paths[i]);
+                    samples.push_back(it == ret->sampleMap.end() ? std::vector<SampleBlock>{} : it->second);
+                }
+                return true;
+            },
+            FrameType::kMsgType_Ask_FileSamples);
+        if (!ok) {
+            return false;
+        }
+    }
+    return samples.size() == paths.size();
+}
+
 bool RemoteAskDF::AskDelete(const std::vector<std::string>& fileList, std::vector<std::string>& failedList)
 {
     Message msg;
@@ -151,7 +218,7 @@ bool RemoteAskDF::AskRename(const std::string& oldName, const std::string& newNa
             if (ret == nullptr) {
                 return false;
             }
-            return ret->mark == 1;
+            return ret->msgStateCode == MessageStateCode::kMessageStateCodeSuccess;
         },
         FrameType::kMsgType_Ask_Rename);
 }
@@ -166,7 +233,7 @@ bool RemoteAskDF::AskCreateDir(const std::string& path)
             if (ret == nullptr) {
                 return false;
             }
-            return ret->mark == 1;
+            return ret->msgStateCode == MessageStateCode::kMessageStateCodeSuccess;
         },
         FrameType::kMsgType_Ask_CreateDir);
 }
@@ -182,7 +249,7 @@ bool RemoteAskDF::AskArchive(const std::vector<FileMeta>& fileList, const std::s
             if (ret == nullptr) {
                 return false;
             }
-            return ret->mark == 1;
+            return ret->msgStateCode == MessageStateCode::kMessageStateCodeSuccess;
         },
         FrameType::kMsgType_Ask_Archive);
 }
@@ -198,7 +265,7 @@ bool RemoteAskDF::AskUnArchive(const std::string& archivePath, const std::string
             if (ret == nullptr) {
                 return false;
             }
-            return ret->mark == 1;
+            return ret->msgStateCode == MessageStateCode::kMessageStateCodeSuccess;
         },
         FrameType::kMsgType_Ask_UnArchive);
 }

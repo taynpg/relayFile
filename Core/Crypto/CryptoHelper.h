@@ -22,11 +22,11 @@ public:
     void setKey(const std::string& passphrase);
     void clearKey();
 
-    // 对 frame->data 进行 AES-256-GCM 加密并置 mark |= FRAME_MARK_ENCRYPTED。
+    // 对 frame->data 进行 AES-256-GCM 加密并置 flags |= kFrameFlag_Encrypted。
     // 若未启用加密或没有密钥，返回 true（无操作放行）。
     bool encryptFrame(FramePtr frame);
 
-    // 若 frame->mark 含 FRAME_MARK_ENCRYPTED，则提取 nonce/tag 解密并恢复原始 data。
+    // 若 frame 带 kFrameFlag_Encrypted，则提取 nonce/tag 解密并恢复原始 data。
     // 解密失败（无密钥、tag 校验失败、数据过短）返回 false，调用方应丢弃该帧。
     bool decryptFrame(FramePtr frame);
 

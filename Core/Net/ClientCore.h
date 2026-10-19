@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QMutex>
 #include <QTcpSocket>
 #include <QThread>
 #include <QTimer>
@@ -49,6 +50,7 @@ public:
     bool isConnected() const;
 
 public:
+    // 客户端信息会被多个线程读（GUI、传输 IO 线程、套接字线程），统一加锁拷贝返回
     ClientInfo getOtherClientInfo() const;
     ClientInfo getOwnClientInfo() const;
 
@@ -83,6 +85,9 @@ private:
     QTcpSocket* tcp_{};
     bool isControl_{true};
     std::atomic_uint64_t sessionId_{0};
+    // 连接状态：跨线程查询 isConnected() 时不能去碰 QTcpSocket
+    std::atomic<bool> connected_{false};
+    mutable QMutex infoLock_;
 
 private:
     miniBuffer buffer_;

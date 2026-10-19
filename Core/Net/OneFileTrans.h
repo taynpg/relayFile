@@ -1,11 +1,13 @@
 #pragma once
 
 #include <atomic>
+#include <cstdint>
+#include <map>
+#include <set>
 #include <QFile>
 #include <QMutex>
 #include <QObject>
 #include <QTimer>
-#include <fstream>
 #include <memory>
 
 #include "ClientCore.h"
@@ -13,21 +15,28 @@
 #include "Protocol/Protocol.h"
 
 /*
-### 1. 接收方 ACK 优先（核心修复）— OneFileTrans.cpp handleRecvChuck
-原来先写盘再发 ACK，写盘慢（尤其网络盘）会阻塞主线程，ACK 延迟触发发送方 15 秒超时重传。
-而重传后 ACK 才到会重置重传计数，形成"超时→重传→ACK 到→重置→再超时"的死循环，表现为永久卡住。
+### 传输可靠性约定
 
-改为：先立即回 ACK，再写盘。 ACK 不再被写盘阻塞，发送方窗口能持续推进。
+1. 接收方必须"先落盘、成功后才 ACK"。写盘失败即终止传输并通知对端，
+   绝不让发送方在数据未落盘的情况下推进窗口。
+2. 接收数据写入 `<目标路径>.relaypart`，只有长度校验通过后才 flush + 原子 rename
+   到目标路径；失败/取消时删除 `.relaypart`，不会破坏目标路径上原有的文件。
+   该临时文件同时是后续断点续传的基础（长度 + 文件指纹 = 续传偏移）。
+3. 完成语义是端到端握手：
+   `Request_Complete` -> 接收方校验落盘 -> `Answer_Complete{ok,err}` -> 发送方才置 Finished。
+   Answer 丢失时发送方会重发 `Request_Complete`，接收方对已完成的传输幂等重发 Answer。
 
-### 2. state_ 原子化 — OneFileTrans.h
-`state_` 从普通`TransStatus` 改为`std::atomic<TransStatus>` ，所有读写用`load()/store()` 。`getTransStatus` （workerThread_ 轮询）
-和 OneFileTrans（主线程）之间无锁跨线程访问现在有了内存序保证，避免状态变化不可见导致 RunTaskItem 死循环。
+### 窗口与 ACK（第二批）
 
-### 3. 缩短发送超时 — CoreDefine.hpp
-`defSendTimeout` 从 15000ms 降到 5000ms，加快故障检测和重传节奏，减少单次卡顿持续时间。
+- 窗口按**字节**计（`windowBytes_`），与块大小解耦；块大小由接收方在握手时决定
+  （`Answer_Send` / `Request_Start` 的 Message.blockSize、windowBytes）。
+- ACK 是**累积**的：`index` = 下一个期望的块号（所有更小的块都已落盘）。
+- ACK 的 `data` 是 SACK 位图，bit i 表示块 `index + i` 已收到（允许乱序到达）。
+  发送方据此只重传真正的空洞，而不是"从头重发"。
+- ACK 不需要每块一个：累计收到 `defAckBytes` 或距上次 ACK 超过 `defAckDelayMs` 才回一次。
 
-### 4. Send 返回值检查 — ClientCore.cpp + ClientHelper.cpp
-`ClientCore::Send` 失败（连接断开/写入不完整）时打 warning 日志，不再静默丢帧；DoubleLinker 的控制/文件连接发送 lambda 都检查返回值。
+`state_` 使用 `std::atomic<TransStatus>`：`getTransStatus` 在 GUI 线程轮询，
+写入发生在 IO/接收回调线程，需要内存序保证可见性。
 */
 
 class OneFileTrans : public QObject
@@ -69,15 +78,49 @@ public:
     bool nextSend();
     bool handleAck(FramePtr frame);
     bool handleRecvChuck(FramePtr frame);
-    bool handleInterrupt(FramePtr frame);
+    // discardPart=true：删除 .relaypart（显式取消 / 对端取消）；
+    // discardPart=false：保留残片，留给下次断点续传（超时、网络中断）
+    bool handleInterrupt(FramePtr frame, bool discardPart = true);
     bool handleFinish(FramePtr frame);
+    bool handleCompleteAnswer(FramePtr frame);
     TransMode getTransMode();
     TransStatus getTransStatus() const { return state_.load(std::memory_order_acquire); }
     QString getTransName() const;
 
+    // 握手协商：接收方决定块大小/窗口，发送方在开始发送前套用
+    void applyTransferParams(std::uint32_t blockSize, std::uint32_t windowBytes);
+    std::uint32_t getBlockSize() const { return static_cast<std::uint32_t>(blockSize_); }
+    std::uint32_t getWindowBytes() const { return static_cast<std::uint32_t>(windowBytes_); }
+
+    // 断点续传：接收方已连续落盘的字节数（块对齐） / 源文件快速指纹
+    std::uint64_t getResumeOffset() const { return resumeOffset_; }
+    std::string getFingerprint() const { return fingerprint_; }
+    void applyResumeOffset(std::uint64_t offset);
+
     void onSendOrRecvTimeout();
     void setTargetControlId(const std::string& targetControlId);
     FramePtr CreateFrame(FrameType type);
+
+private:
+    struct BlockState {
+        qint64 lastSendMs{};
+        int retries{};
+    };
+
+    void sendCompleteFrame();
+    void answerComplete(bool ok, const std::string& err);
+    void tryReusePartFile(const Message& msg);
+    bool finalizeRecvFile(QString& err);
+    void discardPartFile();
+    void failAndInterrupt(const std::string& err);
+
+    void sendBlock(std::uint64_t idx);
+    void sendAck();
+    std::vector<char> buildSackBitmap() const;
+    void applySackBitmap(const std::vector<char>& bitmap);
+    std::uint64_t inflightBytes() const;
+    bool writeAll(const char* data, qint64 size);
+    bool shouldSendAck() const;
 
 private:
     TransMode tMode_{};
@@ -88,6 +131,8 @@ private:
     FileMeta meta_;
     Message msg_;
     QString filePath_;
+    // 接收侧实际写入的临时文件：<filePath_>.relaypart，校验通过后才 rename 到 filePath_
+    QString partPath_;
     std::string uuid_;
     std::string targetId_;
     std::string targetControlId_;
@@ -98,16 +143,38 @@ private:
 
     std::uint64_t totalSize_{};
     std::uint64_t transSize_{};
-    // 发送方：ackIndex_=最早未确认块号(窗口左沿)，sentIndex_=下一待发块号(右沿+1)
-    // 接收方：curBlockIndex_=期望收到的块号
-    std::uint64_t ackIndex_{};
-    std::uint64_t sentIndex_{};
-    std::uint64_t curBlockIndex_{};
-    bool eofReached_{};
-    int retransCount_{};
     std::uint64_t blockSize_{defBlockSize};
+    std::uint64_t windowBytes_{defWindowBytes};
+    std::uint64_t totalBlocks_{};
 
-    // 压缩传输：msg.mark==2 表示本传输为一个自描述 tar.xz 归档包，
+    // 发送方：ackIndex_=累计已确认（下一个期望块），nextIndex_=下一待发块
+    // 接收方：curBlockIndex_=累计连续收到的块数（下一个期望块）
+    std::uint64_t ackIndex_{};
+    std::uint64_t nextIndex_{};
+    std::uint64_t curBlockIndex_{};
+    // 已发送但还没被"累计确认"或 SACK 命中的块
+    std::map<std::uint64_t, BlockState> inflight_;
+    // 接收方：乱序到达、已经落盘的块（等空洞补齐后提升为 curBlockIndex_）
+    std::set<std::uint64_t> recvOutOfOrder_;
+
+    // 累积 ACK 节流
+    std::uint64_t bytesSinceAck_{};
+    qint64 lastAckMs_{};
+
+    // 完成握手：发送方已发 Complete 并等待 Answer_Complete；接收方已回过 Answer（幂等重发用）
+    bool completeSent_{};
+    int completeRetry_{};
+    bool completeAnswered_{};
+    bool completeAnswerOk_{};
+    std::string completeAnswerErr_;
+    // .relaypart 已成功 rename 到目标路径
+    bool fileFinalized_{};
+
+    // 断点续传：接收方复用了多长的 .relaypart；发送方要跳过的字节数
+    std::uint64_t resumeOffset_{};
+    std::string fingerprint_;
+
+    // 压缩传输：msg 带 kArchive 标志，本传输为一个自描述 tar.xz 归档包，
     // 接收方收完后就地解包并按内嵌清单写入各目的路径，随后删除临时归档。
     bool isArchive_{};
 };

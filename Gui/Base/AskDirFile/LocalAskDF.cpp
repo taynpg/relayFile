@@ -21,6 +21,34 @@ bool LocalAskDF::AskFileSamples(const std::string& path, std::vector<SampleBlock
     return LocalHandle::AskFileSamples(path, samples);
 }
 
+bool LocalAskDF::AskFileMetaBatch(const std::vector<std::string>& paths, std::vector<FileMeta>& metas)
+{
+    metas.clear();
+    metas.reserve(paths.size());
+    for (const auto& path : paths) {
+        FileMeta meta;
+        LocalHandle::AskFileMeta(path, meta);
+        if (meta.exist == 0 && meta.fullPath.empty()) {
+            meta.fullPath = path;
+        }
+        metas.push_back(meta);
+    }
+    return true;
+}
+
+bool LocalAskDF::AskFileSamplesBatch(const std::vector<std::string>& paths,
+                                     std::vector<std::vector<SampleBlock>>& samples)
+{
+    samples.clear();
+    samples.reserve(paths.size());
+    for (const auto& path : paths) {
+        std::vector<SampleBlock> one;
+        LocalHandle::AskFileSamples(path, one);
+        samples.push_back(std::move(one));
+    }
+    return true;
+}
+
 bool LocalAskDF::AskDelete(const std::vector<std::string>& fileList, std::vector<std::string>& failedList)
 {
     return LocalHandle::AskDelete(fileList, failedList);

@@ -1,40 +1,8 @@
 #include "Message.h"
 
-Message::Message(const Message& o)
-{
-    comStr = o.comStr;
-    errMsg = o.errMsg;
-    from = o.from;
-    to = o.to;
-    msgStateCode = o.msgStateCode;
-    ff = o.ff;
-    ft = o.ft;
-    mark = o.mark;
-    clientList = o.clientList;
-    mapData = o.mapData;
-    samples = o.samples;
-}
-
-Message& Message::operator=(const Message& o)
-{
-    if (this == &o) {
-        return *this;
-    }
-    comStr = o.comStr;
-    errMsg = o.errMsg;
-    transId = o.transId;
-    uuid = o.uuid;
-    from = o.from;
-    to = o.to;
-    msgStateCode = o.msgStateCode;
-    ff = o.ff;
-    ft = o.ft;
-    mark = o.mark;
-    clientList = o.clientList;
-    mapData = o.mapData;
-    samples = o.samples;
-    return *this;
-}
+// 拷贝/移动语义统一使用编译器生成的版本（见 Message.h）。
+// 早期手写实现漏掉了 transId / uuid，导致依赖拷贝的地方拿到空 uuid，
+// 而 pushTask 里还要手动补字段来绕过——不要改回手写实现。
 
 std::shared_ptr<Message> Message::Create()
 {

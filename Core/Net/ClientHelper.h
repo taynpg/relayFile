@@ -2,6 +2,9 @@
 
 #include <QThread>
 #include <QTimer>
+#include <atomic>
+#include <condition_variable>
+#include <mutex>
 
 #include "ControlSession.h"
 #include "FileSession.h"
@@ -55,6 +58,7 @@ public:
 
 public:
     bool RunTask(const std::vector<std::shared_ptr<TransItem>>& tasks);
+    // 阻塞直到任务结束（条件变量 + 总超时），不再 msleep 轮询 + processEvents
     bool RunTaskItem(const std::shared_ptr<TransItem>& item);
     void clearCurrentTaskItem();
     template <typename HandleResp> bool bRequest(FramePtr frame, HandleResp handleResp);
@@ -63,6 +67,8 @@ public:
 public:
     void Quit();
     bool waitFileConnect();
+    // 心跳跑在控制连接自己的线程里：GUI 卡住也不能让服务器把连接踢掉
+    void startHeartbeat();
     void SetControlSession(std::shared_ptr<ControlSession> session);
     void SetFileSession(std::shared_ptr<FileSession> session);
 
@@ -77,10 +83,12 @@ public slots:
 public slots:
     void onSendControl(FramePtr frame);
     void onSendFile(FramePtr frame);
+    // 注意：这两个槽可能在套接字线程里被直接调用，只能做路由，不能碰 GUI 线程的对象
     void onDeliverControl(FramePtr frame);
     void onDeliverFile(FramePtr frame);
-    void onTellHeart();
     void onCancelWaitMsg();
+    void onNeedFileConnect();
+    void onTaskStateChanged(const QString& uuid, bool isSend, int status);
 
 private:
     std::shared_ptr<ControlSession> controlSession_{};
@@ -92,11 +100,22 @@ private:
 
     // curTask
 private:
-    bool isRunTaskItem_{};
+    // RunTaskItem 用条件变量等结果：状态变化由 FileSession 的 IO 线程直接通知
+    struct TaskWait {
+        bool registered{false};
+        bool done{false};
+        OneFileTrans::TransStatus status{OneFileTrans::TransStatus::Idle};
+    };
+    std::mutex taskMutex_;
+    std::condition_variable taskCv_;
+    TaskWait* taskWait_{};
+    std::string taskWaitUUID_{};
+    bool taskWaitIsSend_{};
+
+    std::atomic<bool> isRunTaskItem_{false};
     bool curTaskIsSend_{};
     std::string curTaskUUID_{};
-    QTimer* heartTimer_{};
-    OneFileTrans::TransStatus trState_{};
+
 };
 
 class CmdExecutor : public QObject

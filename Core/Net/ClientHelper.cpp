@@ -1,8 +1,13 @@
 #include "ClientHelper.h"
 
-#include <QCoreApplication>
-#include <QTimer>
+#include "FileSessionIO.h"
 
+#include <QCoreApplication>
+#include <QMetaObject>
+#include <QTimer>
+#include <chrono>
+
+#include "CoreDefine.hpp"
 #include "File/FileDir.h"
 #include "Protocol/Serialize.hpp"
 #include "Utils/Common.h"
@@ -10,9 +15,6 @@
 
 DoubleLinker::DoubleLinker(QObject* parent) : QObject(parent)
 {
-    heartTimer_ = new QTimer(this);
-    connect(heartTimer_, &QTimer::timeout, this, &DoubleLinker::onTellHeart);
-    heartTimer_->start(1500);
 }
 
 DoubleLinker::~DoubleLinker()
@@ -44,7 +46,9 @@ void DoubleLinker::SetControlSession(std::shared_ptr<ControlSession> session)
 {
     controlSession_ = session;
     auto* cliCore = controlSession_->getClientCore();
-    connect(cliCore, &ClientCore::signalDeliverFrame, this, &DoubleLinker::onDeliverControl);
+    // DirectConnection：在套接字线程里就完成路由，不经过 GUI 线程。
+    // 否则 GUI 一旦阻塞（例如 RunTaskItem 正在等结果），对端的应答就排队排到死。
+    connect(cliCore, &ClientCore::signalDeliverFrame, this, &DoubleLinker::onDeliverControl, Qt::DirectConnection);
     connect(this, &DoubleLinker::signalSendControl, cliCore, [this, cliCore](FramePtr frame) {
         if (!cliCore->Send(frame)) {
             qWarning() << "[TRACE-SID] 控制连接发送失败 sid=" << frame->sessionId
@@ -55,20 +59,60 @@ void DoubleLinker::SetControlSession(std::shared_ptr<ControlSession> session)
         }
     });
     connect(controlSession_.get(), &ControlSession::signalRequestSend, this, &DoubleLinker::onSendControl);
+    startHeartbeat();
+}
+
+void DoubleLinker::startHeartbeat()
+{
+    // 关键：定时器必须活在控制连接的套接字线程里。
+    // 放在 GUI 线程时，只要界面卡住超过服务器的心跳超时（15s），连接就会被踢掉，
+    // 后续 Request_Complete / Cancel 之类走控制连接的帧全部发不出去。
+    auto* cliCore = controlSession_->getClientCore();
+    auto fileSession = fileSession_;
+    QMetaObject::invokeMethod(
+        cliCore,
+        [cliCore, fileSession]() {
+            auto* timer = new QTimer(cliCore);
+            timer->setInterval(1500);
+            QObject::connect(timer, &QTimer::timeout, cliCore, [cliCore, fileSession]() {
+                if (!cliCore->isConnected()) {
+                    return;
+                }
+                Message heartMsg;
+                if (fileSession) {
+                    heartMsg.comStr = fileSession->getClientCore()->getOwnClientInfo().clientId;
+                }
+                auto f = OneFrame::Create();
+                f->sessionId = -1;
+                f->data = serializeStruct(heartMsg);
+                f->type = FrameType::kMsgType_Ask_Heart;
+                cliCore->Send(f);
+            });
+            timer->start();
+        },
+        Qt::QueuedConnection);
 }
 
 void DoubleLinker::SetFileSession(std::shared_ptr<FileSession> session)
 {
     fileSession_ = session;
     auto* cliCore = fileSession_->getClientCore();
-    connect(cliCore, &ClientCore::signalDeliverFrame, this, &DoubleLinker::onDeliverFile);
+    connect(cliCore, &ClientCore::signalDeliverFrame, this, &DoubleLinker::onDeliverFile, Qt::DirectConnection);
     connect(this, &DoubleLinker::signalSendFile, cliCore, [this, cliCore](FramePtr frame) {
         if (!cliCore->Send(frame)) {
             qWarning() << "文件连接发送失败, type=" << static_cast<int>(frame->type)
                        << "index=" << frame->index;
         }
     });
-    connect(fileSession_.get(), &FileSession::signalRequestSend, this, &DoubleLinker::onSendFile);
+    // 关键：直接连传输引擎（IO 线程），不经过 FileSession 这个 GUI 线程门面。
+    // 门面信号是排队投递到 GUI 线程的，一旦 GUI 在等任务结果（RunTaskItem 阻塞），
+    // 数据帧发不出去、状态变更也到不了等待方，双方就互相等死。
+    if (auto* io = fileSession_->io()) {
+        connect(io, &FileSessionIO::signalRequestSend, this, &DoubleLinker::onSendFile, Qt::DirectConnection);
+        connect(io, &FileSessionIO::signalTaskStateChanged, this, &DoubleLinker::onTaskStateChanged,
+                Qt::DirectConnection);
+    }
+    connect(fileSession_.get(), &FileSession::signalNeedFileConnect, this, &DoubleLinker::onNeedFileConnect);
     connect(this, &DoubleLinker::signalAskFileID, fileSession_.get(), &FileSession::AskOwnID);
     connect(this, &DoubleLinker::signalFileDoConnect, cliCore, &ClientCore::connectToServer);
     connect(cliCore, &ClientCore::signalConnected, this, &DoubleLinker::onDoFileConnectSuccess);
@@ -79,21 +123,6 @@ void DoubleLinker::SetFileSession(std::shared_ptr<FileSession> session)
     connect(fileSession_.get(), &FileSession::signalCurFile, this,
             [this](const QString& from, const QString& to) { emit signalCurFileItem(from, to); });
     connect(this, &DoubleLinker::signalCancelWaitMsg, controlSession_.get(), &ControlSession::onCancelWaitMsg);
-}
-
-void DoubleLinker::onTellHeart()
-{
-    if (!controlSession_->getClientCore()->isConnected()) {
-        return;
-    }
-    Message heartMsg;
-    heartMsg.comStr = fileSession_->getClientCore()->getOwnClientInfo().clientId;
-    auto f = OneFrame::Create();
-    f->sessionId = -1;
-    f->data = serializeStruct(heartMsg);
-    f->type = FrameType::kMsgType_Ask_Heart;
-
-    emit signalSendControl(f);
 }
 
 bool DoubleLinker::RunTask(const std::vector<std::shared_ptr<TransItem>>& tasks)
@@ -108,40 +137,83 @@ bool DoubleLinker::RunTask(const std::vector<std::shared_ptr<TransItem>>& tasks)
 
 bool DoubleLinker::RunTaskItem(const std::shared_ptr<TransItem>& item)
 {
-    isRunTaskItem_ = true;
     Message reqMsg;
     reqMsg.uuid = Common::GetUUID().toStdString();
     reqMsg.ff = item->from;
     reqMsg.ft = item->to;
     reqMsg.from.clientId = controlSession_->getOwnInfo().clientId;
     reqMsg.to.clientId = controlSession_->getOtherInfo().clientId;
-    // mark=2：归档传输，接收方收完即解包。
-    reqMsg.mark = item->isArchive ? 2 : 1;
+    // 归档传输：接收方收完即解包。
+    reqMsg.setFlag(MessageFlag::kArchive, item->isArchive);
+    if (item->isSend) {
+        // 断点续传指纹：接收方拿它校验本地 .relaypart 是不是同一个源文件
+        reqMsg.resumeFingerprint =
+            FileDir::QuickFingerprint(QString::fromStdString(item->from.fullPath)).toStdString();
+    }
 
     auto requestFrame = OneFrame::Create();
     requestFrame->data = serializeStruct(reqMsg);
     requestFrame->type = item->isSend ? FrameType::kFileType_Request_Send : FrameType::kFileType_Request_Down;
 
-    bool isDone = false;
-    trState_ = OneFileTrans::TransStatus::Idle;
+    TaskWait wait;
+    {
+        std::lock_guard<std::mutex> lock(taskMutex_);
+        taskWait_ = &wait;
+        taskWaitUUID_ = reqMsg.uuid;
+        taskWaitIsSend_ = item->isSend;
+    }
+    isRunTaskItem_ = true;
     curTaskIsSend_ = item->isSend;
     curTaskUUID_ = reqMsg.uuid;
     onSendControl(requestFrame);
 
-    while (isRunTaskItem_) {
-        QThread::msleep(1);
-        QCoreApplication::processEvents();
-        if (!fileSession_->getTransStatus(trState_, curTaskUUID_, curTaskIsSend_)) {
-            continue;
+    bool isDone = false;
+    {
+        std::unique_lock<std::mutex> lock(taskMutex_);
+        const auto start = std::chrono::steady_clock::now();
+        while (!wait.done && isRunTaskItem_) {
+            taskCv_.wait_for(lock, std::chrono::milliseconds(200));
+            const auto elapsed =
+                std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
+            if (!wait.registered) {
+                // 会话一直没建起来（对端没应答 / 握手失败）
+                if (elapsed > defWaitCmdTimeout) {
+                    qWarning() << "任务创建超时，对端未应答, uuid:" << QString::fromStdString(reqMsg.uuid);
+                    break;
+                }
+            } else if (elapsed > defTaskTotalTimeout) {
+                // 传输中途卡死由 OneFileTrans 自己的超时负责，这里只兜底
+                qWarning() << "任务总超时, uuid:" << QString::fromStdString(reqMsg.uuid);
+                break;
+            }
         }
-        if (trState_ == OneFileTrans::TransStatus::Finished || trState_ == OneFileTrans::TransStatus::Interrupted) {
-            isRunTaskItem_ = false;
-        }
+        isDone = wait.done && wait.status == OneFileTrans::TransStatus::Finished;
+        taskWait_ = nullptr;
     }
-    if (trState_ == OneFileTrans::TransStatus::Finished) {
-        isDone = true;
-    }
+    isRunTaskItem_ = false;
     return isDone;
+}
+
+void DoubleLinker::onTaskStateChanged(const QString& uuid, bool isSend, int status)
+{
+    // 可能在 FileSession 的 IO 线程里被调用：只碰 mutex 保护的成员
+    std::lock_guard<std::mutex> lock(taskMutex_);
+    if (!taskWait_) {
+        return;
+    }
+    if (uuid.toStdString() != taskWaitUUID_ || isSend != taskWaitIsSend_) {
+        return;
+    }
+    const auto st = static_cast<OneFileTrans::TransStatus>(status);
+    if (st == OneFileTrans::TransStatus::Idle) {
+        return;
+    }
+    taskWait_->registered = true;
+    if (st == OneFileTrans::TransStatus::Finished || st == OneFileTrans::TransStatus::Interrupted) {
+        taskWait_->status = st;
+        taskWait_->done = true;
+    }
+    taskCv_.notify_all();
 }
 
 std::shared_ptr<ControlSession> DoubleLinker::GetControlSession() const
@@ -157,7 +229,6 @@ std::shared_ptr<FileSession> DoubleLinker::GetFileSession() const
 void DoubleLinker::Quit()
 {
     controlSession_->Quit();
-    heartTimer_->stop();
     fileSession_->Quit();
 }
 
@@ -195,10 +266,16 @@ template <typename HandleResp> void DoubleLinker::vRequest(FramePtr frame, Handl
 
 void DoubleLinker::onDeliverControl(FramePtr frame)
 {
+    // 这里是套接字线程（DirectConnection）。只做投递：
+    //   控制帧 → ControlSession（GUI 线程处理，涉及本地文件系统操作）
+    //   文件帧 → FileSession 的传输 IO 线程
     if (GIsControlMessageFrame(frame)) {
-        controlSession_->handleFrame(frame);
-    } else {
-        onDeliverFile(frame);
+        auto* cs = controlSession_.get();
+        if (cs) {
+            QMetaObject::invokeMethod(cs, [cs, frame]() { cs->handleFrame(frame); }, Qt::QueuedConnection);
+        }
+    } else if (fileSession_) {
+        fileSession_->handleFrame(frame);
     }
 }
 
@@ -209,12 +286,20 @@ void DoubleLinker::onCancelWaitMsg()
 
 void DoubleLinker::onDeliverFile(FramePtr frame)
 {
-    // 暂时先简单等待吧
-    if (FrameType::kFileType_Answer_ID != frame->type && !waitFileConnect()) {
-        // 告诉对方取消。
+    // 套接字线程：连接是否就绪由 FileSession 的 IO 线程自己确认，
+    // 不能在这里阻塞等待（会卡住整条套接字的收包）。
+    if (fileSession_) {
+        fileSession_->handleFrame(frame);
+    }
+}
+
+void DoubleLinker::onNeedFileConnect()
+{
+    if (!controlSession_) {
         return;
     }
-    fileSession_->handleFrame(frame);
+    auto* cli = controlSession_->getClientCore();
+    emit signalFileDoConnect(cli->getServerIp(), cli->getServerPort());
 }
 
 bool DoubleLinker::waitFileConnect()
@@ -230,29 +315,27 @@ bool DoubleLinker::waitFileConnect()
         }
     }
 
-    bool Run = true;
-
-    auto quitHandle = [this, &Run]() { Run = false; };
-    auto stdTimer = std::make_shared<TimerStd>(quitHandle);
     auto ip = controlSession_->getClientCore()->getServerIp();
     auto port = controlSession_->getClientCore()->getServerPort();
 
-    emit signalFileDoConnect(ip, port);
+    // 让传输 IO 线程自己也知道端点：它可能需要在收帧时补一次连接
+    fileSession_->setServerEndpoint(ip, port);
 
     {
         QMutexLocker locker(&fcStateLock_);
         fcState_ = FileControlState::FCS_Connecting;
     }
+    emit signalFileDoConnect(ip, port);
 
-    stdTimer->start_once(std::chrono::seconds(5));
-    while (Run) {
-        QThread::msleep(1);
-        QCoreApplication::processEvents();
+    // 不再 processEvents 忙等：连接、AskOwnID、收 ID 全部由各自线程的事件循环完成，
+    // 这里只等待一个跨线程可见的状态（isConnected 看 atomic、clientId 加锁拷贝）。
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (std::chrono::steady_clock::now() < deadline) {
         if (cli->isConnected() && !cli->getOwnClientInfo().clientId.empty()) {
             return true;
         }
+        QThread::msleep(10);
     }
-    stdTimer->stop();
     {
         QMutexLocker locker(&fcStateLock_);
         auto connected = fcState_ == FileControlState::FCS_Connected;
@@ -264,7 +347,11 @@ bool DoubleLinker::waitFileConnect()
 void DoubleLinker::clearCurrentTaskItem()
 {
     fileSession_->clearTask(curTaskUUID_, curTaskIsSend_);
-    isRunTaskItem_ = false;
+    {
+        std::lock_guard<std::mutex> lock(taskMutex_);
+        isRunTaskItem_ = false;
+        taskCv_.notify_all();
+    }
 }
 
 void DoubleLinker::onDoFileConnectSuccess()

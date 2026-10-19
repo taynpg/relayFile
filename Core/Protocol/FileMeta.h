@@ -14,9 +14,10 @@ enum class FileType {
 
 struct FileMeta {
     FileMeta() = default;
-    FileMeta(const FileMeta& o);
-    FileMeta& operator=(const FileMeta& o);
-    FileMeta(FileMeta&& s) noexcept;
+    FileMeta(const FileMeta&) = default;
+    FileMeta& operator=(const FileMeta&) = default;
+    FileMeta(FileMeta&&) noexcept = default;
+    FileMeta& operator=(FileMeta&&) noexcept = default;
     std::string dir;
     std::string name;
     std::string fullPath;

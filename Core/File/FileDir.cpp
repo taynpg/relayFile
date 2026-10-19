@@ -1,7 +1,9 @@
 #include "FileDir.h"
 
+#include <QCryptographicHash>
 #include <QDateTime>
 #include <QDir>
+#include <QFile>
 #include <QQueue>
 #include <Utils/miniUtil.h>
 
@@ -300,4 +302,31 @@ bool FileDir::Rename(const QString& oldName, const QString& newName)
 {
     QFile file(oldName);
     return file.rename(newName);
+}
+
+QString FileDir::QuickFingerprint(const QString& path, qint64 sizeOverride)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        return QString();
+    }
+    const qint64 size = sizeOverride >= 0 ? sizeOverride : file.size();
+    QByteArray head = file.read(qMin<qint64>(size, 64 * 1024));
+    file.close();
+
+    QCryptographicHash hash(QCryptographicHash::Sha256);
+    hash.addData(head);
+    hash.addData(QByteArrayView(reinterpret_cast<const char*>(&size), sizeof(size)));
+    return QString::fromLatin1(hash.result().toHex());
+}
+
+bool FileDir::ResizeFile(const QString& path, qint64 newSize)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadWrite)) {
+        return false;
+    }
+    const bool ok = file.resize(newSize);
+    file.close();
+    return ok;
 }

@@ -5,6 +5,7 @@
 #include <QFile>
 #include <QHeaderView>
 #include <QUuid>
+#include <algorithm>
 #include <future>
 #include <Utils/Common.h>
 
@@ -40,7 +41,11 @@ void RelayTask::Quit()
         archiveWaitState_->cancelled = true;
         archiveWaitState_->cond.wakeAll();
     }
-    doubleLinker_->GetControlSession()->onCancelWaitMsg();
+    // 先让正在等待传输结果的 worker 退出等待，否则 stop() 会一直 join 到任务超时
+    if (doubleLinker_) {
+        doubleLinker_->clearCurrentTaskItem();
+        doubleLinker_->GetControlSession()->onCancelWaitMsg();
+    }
     workerThread_->stop();
     workerThread_->quit();
 }
@@ -526,7 +531,7 @@ void RelayTask::onBaseCheck()
         }
         emit signalLog("传输TCP连接检查通过。");
         fileList_.clear();
-        // 3.检查本地根目录是否存在。
+        // 3.检查源端文件是否存在。
         std::shared_ptr<BaseAskDF> askDfOwn = data_->isUpload ? askLocalDf_ : askRemoteDf_;
         std::shared_ptr<BaseAskDF> askDfOther = data_->isUpload ? askRemoteDf_ : askLocalDf_;
         auto name = data_->isUpload ? GUI_DIRECTION_LOCAL : GUI_DIRECTION_REMOTE;
@@ -558,22 +563,41 @@ void RelayTask::onBaseCheck()
             meta.size = item.size;
             fileList_.push_back(meta);
         }
-        FileMeta tmpMeta;
-        for (auto& item : fileList_) {
-            if (!askDfOwn->AskFileMeta(item.fullPath, tmpMeta)) {
-                emit signalLog(QString("%1文件文件存在性检查：%2 失败。").arg(name).arg(QString::fromStdString(item.fullPath)));
-                emit signalCheckUnComplete();
-                return;
-            }
-            if (tmpMeta.exist == 0) {
-                emit signalLog(QString("%1文件：%2 不存在。").arg(name).arg(QString::fromStdString(item.fullPath)));
-                emit signalCheckUnComplete();
-                return;
+
+        // 4. 批量取源端元信息：整批一次 RTT（原来是一个文件一次往返），
+        //    单条查不到只跳过该条，不再让整个任务因为一个文件失败而退出。
+        std::vector<std::string> srcPaths;
+        srcPaths.reserve(fileList_.size());
+        for (const auto& item : fileList_) {
+            srcPaths.push_back(item.fullPath);
+        }
+        std::vector<FileMeta> srcMetas;
+        if (!askDfOwn->AskFileMetaBatch(srcPaths, srcMetas) || srcMetas.size() != srcPaths.size()) {
+            emit signalLog(QString("批量获取%1文件信息失败。").arg(name));
+            emit signalCheckUnComplete();
+            return;
+        }
+
+        std::vector<FileMeta> existList;
+        existList.reserve(fileList_.size());
+        for (size_t i = 0; i < fileList_.size(); ++i) {
+            const auto& meta = srcMetas[i];
+            auto& item = fileList_[i];
+            if (meta.exist == 0) {
+                emit signalLog(QString("%1文件：%2 不存在，已跳过。").arg(name).arg(QString::fromStdString(item.fullPath)));
+                continue;
             }
             // 发送方的信息
-            item.size = tmpMeta.size;
-            item.permission = tmpMeta.permission;
-            item.mark = tmpMeta.mark;
+            item.size = meta.size;
+            item.permission = meta.permission;
+            item.mark = meta.mark;
+            existList.push_back(item);
+        }
+        fileList_.swap(existList);
+        if (fileList_.empty()) {
+            emit signalLog("没有可传输的文件。");
+            emit signalCheckUnComplete();
+            return;
         }
         emit signalUpdateTable();
         emit signalLog("源端文件存在性检查完成。");
@@ -594,44 +618,78 @@ void RelayTask::onBaseCheck()
         }
 
         auto nameConfirm = data_->isUpload ? GUI_DIRECTION_REMOTE : GUI_DIRECTION_LOCAL;
-        for (auto& item : transItems_) {
-            if (!askDfOther->AskFileMeta(item->to.fullPath, tmpMeta)) {
-                emit signalLog(
-                    QString("%1文件文件存在性检查：%2 失败。").arg(nameConfirm).arg(QString::fromStdString(item->to.fullPath)));
-                emit signalCheckUnComplete();
-                return;
-            }
-            if (tmpMeta.exist != 0) {
-                emit signalLog(
-                    QString("%1文件：%2 已存在相同文件。").arg(nameConfirm).arg(QString::fromStdString(item->to.fullPath)));
+        std::vector<std::string> dstPaths;
+        dstPaths.reserve(transItems_.size());
+        for (const auto& item : transItems_) {
+            dstPaths.push_back(item->to.fullPath);
+        }
+        std::vector<FileMeta> dstMetas;
+        if (!askDfOther->AskFileMetaBatch(dstPaths, dstMetas) || dstMetas.size() != dstPaths.size()) {
+            emit signalLog(QString("批量获取%1文件信息失败。").arg(nameConfirm));
+            emit signalCheckUnComplete();
+            return;
+        }
 
-                // 内容粗判：先比大小，大小一致再各抽取 10 个采样块比较
-                bool contentSame = false;
-                if (item->from.size == tmpMeta.size) {
-                    std::vector<SampleBlock> ownSamples;
-                    std::vector<SampleBlock> otherSamples;
-                    if (askDfOwn->AskFileSamples(item->from.fullPath, ownSamples)
-                        && askDfOther->AskFileSamples(item->to.fullPath, otherSamples)
-                        && ownSamples.size() == otherSamples.size()) {
-                        contentSame = true;
-                        for (size_t i = 0; i < ownSamples.size(); ++i) {
-                            if (ownSamples[i].offset != otherSamples[i].offset
-                                || ownSamples[i].data != otherSamples[i].data) {
-                                contentSame = false;
-                                break;
-                            }
+        // 大小一致的目标文件需要做内容粗判：两边各批量采样一次，而不是每个文件两次往返
+        std::vector<size_t> sameSizeIds;
+        for (size_t i = 0; i < transItems_.size(); ++i) {
+            if (dstMetas[i].exist != 0) {
+                emit signalLog(
+                    QString("%1文件：%2 已存在相同文件。").arg(nameConfirm).arg(QString::fromStdString(transItems_[i]->to.fullPath)));
+                if (transItems_[i]->from.size == dstMetas[i].size) {
+                    sameSizeIds.push_back(i);
+                }
+            }
+        }
+
+        std::vector<std::vector<SampleBlock>> ownSamples;
+        std::vector<std::vector<SampleBlock>> otherSamples;
+        bool samplesOk = true;
+        if (!sameSizeIds.empty()) {
+            std::vector<std::string> ownPaths;
+            std::vector<std::string> otherPaths;
+            ownPaths.reserve(sameSizeIds.size());
+            otherPaths.reserve(sameSizeIds.size());
+            for (auto id : sameSizeIds) {
+                ownPaths.push_back(transItems_[id]->from.fullPath);
+                otherPaths.push_back(transItems_[id]->to.fullPath);
+            }
+            samplesOk = askDfOwn->AskFileSamplesBatch(ownPaths, ownSamples)
+                        && askDfOther->AskFileSamplesBatch(otherPaths, otherSamples);
+            if (!samplesOk) {
+                emit signalLog("采样比较失败，按内容不一致处理。");
+            }
+        }
+
+        for (size_t i = 0; i < transItems_.size(); ++i) {
+            if (dstMetas[i].exist == 0) {
+                continue;
+            }
+            bool contentSame = false;
+            auto pos = std::find(sameSizeIds.begin(), sameSizeIds.end(), i);
+            if (samplesOk && pos != sameSizeIds.end()) {
+                const auto idx = static_cast<size_t>(std::distance(sameSizeIds.begin(), pos));
+                if (idx < ownSamples.size() && idx < otherSamples.size() && !ownSamples[idx].empty()
+                    && ownSamples[idx].size() == otherSamples[idx].size()) {
+                    contentSame = true;
+                    for (size_t k = 0; k < ownSamples[idx].size(); ++k) {
+                        if (ownSamples[idx][k].offset != otherSamples[idx][k].offset
+                            || ownSamples[idx][k].data != otherSamples[idx][k].data) {
+                            contentSame = false;
+                            break;
                         }
                     }
                 }
-                emit signalLog(QString("文件：%1 内容粗判%2。")
-                                   .arg(QString::fromStdString(item->to.fullPath))
-                                   .arg(contentSame ? "一致" : "不一致"));
-                needConfirmFiles_.push_back({item->to, contentSame});
             }
+            emit signalLog(QString("文件：%1 内容粗判%2。")
+                               .arg(QString::fromStdString(transItems_[i]->to.fullPath))
+                               .arg(contentSame ? "一致" : "不一致"));
+            needConfirmFiles_.push_back({transItems_[i]->to, contentSame});
         }
         emit signalNeedConfirmFiles();
     });
 }
+
 
 void RelayTask::onConfirmFiles()
 {

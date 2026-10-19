@@ -19,6 +19,9 @@ public:
     bool AskHome(std::string& home) override;
     bool AskFileMeta(const std::string& path, FileMeta& meta) override;
     bool AskFileSamples(const std::string& path, std::vector<SampleBlock>& samples) override;
+    bool AskFileMetaBatch(const std::vector<std::string>& paths, std::vector<FileMeta>& metas) override;
+    bool AskFileSamplesBatch(const std::vector<std::string>& paths,
+                             std::vector<std::vector<SampleBlock>>& samples) override;
     bool AskDelete(const std::vector<std::string>& fileList, std::vector<std::string>& failedList) override;
     bool AskSha256(const std::string& path, std::string& sha256) override;
     bool AskRename(const std::string& oldName, const std::string& newName) override;

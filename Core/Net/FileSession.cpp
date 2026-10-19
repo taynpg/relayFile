@@ -1,247 +1,139 @@
 #include "FileSession.h"
 
-#include "CoreDefine.hpp"
-#include "File/FileDir.h"
-#include "Protocol/Serialize.hpp"
+#include <QDebug>
+#include <QMetaObject>
 
-FileSession::FileSession(QObject* parent)
+#include "FileSessionIO.h"
+
+FileSession::FileSession(QObject* parent) : QObject(parent)
 {
     clientCore_ = new ClientCore();
     clientCore_->setIsControl(false);
     clientWorker_ = new ClientWorker(clientCore_, nullptr);
     clientCore_->moveToThread(clientWorker_);
     clientWorker_->start();
+
+    // 传输引擎独占一个 IO 线程：写盘、ACK、重传都不经过 GUI 线程
+    ioThread_ = new QThread();
+    ioThread_->setObjectName("rf-transfer-io");
+    io_ = new FileSessionIO(clientCore_);
+    io_->moveToThread(ioThread_);
+    // 线程结束时在它自己的线程里销毁引擎（含 OneFileTrans / QFile / QTimer）
+    connect(ioThread_, &QThread::finished, io_, &QObject::deleteLater);
+
+    connect(io_, &FileSessionIO::signalRequestSend, this, &FileSession::signalRequestSend);
+    connect(io_, &FileSessionIO::signalCurFileProgress, this, &FileSession::signalCurFileProgress);
+    connect(io_, &FileSessionIO::signalCurFile, this, &FileSession::signalCurFile);
+    connect(io_, &FileSessionIO::signalTaskStateChanged, this, &FileSession::signalTaskStateChanged);
+    connect(io_, &FileSessionIO::signalNeedFileConnect, this, &FileSession::signalNeedFileConnect);
+
+    ioThread_->start();
 }
 
 FileSession::~FileSession()
 {
-    delete clientCore_;
-    delete clientWorker_;
+    Quit();
 }
 
 void FileSession::Quit()
 {
-    clientWorker_->quit();
-    clientWorker_->wait();
-}
-
-std::string FileSession::getMapKeyUUIDByMode(const std::string& uuid, OneFileTrans::TransMode mode)
-{
-    if (mode == OneFileTrans::TransMode::Send) {
-        return uuid + "S";
-    } else {
-        return uuid + "R";
-    }
-}
-
-std::string FileSession::getMapKeyUUIDByMark(const std::string& uuid, int16_t mark)
-{
-    if (0 != mark) {
-        return uuid + "S";
-    } else {
-        return uuid + "R";
-    }
-}
-
-void FileSession::pushTask(const std::shared_ptr<OneFileTrans>& fileTrans, const Message& msg, const std::string& errMsg,
-                           FrameType type, bool ret, bool needConnect)
-{
-    Message resp(msg);
-    resp.uuid = msg.uuid;
-    std::swap(resp.from, resp.to);
-
-    if (needConnect && msg.mark != 0) {
-        connect(fileTrans.get(), &OneFileTrans::signalProcess, this, &FileSession::signalCurFileProgress);
-        signalCurFile(QString::fromStdString(msg.ff.fullPath), QString::fromStdString(msg.ft.fullPath));
-        resp.mark = 0;
+    if (quit_.exchange(true)) {
+        return;
     }
 
-    auto mapKeyUUID = getMapKeyUUIDByMode(msg.uuid, fileTrans->getTransMode());
-    if (ret) {
-        {
-            QMutexLocker locker(&transferMapLock_);
-            transferMap_[mapKeyUUID] = fileTrans;
-        }
-        resp.transId = clientCore_->getOwnClientInfo().clientId;
-        resp.msgStateCode = MessageStateCode::kMessageStateCodeSuccess;
-    } else {
-        resp.msgStateCode = MessageStateCode::kMessageStateCodeFailed;
-        resp.errMsg = errMsg;
-    }
-    auto rf = OneFrame::Create();
-    rf->to = resp.to.clientId;
-    rf->data = serializeStruct(resp);
-    rf->type = type;
-    rf->mark = fileTrans->getTransMode() == OneFileTrans::TransMode::Send ? 0 : 1;
-    rf->fuuid = msg.uuid;
-
-    if (ret) {
-        connect(fileTrans.get(), &OneFileTrans::signalRequestSend, this, [this](FramePtr frame) { signalRequestSend(frame); });
-    }
-    emit signalRequestSend(rf);
-}
-
-void FileSession::clearTask(const std::string& uuid, bool isSend)
-{
-    bool isFind = false;
-    auto mapKeyUUID = getMapKeyUUIDByMode(uuid, isSend ? OneFileTrans::TransMode::Send : OneFileTrans::TransMode::Receive);
-    {
-        QMutexLocker locker(&transferMapLock_);
-        if (transferMap_.find(mapKeyUUID) != transferMap_.end()) {
-            isFind = true;
-            auto& tf = transferMap_[mapKeyUUID];
-            if (tf) {
-                tf->stopTrans();
-            }
-            transferMap_.remove(mapKeyUUID);
+    // 1) 先在 IO 线程内停掉所有传输、清空映射（QTimer/QFile 都在那个线程里）
+    if (io_ && ioThread_ && ioThread_->isRunning()) {
+        if (QThread::currentThread() != ioThread_) {
+            QMetaObject::invokeMethod(io_, [this]() { io_->shutdown(); }, Qt::BlockingQueuedConnection);
+            ioThread_->quit();
+            ioThread_->wait();
+        } else {
+            io_->shutdown();
         }
     }
-    if (isFind) {
-        qWarning() << "清除任务：" << QString::fromStdString(uuid);
+    io_ = nullptr;
+    if (ioThread_) {
+        delete ioThread_;
+        ioThread_ = nullptr;
+    }
+
+    // 2) 再处理套接字线程
+    if (!clientCore_) {
+        delete clientWorker_;
+        clientWorker_ = nullptr;
+        return;
+    }
+    // ClientCore 及其 QTcpSocket 都是在 worker 线程里创建并使用的，
+    // 必须回到 worker 线程内部销毁：直接在主线程 delete 会触发
+    // "QSocketNotifier: Socket notifiers cannot be enabled or disabled from another thread"。
+    if (clientWorker_->isRunning() && QThread::currentThread() != clientWorker_) {
+        QMetaObject::invokeMethod(
+            clientCore_,
+            [this]() {
+                delete clientCore_;
+                clientCore_ = nullptr;
+            },
+            Qt::BlockingQueuedConnection);
+        clientWorker_->quit();
+        clientWorker_->wait();
+    } else {
+        delete clientCore_;
+        clientCore_ = nullptr;
+        if (clientWorker_->isRunning()) {
+            clientWorker_->quit();
+            clientWorker_->wait();
+        }
+    }
+    if (clientWorker_) {
+        delete clientWorker_;
+        clientWorker_ = nullptr;
     }
 }
 
 void FileSession::handleFrame(FramePtr frame)
 {
-    Message msg;
-    if (static_cast<int>(frame->type) < defDirectChuckAck) {
-        deserializeStruct(frame->data, msg);
+    if (quit_.load() || !io_) {
+        return;
     }
-    switch (frame->type) {
-    case FrameType::kFileType_Answer_ID: {
-        ClientInfo info;
-        info.clientId = msg.to.clientId;
-        clientCore_->onRecordOwnInfo(info);
-        qDebug() << "传输ID：" << QString::fromStdString(info.clientId);
-        break;
-    }
-    case FrameType::kFileType_Request_Down: {
-        auto fileTrans = std::make_shared<OneFileTrans>();
-        auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Send, msg, msg.transId,
-                                           clientCore_->getOwnClientInfo().clientId, msg.uuid);
-
-        fileTrans->setTargetControlId(frame->from);
-
-        pushTask(fileTrans, msg, "文件任务初始化失败（Request_Down）。", FrameType::kFileType_Answer_Down, ret, false);
-        qDebug() << QString::fromStdString(msg.from.clientId)
-                 << "kFileType_Answer_Down:" << QString::fromStdString(msg.ff.fullPath) << "，结果：" << ret;
-        break;
-    }
-    case FrameType::kFileType_Answer_Down: {
-        // 判断成功性
-        Message ansMsg;
-        deserializeStruct(frame->data, ansMsg);
-        if (ansMsg.msgStateCode == MessageStateCode::kMessageStateCodeFailed) {
-            auto kuuid = getMapKeyUUIDByMode(msg.uuid, OneFileTrans::TransMode::Receive);
-            {
-                QMutexLocker locker(&transferMapLock_);
-                if (!transferMap_.contains(kuuid)) {
-                    transferMap_[kuuid] = nullptr;
-                }
-            }
-            // 失败了就放弃传输。
-            qWarning() << QString::fromStdString(ansMsg.errMsg);
-            break;
-        }
-        auto fileTrans = std::make_shared<OneFileTrans>();
-        auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Receive, msg, msg.transId,
-                                           clientCore_->getOwnClientInfo().clientId, msg.uuid);
-
-        fileTrans->setTargetControlId(frame->from);
-        pushTask(fileTrans, msg, "文件任务初始化失败（Answer_Down）。", FrameType::kFileType_Request_Start, ret, true);
-        qDebug() << QString::fromStdString(msg.from.clientId)
-                 << "kFileType_Answer_Down:" << QString::fromStdString(msg.ft.fullPath) << "，结果：" << ret;
-        break;
-    }
-    case FrameType::kFileType_Request_Send: {
-        auto fileTrans = std::make_shared<OneFileTrans>();
-        auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Receive, msg, msg.transId,
-                                           clientCore_->getOwnClientInfo().clientId, msg.uuid);
-
-        fileTrans->setTargetControlId(frame->from);
-        pushTask(fileTrans, msg, "文件任务初始化失败（Request_Send）。", FrameType::kFileType_Answer_Send, ret, false);
-        qDebug() << QString::fromStdString(msg.from.clientId)
-                 << "kFileType_Request_Send:" << QString::fromStdString(msg.ft.fullPath) << "，结果：" << ret;
-        break;
-    }
-    case FrameType::kFileType_Answer_Send: {
-        // 判断成功性
-        Message ansMsg;
-        deserializeStruct(frame->data, ansMsg);
-        if (ansMsg.msgStateCode == MessageStateCode::kMessageStateCodeFailed) {
-            auto kuuid = getMapKeyUUIDByMode(msg.uuid, OneFileTrans::TransMode::Send);
-            {
-                QMutexLocker locker(&transferMapLock_);
-                if (!transferMap_.contains(kuuid)) {
-                    transferMap_[kuuid] = nullptr;
-                }
-            }
-            // 失败了就放弃传输。
-            qWarning() << QString::fromStdString(ansMsg.errMsg);
-            break;
-        }
-        auto fileTrans = std::make_shared<OneFileTrans>();
-        auto ret = fileTrans->initTransfer(OneFileTrans::TransMode::Send, msg, msg.transId,
-                                           clientCore_->getOwnClientInfo().clientId, msg.uuid);
-
-        fileTrans->setTargetControlId(frame->from);
-        pushTask(fileTrans, msg, "文件任务初始化失败（Answer_Send）。", FrameType::kFileType_Request_Start, ret, true);
-        // qDebug() << QString::fromStdString(msg.from.clientId)
-        //          << "kFileType_Answer_Send:" << QString::fromStdString(msg.ff.fullPath) << "，结果：" << ret;
-        break;
-    }
-    // case FrameType::kFileType_Answer_Start: {
-    //     break;
-    // }
-    default: {
-        std::shared_ptr<OneFileTrans> fileTrans = nullptr;
-        {
-            auto mapKeyUUID = getMapKeyUUIDByMark(frame->fuuid, frame->mark);
-            QMutexLocker locker(&transferMapLock_);
-            if (transferMap_.contains(mapKeyUUID)) {
-                fileTrans = transferMap_[mapKeyUUID];
-            }
-        }
-        if (fileTrans) {
-            fileTrans->onFrameReceive(frame);
-        }
-        break;
-    }
-    }
+    auto* io = io_.data();
+    QMetaObject::invokeMethod(io, [io, frame]() { io->handleFrame(frame); }, Qt::QueuedConnection);
 }
 
 bool FileSession::getTransStatus(OneFileTrans::TransStatus& status, const std::string& baseUUID, bool isSend)
 {
-    auto mapKeyUUID = getMapKeyUUIDByMode(baseUUID, isSend ? OneFileTrans::TransMode::Send : OneFileTrans::TransMode::Receive);
-    bool have = false;
-    {
-        QMutexLocker locker(&transferMapLock_);
-        if (transferMap_.contains(mapKeyUUID)) {
-            have = true;
-            auto& ot = transferMap_[mapKeyUUID];
-            if (ot == nullptr) {
-                status = OneFileTrans::TransStatus::Interrupted;
-            } else {
-                status = ot->getTransStatus();
-            }
-        }
+    auto* io = io_.data();
+    if (!io) {
+        return false;
     }
-    return have;
+    return io->getTransStatus(status, baseUUID, isSend);
 }
 
-bool FileSession::getFileMeta(const Message& msg, FileMeta& meta)
+void FileSession::clearTask(const std::string& uuid, bool isSend)
 {
-    bool isHave = false;
-    for (const auto& item : msg.mapData) {
-        auto& metaList = item.second;
-        if (metaList.size() != 1) {
-            meta = metaList[0];
-            isHave = true;
-            break;
-        }
-        break;
+    if (quit_.load() || !io_) {
+        return;
     }
-    return isHave;
+    auto* io = io_.data();
+    const auto quuid = QString::fromStdString(uuid);
+    QMetaObject::invokeMethod(io, [io, quuid, isSend]() { io->clearTask(quuid, isSend); }, Qt::QueuedConnection);
+}
+
+void FileSession::AskOwnID()
+{
+    if (quit_.load() || !io_) {
+        return;
+    }
+    auto* io = io_.data();
+    QMetaObject::invokeMethod(io, [io]() { io->askOwnID(); }, Qt::QueuedConnection);
+}
+
+void FileSession::setServerEndpoint(const QString& ip, qint16 port)
+{
+    if (quit_.load() || !io_) {
+        return;
+    }
+    auto* io = io_.data();
+    QMetaObject::invokeMethod(io, [io, ip, port]() { io->setServerEndpoint(ip, port); }, Qt::QueuedConnection);
 }
 
 ClientCore* FileSession::getClientCore()
@@ -249,13 +141,7 @@ ClientCore* FileSession::getClientCore()
     return clientCore_;
 }
 
-void FileSession::AskOwnID()
+FileSessionIO* FileSession::io() const
 {
-    Message msg;
-    msg.comStr = "F";
-    auto frame = OneFrame::Create();
-    frame->data = serializeStruct(msg);
-    frame->sessionId = getClientCore()->GetSessionId();
-    frame->type = FrameType::kFileType_Request_ID;
-    emit signalRequestSend(frame);
+    return io_.data();
 }

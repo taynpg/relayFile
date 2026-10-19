@@ -17,3 +17,11 @@ log/
 cmk_cache
 cmk_temp
 __pycache__/
+
+# ---> workbuddy：本地助手工作区（记忆/会话数据），不入库
+.workbuddy/
+
+# ---> 运行时产物
+*.relaypart
+relay_archive_*.tar.xz
+*.dump

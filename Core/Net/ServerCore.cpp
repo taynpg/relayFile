@@ -97,9 +97,15 @@ void ServerCore::onRead()
 
         cli->buffer.Append(data.data(), data.size());
         while (true) {
-            auto frame = Protocol::UnPack(cli->buffer);
-            if (frame == nullptr) {
+            FramePtr frame;
+            auto ret = Protocol::UnPack(cli->buffer, frame);
+            if (ret == UnPackResult::NeedMoreData) {
                 break;
+            }
+            if (ret == UnPackResult::ProtocolError) {
+                qWarning() << "协议错误（版本不符或帧损坏），断开客户端:" << cli->id;
+                socket->abort();
+                return;
             }
             if (frame->type == FrameType::kMsgType_Ask_Heart) {
                 onUseHeart(cli, frame);
@@ -289,6 +295,10 @@ bool ServerCore::forwarFileData(FramePtr frame, const std::string& otherId)
 bool ServerCore::sendData(FramePtr frame, QTcpSocket* socket)
 {
     auto data = Protocol::Pack(frame);
+    if (data.empty()) {
+        qWarning() << "转发失败：帧序列化失败, type=" << static_cast<int>(frame->type);
+        return false;
+    }
     return sendData(data.data(), data.size(), socket);
 }
 

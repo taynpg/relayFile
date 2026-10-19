@@ -3,8 +3,10 @@
 #include <QMap>
 #include <QMutex>
 #include <QObject>
+#include <QThread>
 #include <QTimer>
 #include <any>
+#include <atomic>
 
 #include "ClientCore.h"
 #include "Protocol/Protocol.h"
@@ -63,6 +65,9 @@ public:
         int ftype{};
         std::string target;
         std::string path;
+        // 回调只允许执行一次：超时、应答、取消三条路径可能同时命中，
+        // 重复 set_value 会抛 future_error。
+        std::atomic<bool> done{false};
     };
 
     struct TaskWorker {
@@ -103,6 +108,8 @@ private:
     QMutex responseWaitLock_;
     QMutex pubCallLock_;
     ClientWorker* clientWorker_{};
+    // Quit 可能被显式调用，也可能来自析构，必须幂等
+    std::atomic<bool> quit_{false};
     std::shared_ptr<ThreadPool> workerPool_{};
     std::shared_ptr<TimerPoolStd> timerPoolStd_{};
     QMap<uint64_t, std::shared_ptr<WaiteFrame>> requestWaitFrame_;

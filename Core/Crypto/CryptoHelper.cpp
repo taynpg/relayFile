@@ -70,13 +70,13 @@ bool CryptoHelper::encryptFrame(FramePtr frame)
                              reinterpret_cast<uint8_t*>(out.data() + 12 + plainLen));
 
     frame->data = std::move(out);
-    frame->mark |= FRAME_MARK_ENCRYPTED;
+    frame->flags |= kFrameFlag_Encrypted;
     return true;
 }
 
 bool CryptoHelper::decryptFrame(FramePtr frame)
 {
-    if ((frame->mark & FRAME_MARK_ENCRYPTED) == 0) {
+    if (!frame->isEncrypted()) {
         return true;   // 未加密帧，直接放行
     }
     if (!hasKey_.load()) {
@@ -100,6 +100,6 @@ bool CryptoHelper::decryptFrame(FramePtr frame)
     }
 
     frame->data = std::move(plain);
-    frame->mark &= ~FRAME_MARK_ENCRYPTED;
+    frame->flags &= static_cast<std::uint16_t>(~kFrameFlag_Encrypted);
     return true;
 }

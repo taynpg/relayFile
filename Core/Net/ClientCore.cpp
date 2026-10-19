@@ -26,16 +26,21 @@ void ClientCore::initSignals()
 {
     connect(tcp_, &QTcpSocket::readyRead, this, &ClientCore::onReadyRead);
     connect(tcp_, &QTcpSocket::disconnected, this, [this]() {
-        oInfo_.clientId.clear();
-        oInfo_.clientName.clear();
-        mInfo_.clientId.clear();
-        mInfo_.clientName.clear();
+        connected_.store(false);
+        {
+            QMutexLocker locker(&infoLock_);
+            oInfo_.clientId.clear();
+            oInfo_.clientName.clear();
+            mInfo_.clientId.clear();
+            mInfo_.clientName.clear();
+        }
         emit signalDisconnected();
     });
 }
 
 void ClientCore::disconnectFromServer()
 {
+    connected_.store(false);
     if (tcp_->state() == QAbstractSocket::ConnectedState) {
         tcp_->disconnectFromHost();
         tcp_->close();
@@ -46,21 +51,26 @@ void ClientCore::disconnectFromServer()
 
 void ClientCore::onRecordOwnInfo(const ClientInfo& info)
 {
+    QMutexLocker locker(&infoLock_);
     mInfo_ = info;
 }
 
 bool ClientCore::isConnected() const
 {
-    return tcp_->state() == QAbstractSocket::ConnectedState;
+    // 跨线程调用：tcp_ 可能还没被 worker 线程创建（instance() 尚未执行），
+    // 而且 QTcpSocket::state() 不是线程安全的，统一看 connected_ 快照
+    return connected_.load() && tcp_ != nullptr;
 }
 
 QString ClientCore::getServerIp() const
 {
+    QMutexLocker locker(&infoLock_);
     return serverIp_;
 }
 
 int16_t ClientCore::getServerPort() const
 {
+    QMutexLocker locker(&infoLock_);
     return serverPort_;
 }
 
@@ -78,9 +88,13 @@ bool ClientCore::connectToServer(const QString& server, int16_t port)
         qWarning() << "连接服务器失败:" << tcp_->errorString();
         return false;
     }
+    connected_.store(true);
     emit signalConnected();
-    serverIp_ = server;
-    serverPort_ = port;
+    {
+        QMutexLocker locker(&infoLock_);
+        serverIp_ = server;
+        serverPort_ = port;
+    }
     qInfo() << "连接服务器成功=>" << server << ":" << port;
     emit signalRequestAskOwnID();
     return true;
@@ -91,37 +105,63 @@ void ClientCore::onReadyRead()
     QByteArray data = tcp_->readAll();
     buffer_.Append(data.data(), data.size());
     while (true) {
-        auto frame = Protocol::UnPack(buffer_);
-        if (!frame) {
+        FramePtr frame;
+        UnPackResult ret = UnPackResult::NeedMoreData;
+        try {
+            ret = Protocol::UnPack(buffer_, frame);
+        } catch (const std::exception& e) {
+            // 帧头解析异常（畸形长度/截断）：丢弃当前缓冲，避免同一段坏数据反复抛
+            qWarning() << "解析帧异常，清空接收缓冲:" << e.what();
+            buffer_.RemoveOf(0, buffer_.Size());
             break;
         }
-        if (!CryptoHelper::instance().decryptFrame(frame)) {
-            qWarning() << "帧解密失败（未配置密钥或校验失败），丢弃, type=" << static_cast<int>(frame->type);
-            continue;
+        if (ret == UnPackResult::NeedMoreData) {
+            break;
         }
-        emit signalDeliverFrame(frame);
+        if (ret == UnPackResult::ProtocolError) {
+            qWarning() << "协议错误（版本不符或帧损坏），断开连接";
+            tcp_->abort();
+            return;
+        }
+        try {
+            if (!CryptoHelper::instance().decryptFrame(frame)) {
+                qWarning() << "帧解密失败（未配置密钥或校验失败），丢弃, type=" << static_cast<int>(frame->type);
+                continue;
+            }
+            emit signalDeliverFrame(frame);
+        } catch (const std::exception& e) {
+            // cereal 反序列化遇到截断/畸形数据会抛；绝不能让异常穿过 Qt 事件循环
+            qWarning() << "处理帧异常（已丢弃）, type=" << static_cast<int>(frame->type) << "err:" << e.what();
+        } catch (...) {
+            qWarning() << "处理帧未知异常（已丢弃）, type=" << static_cast<int>(frame->type);
+        }
     }
 }
 
 void ClientCore::setOtherClientInfo(const ClientInfo& oInfo)
 {
     qInfo() << "设置客户端信息：" << QString::fromStdString(oInfo.clientId) << QString::fromStdString(oInfo.clientName);
+    QMutexLocker locker(&infoLock_);
     oInfo_ = oInfo;
 }
 
 ClientInfo ClientCore::getOtherClientInfo() const
 {
+    QMutexLocker locker(&infoLock_);
     return oInfo_;
 }
 ClientInfo ClientCore::getOwnClientInfo() const
 {
+    QMutexLocker locker(&infoLock_);
     return mInfo_;
 }
 
 QString ClientCore::getClientFullName() const
 {
-    QString name = QString("%1,%2").arg(QString::fromStdString(oInfo_.clientId)).arg(QString::fromStdString(oInfo_.clientName));
-    return name;
+    QMutexLocker locker(&infoLock_);
+    return QString("%1,%2")
+        .arg(QString::fromStdString(oInfo_.clientId))
+        .arg(QString::fromStdString(oInfo_.clientName));
 }
 
 void ClientCore::setIsControl(bool isControl)
@@ -152,11 +192,18 @@ static bool GIsEncryptableFrame(FramePtr frame)
 bool ClientCore::Send(FramePtr frame)
 {
     if (isControl_) {
+        ClientInfo own;
+        ClientInfo other;
+        {
+            QMutexLocker locker(&infoLock_);
+            own = mInfo_;
+            other = oInfo_;
+        }
         if (frame->from.empty()) {
-            frame->from = mInfo_.clientId;
+            frame->from = own.clientId;
         }
         if (frame->to.empty()) {
-            frame->to = oInfo_.clientId;
+            frame->to = other.clientId;
         }
         if (frame->sessionId == 0) {
             frame->sessionId = GetSessionId();
@@ -166,6 +213,11 @@ bool ClientCore::Send(FramePtr frame)
         CryptoHelper::instance().encryptFrame(frame);
     }
     auto data = Protocol::Pack(frame);
+    if (data.empty()) {
+        qWarning() << "ClientCore::Send 失败：帧序列化失败（路由字段过长或帧超过上限）, type="
+                   << static_cast<int>(frame->type);
+        return false;
+    }
     return Send(data.data(), data.size());
 }
 

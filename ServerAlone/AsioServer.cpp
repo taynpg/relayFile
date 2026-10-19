@@ -67,9 +67,16 @@ bool AsioServer::Session::feed(const char* data, std::size_t n)
     try {
         buffer_.Append(data, n);
         while (true) {
-            auto frame = Protocol::UnPack(buffer_);
-            if (frame == nullptr) {
+            FramePtr frame;
+            auto ret = Protocol::UnPack(buffer_, frame);
+            if (ret == UnPackResult::NeedMoreData) {
                 break;
+            }
+            if (ret == UnPackResult::ProtocolError) {
+                SPDLOG_WARN("协议错误（版本不符或帧损坏），断开连接");
+                close();
+                server_.removeSession(self);
+                return false;
             }
             if (frame->type == FrameType::kMsgType_Ask_Heart) {
                 server_.onUseHeart(self, frame);

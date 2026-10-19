@@ -61,4 +61,12 @@ public:
     static bool GetFileNameNoExt(const QString& path, QString& fileName);
     static uint16_t GetMark();
     static bool SetPermission(const QString& path, quint16 permission);
+
+    // 断点续传用的快速指纹：文件长度 + 首 64KB 的 SHA-256。
+    // 只读 64KB，代价可控；用来确认 .relaypart 与源文件是同一份数据，
+    // 避免把两个不同文件的前后两截拼成一个"成功"的文件。
+    // sizeOverride < 0 时取文件实际长度。接收方必须传"期望的总长度"：
+    // 残片只有一部分，用残片自己的长度算出来的指纹永远对不上源文件。
+    static QString QuickFingerprint(const QString& path, qint64 sizeOverride = -1);
+    static bool ResizeFile(const QString& path, qint64 newSize);
 };

@@ -1,10 +1,105 @@
 #include "Protocol.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
-#include <cstdio>
 #include <cstring>
 #include <memory>
+
+namespace {
+
+inline std::uint16_t ReadU16(const char* p)
+{
+    return static_cast<std::uint16_t>(static_cast<std::uint8_t>(p[0])) |
+           (static_cast<std::uint16_t>(static_cast<std::uint8_t>(p[1])) << 8);
+}
+
+inline std::uint32_t ReadU32(const char* p)
+{
+    return static_cast<std::uint32_t>(static_cast<std::uint8_t>(p[0])) |
+           (static_cast<std::uint32_t>(static_cast<std::uint8_t>(p[1])) << 8) |
+           (static_cast<std::uint32_t>(static_cast<std::uint8_t>(p[2])) << 16) |
+           (static_cast<std::uint32_t>(static_cast<std::uint8_t>(p[3])) << 24);
+}
+
+inline std::uint64_t ReadU64(const char* p)
+{
+    std::uint64_t v = 0;
+    for (int i = 7; i >= 0; --i) {
+        v = (v << 8) | static_cast<std::uint8_t>(p[i]);
+    }
+    return v;
+}
+
+inline void WriteU16(std::vector<char>& out, std::uint16_t v)
+{
+    out.push_back(static_cast<char>(v & 0xFF));
+    out.push_back(static_cast<char>((v >> 8) & 0xFF));
+}
+
+inline void WriteU32(std::vector<char>& out, std::uint32_t v)
+{
+    out.push_back(static_cast<char>(v & 0xFF));
+    out.push_back(static_cast<char>((v >> 8) & 0xFF));
+    out.push_back(static_cast<char>((v >> 16) & 0xFF));
+    out.push_back(static_cast<char>((v >> 24) & 0xFF));
+}
+
+inline void WriteU64(std::vector<char>& out, std::uint64_t v)
+{
+    for (int i = 0; i < 8; ++i) {
+        out.push_back(static_cast<char>((v >> (8 * i)) & 0xFF));
+    }
+}
+
+// 用 uint32 头 + u8 长度写路由字段；超长直接判失败（不静默截断）
+bool WriteRouteField(std::vector<char>& out, const std::string& s)
+{
+    if (s.size() > FrameProto::kMaxRouteField) {
+        return false;
+    }
+    out.push_back(static_cast<char>(s.size()));
+    out.insert(out.end(), s.begin(), s.end());
+    return true;
+}
+
+bool ReadRouteField(const char* p, std::size_t avail, std::string& out, std::size_t& consumed)
+{
+    if (avail < 1) {
+        return false;
+    }
+    const auto len = static_cast<std::size_t>(static_cast<std::uint8_t>(p[0]));
+    if (avail < 1 + len) {
+        return false;
+    }
+    out.assign(p + 1, len);
+    consumed = 1 + len;
+    return true;
+}
+
+}   // namespace
+
+std::uint32_t Protocol::Crc32(const void* data, std::size_t len)
+{
+    static const auto table = []() {
+        std::array<std::uint32_t, 256> t{};
+        for (std::uint32_t i = 0; i < 256; ++i) {
+            std::uint32_t c = i;
+            for (int k = 0; k < 8; ++k) {
+                c = (c & 1u) ? (0xEDB88320u ^ (c >> 1)) : (c >> 1);
+            }
+            t[i] = c;
+        }
+        return t;
+    }();
+
+    std::uint32_t crc = 0xFFFFFFFFu;
+    const auto* p = static_cast<const std::uint8_t*>(data);
+    for (std::size_t i = 0; i < len; ++i) {
+        crc = table[(crc ^ p[i]) & 0xFF] ^ (crc >> 8);
+    }
+    return crc ^ 0xFFFFFFFFu;
+}
 
 std::shared_ptr<OneFrame> OneFrame::Create()
 {
@@ -20,7 +115,7 @@ std::shared_ptr<OneFrame> OneFrame::Create(std::shared_ptr<OneFrame> frame, bool
 {
     auto f = OneFrame::Create();
     f->type = frame->type;
-    f->mark = frame->mark;
+    f->flags = frame->flags;
     f->sessionId = frame->sessionId;
     f->index = frame->index;
     f->from = frame->from;
@@ -38,123 +133,161 @@ std::shared_ptr<OneFrame> OneFrame::Create(std::shared_ptr<OneFrame> frame, bool
     return f;
 }
 
-std::shared_ptr<OneFrame> Protocol::UnPack(miniBuffer& buffer)
-{
-    constexpr char HEADER[] = {'\xFF', '\xFE'};
-    constexpr char TAIL[] = {'\xFF', '\xFF'};
-    constexpr size_t HEADER_SIZE = 2 + 2 + 2 + 8 + 8 + 32 + 32 + 36 + 4;
-
-    const auto& data = buffer.GetBuffer();
-
-    // 顺序解析：从 buffer 头部开始找帧头，避免在数据体内部盲搜导致假帧头卡死。
-    size_t offset = 0;
-    while (offset + HEADER_SIZE <= data.size()) {
-        // 1) 校验帧头
-        if (data[offset] != HEADER[0] || data[offset + 1] != HEADER[1]) {
-            // 前导垃圾字节，跳过 1 字节继续找
-            ++offset;
-            continue;
-        }
-
-        int16_t type{};
-        int16_t mark{};
-        int64_t sessionId{};
-        int64_t index{};
-        int32_t len{};
-
-        std::memcpy(&type, data.data() + offset + 2, sizeof(type));
-        std::memcpy(&mark, data.data() + offset + 4, sizeof(mark));
-        std::memcpy(&sessionId, data.data() + offset + 6, sizeof(sessionId));
-        std::memcpy(&index, data.data() + offset + 6 + 8, sizeof(index));
-        std::memcpy(&len, data.data() + offset + 6 + 8 + 8 + 32 + 32 + 36, sizeof(len));
-
-        // 2) 长度非法（数据体里误匹配到的假帧头常出现巨大 len）→ 跳过该帧头继续找
-        if (len < 0) {
-            offset += 2;
-            continue;
-        }
-
-        // 3) 帧体还没收全，等待更多数据（不消费 buffer）
-        if (offset + HEADER_SIZE + static_cast<size_t>(len) + 2 > data.size()) {
-            return nullptr;
-        }
-
-        // 4) 校验帧尾；不匹配说明这是数据体里的假帧头，跳过继续找
-        size_t tailPos = offset + HEADER_SIZE + static_cast<size_t>(len);
-        if (data[tailPos] != TAIL[0] || data[tailPos + 1] != TAIL[1]) {
-            offset += 2;
-            continue;
-        }
-
-        // 5) 解析成功，消费 buffer
-        auto frame = std::make_shared<OneFrame>();
-        frame->type = static_cast<FrameType>(type);
-        frame->mark = mark;
-        frame->sessionId = sessionId;
-        frame->index = index;
-        frame->from.assign(data.data() + offset + 6 + 8 + 8, 32);
-        frame->to.assign(data.data() + offset + 6 + 8 + 8 + 32, 32);
-        frame->fuuid.assign(data.data() + offset + 6 + 8 + 8 + 32 + 32, 36);
-        frame->from.erase(frame->from.find_last_not_of('\0') + 1);
-        frame->to.erase(frame->to.find_last_not_of('\0') + 1);
-        frame->fuuid.erase(frame->fuuid.find_last_not_of('\0') + 1);
-
-        if (len > 0) {
-            frame->data.resize(len);
-            std::memcpy(frame->data.data(), data.data() + offset + HEADER_SIZE, len);
-        }
-
-        buffer.RemoveOf(0, static_cast<int>(offset + HEADER_SIZE + static_cast<size_t>(len) + 2));
-
-        return frame;
-    }
-
-    return nullptr;
-}
-
-std::vector<char> Protocol::Pack(const std::shared_ptr<OneFrame>& frame)
+std::vector<char> Protocol::Pack(const FramePtr& frame)
 {
     if (!frame) {
         return {};
     }
 
-    constexpr char HEADER[] = {'\xFF', '\xFE'};
-    constexpr char TAIL[] = {'\xFF', '\xFF'};
-    constexpr size_t HEADER_SIZE = 2 + 2 + 2 + 8 + 8 + 32 + 32 + 36 + 4;   // 90
+    const bool withBodyCrc = frame->data.size() <= FrameProto::kBodyCrcLimit;
+    const std::uint16_t flags = withBodyCrc
+                                    ? static_cast<std::uint16_t>(frame->flags | kFrameFlag_BodyCrc)
+                                    : static_cast<std::uint16_t>(frame->flags & ~kFrameFlag_BodyCrc);
 
-    int32_t len = static_cast<int32_t>(frame->data.size());
+    std::vector<char> out;
+    out.reserve(FrameProto::kFixedHeaderSize + 3 + frame->from.size() + frame->to.size() + frame->fuuid.size() +
+                frame->data.size() + 4);
 
-    std::vector<char> buffer;
-    buffer.reserve(HEADER_SIZE + len);
+    WriteU32(out, FrameProto::kMagic);
+    WriteU16(out, FrameProto::kVersion);
+    WriteU16(out, flags);
+    WriteU16(out, static_cast<std::uint16_t>(frame->type));
+    WriteU16(out, 0);   // reserved
+    WriteU64(out, static_cast<std::uint64_t>(frame->sessionId));
+    WriteU64(out, static_cast<std::uint64_t>(frame->index));
+    WriteU32(out, 0);   // frameLen，先占位
+    WriteU32(out, 0);   // headerCrc，先占位
 
-    int16_t type = static_cast<int16_t>(frame->type);
-    buffer.insert(buffer.end(), std::begin(HEADER), std::end(HEADER));
-    buffer.insert(buffer.end(), reinterpret_cast<const char*>(&type), reinterpret_cast<const char*>(&type) + sizeof(type));
-
-    buffer.insert(buffer.end(), reinterpret_cast<const char*>(&frame->mark),
-                  reinterpret_cast<const char*>(&frame->mark) + sizeof(frame->mark));
-
-    buffer.insert(buffer.end(), reinterpret_cast<const char*>(&frame->sessionId),
-                  reinterpret_cast<const char*>(&frame->sessionId) + sizeof(frame->sessionId));
-    buffer.insert(buffer.end(), reinterpret_cast<const char*>(&frame->index),
-                  reinterpret_cast<const char*>(&frame->index) + sizeof(frame->index));
-
-    for (int i = 0; i < 32; ++i) {
-        buffer.push_back(i < static_cast<int>(frame->from.size()) ? frame->from[i] : '\0');
+    if (!WriteRouteField(out, frame->from) || !WriteRouteField(out, frame->to) ||
+        !WriteRouteField(out, frame->fuuid)) {
+        return {};
     }
-    for (int i = 0; i < 32; ++i) {
-        buffer.push_back(i < static_cast<int>(frame->to.size()) ? frame->to[i] : '\0');
-    }
-    for (int i = 0; i < 36; ++i) {
-        buffer.push_back(i < static_cast<int>(frame->fuuid.size()) ? frame->fuuid[i] : '\0');
+    out.insert(out.end(), frame->data.begin(), frame->data.end());
+    if (withBodyCrc) {
+        WriteU32(out, Crc32(frame->data.data(), frame->data.size()));
     }
 
-    buffer.insert(buffer.end(), reinterpret_cast<const char*>(&len), reinterpret_cast<const char*>(&len) + sizeof(len));
-
-    if (len > 0) {
-        buffer.insert(buffer.end(), frame->data.begin(), frame->data.end());
+    const auto frameLen = static_cast<std::uint32_t>(out.size());
+    if (frameLen > FrameProto::kMaxFrameSize) {
+        return {};
     }
+    // 回填 frameLen（offset 28）与 headerCrc（offset 32）
+    for (int i = 0; i < 4; ++i) {
+        out[28 + i] = static_cast<char>((frameLen >> (8 * i)) & 0xFF);
+    }
+    const std::uint32_t headerCrc = Crc32(out.data(), 32);
+    for (int i = 0; i < 4; ++i) {
+        out[32 + i] = static_cast<char>((headerCrc >> (8 * i)) & 0xFF);
+    }
+    return out;
+}
 
-    buffer.insert(buffer.end(), std::begin(TAIL), std::end(TAIL));
-    return buffer;
+UnPackResult Protocol::UnPack(miniBuffer& buffer, FramePtr& frame)
+{
+    for (;;) {
+        const auto& data = buffer.GetBuffer();
+        const std::size_t avail = data.size();
+
+        // 1) 找 magic：没有就丢弃前导垃圾（保留末尾可能是半个 magic 的字节）
+        std::size_t offset = 0;
+        while (offset + 4 <= avail && ReadU32(data.data() + offset) != FrameProto::kMagic) {
+            ++offset;
+        }
+        if (offset > 0) {
+            if (offset + 4 > avail) {
+                const std::size_t keep = std::min<std::size_t>(avail, 3);
+                if (avail > keep) {
+                    buffer.RemoveOf(0, static_cast<int>(avail - keep));
+                }
+                return UnPackResult::NeedMoreData;
+            }
+            buffer.RemoveOf(0, static_cast<int>(offset));
+            continue;   // 重新取 data 再扫
+        }
+
+        if (avail < FrameProto::kFixedHeaderSize) {
+            return UnPackResult::NeedMoreData;
+        }
+
+        const char* h = data.data();
+        const std::uint32_t frameLen = ReadU32(h + 28);
+        const std::uint32_t headerCrc = ReadU32(h + 32);
+
+        // 2) 头部 sanity + CRC：不匹配说明是数据体里偶然出现的 magic，跳过 1 字节继续找
+        if (frameLen < FrameProto::kFixedHeaderSize + 3 || frameLen > FrameProto::kMaxFrameSize ||
+            Crc32(h, 32) != headerCrc) {
+            buffer.RemoveOf(0, 1);
+            continue;
+        }
+        const std::uint16_t version = ReadU16(h + 4);
+        if (version != FrameProto::kVersion) {
+            // 头部 CRC 都对了却版本不符，是真正的协议不匹配，继续等只会永远等下去
+            return UnPackResult::ProtocolError;
+        }
+        // 3) 帧还没收全
+        if (avail < frameLen) {
+            return UnPackResult::NeedMoreData;
+        }
+
+        const std::uint16_t flags = ReadU16(h + 6);
+        const bool withBodyCrc = (flags & kFrameFlag_BodyCrc) != 0;
+        const std::size_t payloadLen = frameLen - FrameProto::kFixedHeaderSize;
+        if (payloadLen < 3 + (withBodyCrc ? 4 : 0)) {
+            buffer.RemoveOf(0, 1);
+            continue;
+        }
+
+        std::size_t p = FrameProto::kFixedHeaderSize;
+        const std::size_t payloadEnd = frameLen;
+        std::string from;
+        std::string to;
+        std::string uuid;
+        std::size_t used = 0;
+        if (!ReadRouteField(h + p, payloadEnd - p, from, used)) {
+            buffer.RemoveOf(0, 1);
+            continue;
+        }
+        p += used;
+        if (!ReadRouteField(h + p, payloadEnd - p, to, used)) {
+            buffer.RemoveOf(0, 1);
+            continue;
+        }
+        p += used;
+        if (!ReadRouteField(h + p, payloadEnd - p, uuid, used)) {
+            buffer.RemoveOf(0, 1);
+            continue;
+        }
+        p += used;
+
+        const std::size_t bodyEnd = payloadEnd - (withBodyCrc ? 4 : 0);
+        if (p > bodyEnd) {
+            buffer.RemoveOf(0, 1);
+            continue;
+        }
+        const std::size_t bodyLen = bodyEnd - p;
+        if (withBodyCrc) {
+            const std::uint32_t expect = ReadU32(h + bodyEnd);
+            if (Crc32(h + p, bodyLen) != expect) {
+                // body 损坏：整帧丢弃（TCP 已经保证不丢字节，这里只可能是实现 bug 或内存问题）
+                buffer.RemoveOf(0, static_cast<int>(frameLen));
+                return UnPackResult::ProtocolError;
+            }
+        }
+
+        auto f = std::make_shared<OneFrame>();
+        f->type = static_cast<FrameType>(ReadU16(h + 8));
+        f->flags = flags;
+        f->sessionId = static_cast<std::int64_t>(ReadU64(h + 12));
+        f->index = static_cast<std::int64_t>(ReadU64(h + 20));
+        f->from = std::move(from);
+        f->to = std::move(to);
+        f->fuuid = std::move(uuid);
+        if (bodyLen > 0) {
+            f->data.assign(h + p, h + p + bodyLen);
+        }
+
+        buffer.RemoveOf(0, static_cast<int>(frameLen));
+        frame = std::move(f);
+        return UnPackResult::Ok;
+    }
 }
