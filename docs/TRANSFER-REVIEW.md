@@ -25,6 +25,7 @@
 
 > 图例：**✅ 已修复** = 已落地并通过编译 + 端到端验证；**⏳ 未处理** = 仍然存在，逐条原因见下方对应条目；**⚠️ 部分** = 只修了一部分。
 > 最近一次核对：2026-10-19，对照当前 HEAD 源码逐条 grep 确认，不是照抄改造记录。
+> “第四批”指 v0.5 发版前的收尾修复，记录见文末。
 
 | 级别 | 条目 | 状态 | 落点 / 原因 |
 |---|---|---|---|
@@ -35,17 +36,17 @@
 | P0-5 | 前导垃圾不清除 | ✅ 第二批 | 只保留末尾 3 字节，逐字节重同步 |
 | P1-1 | 数据通路在 GUI 线程 | ✅ 第三批 | 新增 `FileSessionIO`，独立 IO 线程 |
 | P1-2 | 一帧一 ACK / 按帧窗口 | ✅ 第二批 | 字节窗口 4MB + 累积 ACK + SACK |
-| P1-3 | 串行执行、失败即中断整批 | ⚠️ 部分 | 元信息检查已改为"单文件缺失跳过"；**传输循环仍是失败即 `break`**（`RelayTask.cpp:426-429`），且仍为单任务串行 |
+| P1-3 | 串行执行、失败即中断整批 | ⚠️ 部分 | 第四批已改为失败不中断（`continue` + 汇总），仅控制连接断开时提前收尾；**仍为单任务串行**，批量握手未做 |
 | P1-4 | `RunTaskItem` 忙等无超时 | ✅ 第三批 | 条件变量 + 两级超时（30s / 6h） |
 | P1-5 | O(N) 串行 RTT | ✅ 第三批 | `AskFileMetaBatch` / `AskFileSamplesBatch` |
 | P1-6 | 每块 4~5 次拷贝 | ⏳ 未处理 | 实测非瓶颈；`miniBuffer::Append` 仍无 `reserve` |
-| P1-7 | 读锁下 `transMap_[key]` | ⏳ 未处理 | `ServerCore.cpp:286-287` 仍持 `QReadLocker` 调 `operator[]` |
+| P1-7 | 读锁下 `transMap_[key]` | ✅ 第四批 | 三处读锁改用 `constFind` / `std::as_const` 遍历，不再隐式 detach |
 | P2-8 | `Message` 拷贝漏字段 | ✅ 第一批 | 四个特殊成员 `= default` |
 | P2-9 | `onCancelWaitMsg` 迭代中 erase | ✅ 第一批 | 先移出容器 + 锁外回调 + `done` 去重 |
 | P2-10 | `FileSession` 析构不等线程 | ✅ 第一批 | `Quit()` 幂等，`ClientCore` 回 worker 线程销毁 |
 | P2-11 | 客户端收帧无异常边界 | ✅ 第一批 | `onReadyRead` / `handleFrame` 全部 try/catch |
-| P2-12 | 零字节文件进度除零 | ⏳ 未处理 | `RelayTask.cpp:907` 仍是 `transed * 1.0 / total` |
-| P2-13 | 解包路径校验可绕过 | ⏳ 未处理 | `LocalHandle.cpp:257` 仍是无分隔符的 `startsWith` |
+| P2-12 | 零字节文件进度除零 | ✅ 第四批 | `total == 0` 直接按完成处理；速度计算也防了 0ms |
+| P2-13 | 解包路径校验可绕过 | ✅ 第四批 | 改为「等于根目录或以根目录+`/`开头」，并拒绝绝对路径条目；已补 zip-slip 测试 |
 | P2-14 | 心跳判活窗口偏松 | ⏳ 未处理 | `ServerCore.cpp:11` 巡检仍为 15000ms |
 | P2-15 | IPv6 客户端 ID 塌成 0.0.0.0 | ⏳ 未处理 | `ServerCore.cpp:50-53` 仍用 `toIPv4Address()` |
 | P2-16 | 帧类型按数值区间判定 | ⏳ 未处理 | `Protocol.h:138-167` 仍是 `>=` / `<` 比大小 |
@@ -58,7 +59,7 @@
 | 安全-3 | 口令直 Hash 当密钥 | ⏳ 未处理 | 无 salt / 迭代 / 密钥确认 |
 | 安全-4 | 控制帧全程明文 | ⏳ 未处理 | 服务器仍需解析部分控制帧 |
 
-**一句话现状**：会导致数据损坏的四条 P0 已全部关闭；剩下的是**一个"失败即中断整批"的行为问题**、**六条健壮性细节**（除零、路径校验、心跳、IPv6、类型判定、读锁写容器）和**整块安全边界**。
+**一句话现状（v0.5 发版前）**：会导致数据损坏的 P0 已全部关闭；失败中断、除零、路径校验、读锁写容器在第四批清掉；剩下的**五条健壮性细节**（心跳判活窗口、IPv6 客户端 ID、帧类型数值区间、每块多次拷贝、死代码）和**整块安全边界**（按当前定位接受，见安全小节）。
 
 ---
 
@@ -156,7 +157,7 @@ socket(worker) --排队--> GUI 线程: UnPack 前后处理 / 写盘 / 组 ACK --
 - 重传用 SACK 位图，避免现在"只重传 ackIndex_ 那一块"的保守策略
 - 握手时协商块大小/窗口（大文件大块，小文件小块）
 
-### 3. 串行执行、失败即中断整批  ⚠️ 部分修复
+### 3. 串行执行、失败即中断整批  ⚠️ 部分修复（第四批改失败不中断）
 `Gui/Form/RelayTask.cpp:412-425`
 
 `for (id : todo) { ... if (!ok) { allSuccess=false; break; } }` —— 一个文件失败，后面全部不传，且没有"跳过继续"。同时全进程只有一个传输在跑（`DoubleLinker` 的 `isRunTaskItem_`/`curTaskUUID_` 是单槽状态，两个传输窗口同时开会互相踩）。
@@ -188,7 +189,7 @@ while (isRunTaskItem_) { QThread::msleep(1); QCoreApplication::processEvents(); 
 
 1GB 实测没出现吞吐退化（41MB/s 稳定），所以**这不是当前瓶颈**，但纯属白烧内存带宽。改成"读偏移 + 环形缓冲 + `std::move` 取 body"，再顺手把 `Append` 的 `reserve` 补上，收益是免费拿的。
 
-### 7. 服务器转发时的读锁写容器  ⏳ 未修复
+### 7. 服务器转发时的读锁写容器  ✅ 已修复（第四批）
 `Core/Net/ServerCore.cpp:276-287`
 
 ```cpp
@@ -236,10 +237,10 @@ QThread: Destroyed while thread '' is still running
 
 服务端在 `ControlSession::handleFrame` 开头就无条件 `deserializeStruct(frame->data, *answerMsg)`，任何非 Message 的帧都会抛。
 
-### 12. 零字节文件进度除零  ⏳ 未修复
+### 12. 零字节文件进度除零  ✅ 已修复（第四批）
 `Gui/Form/RelayTask.cpp:847-853`：`transed * 1.0 / total`，`total == 0` 时得到 NaN，再 `int(NaN)` 是 UB。空文件走 `nextSend()` 时确实会 `emit signalProcess(0, 0)`。
 
-### 13. 解包路径校验可绕过  ⏳ 未修复
+### 13. 解包路径校验可绕过  ✅ 已修复（第四批）
 `Core/File/LocalHandle.cpp:257`
 
 ```cpp
@@ -300,7 +301,7 @@ static_assert(sizeof(FrameHeader) == 126);
 
 ---
 
-## 建议的改造顺序（已按三批执行，逐项状态见上方总览表）
+## 建议的改造顺序（已按三批 + 发版前收尾执行，逐项状态见上方总览表）
 
 **第一批（不改协议，几天内可做完，消除数据损坏）**
 
@@ -537,3 +538,47 @@ GUI 主线程 ──信号──> 传输 IO 线程（读源文件 / 写 .relaypa
   会误判为可续传（概率极低，真要严丝合缝就得上全文件哈希，代价是传前先读一遍）。
 - `OneFrame::index` 仍是 `int64_t`；`Answer_Start` / `Answer_Ack` / `Answer_Chuck` / `Answer_Cancel`
   仍是死类型，可以下一轮清掉。
+
+---
+
+## 第四批改造记录（v0.5 发版前收尾）
+
+发版前按"日常使用会不会撞到"重新筛了一遍，只收掉必定影响正常使用、或属于输入校验缺失的项。
+
+### 14. 批量传输失败不再中断整批
+`Gui/Form/RelayTask.cpp` `onStartRun`
+
+原循环 `if (!ok) { allSuccess = false; break; }`：拖 50 个文件，第 3 个无权限或被占用，后面 47 个直接不传。现改为记失败后 `continue`，末尾按 `allSuccess` 汇总，并在日志里给出失败数量。唯一会提前收尾的情况是控制连接已断开——此时继续只会让剩余文件逐个等超时。
+
+### 15. zip 条目路径校验
+`Core/File/LocalHandle.cpp` `ZipHandle::UnArchive`
+
+原校验 `fullPath.startsWith(cleanPath(extractPath))` 没有分隔符边界：根目录 `/out/data` 与条目 `../data-evil/x`，清理后是 `/out/data-evil/x`，命中前缀判定，可以写到解压目录之外。归档内容来自对端，属于输入校验缺失。现在要求 `fullPath` 等于根目录、或以 `rootPath + "/"` 开头，并直接拒绝绝对路径条目。
+
+一个实现细节：`QDir::cleanPath` 统一输出 `/`，拼接也必须用 `/`。初版沿用了 `targetSep`（Windows 下是 `\`），导致前缀永远不匹配、正常条目全被拒绝——由 ZipTest 现有用例当场发现，已修正。
+
+### 16. 读锁下不再写容器
+`Core/Net/ServerCore.cpp` `forwarData` / `forwarFileData` / `GetClientList`
+
+三处 `QReadLocker` 作用域内分别用了 `operator[]` 和非 const 迭代器：前者在 key 不存在时插入，后者会触发隐式 detach，都是读锁下的写操作。统一改为 `constFind` 与 `std::as_const` 遍历。
+
+### 17. 空文件进度除零
+`Gui/Form/RelayTask.cpp` `onCurFileProgress` / `onSuccessFresh`
+
+空文件 `total == 0` 时 `transed * 1.0 / total` 得到 nan，转 `int` 是未定义行为；进度改为按完成处理。速度计算同时防了 `0ms`（极短传输可能测到 0，除零后速度显示为 inf）。
+
+### 18. 构建与拖拽
+- `CMakeLists.txt`：在 `add_subdirectory(Third/SingleApplication)` 之前设置 `QT_DEFAULT_MAJOR_VERSION`（跟随实际 Qt 主版本）和 `QAPPLICATION_CLASS=QApplication`。此前这两个值必须由命令行显式传入，否则 configure 阶段报 `Could NOT find Qt5`，或编译期报 `QApplication has not been declared`。README 的 MSYS2 命令同时补上了 `CMAKE_PREFIX_PATH`。
+- `Gui/Control/OwnTableWidget.cpp` `ComDropTable::dropEvent`：拖入时补齐单元格把第 6 列「远端」设成了只读，而右键「新行」走的 `insertRow` 创建的是可编辑项，两条路径行为不一致，导致拖入的行无法填写远端校验名称。现在只读列仅限 ID / 类型 / 标记，其余列可编辑，并且对已存在的行也补齐缺失单元格。
+
+### 验证
+| 项 | 结果 |
+|---|---|
+| Release 编译 | console 与 GUI 均 0 warning；GUI 不再需要手动传 Qt 主版本参数 |
+| `relayFileUnpackTest` | 14 项全过，`TOTAL FAILS: 0` |
+| `relayFileZipTest` | 全过；新增 zip-slip 用例（条目 `../escaped.txt`）确认被拒绝且解压目录外无文件落地 |
+| 200MB 环回 | 0.98s，203MB/s，sha256 一致 |
+| 边界场景（Release） | 空文件 0 字节、1 字节、含空格文件名、目标父目录不存在自动创建，sha256 均一致 |
+
+### 第四批仍未处理
+心跳判活 15s、IPv6 客户端 ID、帧类型按数值区间判定、每块多次拷贝、死代码清理、安全四条，以及 P1-3 里"单任务串行 / 批量握手"的部分。这些计划进 1.0.x。

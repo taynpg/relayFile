@@ -68,10 +68,14 @@ void ComDropTable::dropEvent(QDropEvent* event)
     for (int i = 0; i < infoDrop.items.size(); i++, ++curRow) {
         if (curRow >= rowCount()) {
             insertRow(rowCount());
-            // 拖入逻辑只创建 0~5 列，补齐其余列的空单元格，
-            // 避免保存/传输时 item(row, 6) 取到空指针闪退
-            for (int col = 6; col < columnCount(); ++col) {
-                setItemData(curRow, col, "", false, false);
+        }
+        // 拖入的行可能只有部分单元格（新插入行、或旧配置缺列），逐列补齐：
+        // ID/类型/标记为只读，「远端」等其余列必须可编辑，否则用户无法填写远端校验名称。
+        // 补齐同时避免保存/传输时 item(row, n) 取到空指针闪退。
+        for (int col = 0; col < columnCount(); ++col) {
+            if (!item(curRow, col)) {
+                const bool readOnly = (col == 0 || col == 2 || col == 3);
+                setItemData(curRow, col, "", false, !readOnly);
             }
         }
         setItemData(curRow, 0, "", false, false);

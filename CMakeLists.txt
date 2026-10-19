@@ -75,6 +75,13 @@ add_subdirectory(Core)
 add_subdirectory(Console)
 
 if(DEFINED RF_USE_GUI AND RF_USE_GUI)
+    # Third/SingleApplication 的两个默认值与本工程不符，必须在 add_subdirectory 前设置：
+    #   QT_DEFAULT_MAJOR_VERSION 默认 5，会去 find_package(Qt5) 导致 configure 失败；
+    #   QAPPLICATION_CLASS 默认 QCoreApplication，与 Widgets 应用的 QApplication 不匹配，
+    #   moc 生成代码会报 "QApplication has not been declared"。
+    find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core)
+    set(QT_DEFAULT_MAJOR_VERSION ${QT_VERSION_MAJOR})
+    set(QAPPLICATION_CLASS QApplication)
     add_subdirectory(Third/SingleApplication)
     add_subdirectory(Gui)
 endif()

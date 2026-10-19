@@ -414,6 +414,7 @@ void RelayTask::onStartRun()
             }
         }
 
+        int failedCount = 0;
         for (int id : todo) {
             if (rowDisplay_[id].status != GUI_FILE_TRAN_STATE_WAIT) {
                 continue;
@@ -423,10 +424,23 @@ void RelayTask::onStartRun()
             startTime_ = std::chrono::steady_clock::now();
             bool handleSuccess = handleOneLine(id);
             doubleLinker_->clearCurrentTaskItem();
-            if (!handleSuccess) {
-                allSuccess = false;
+            if (handleSuccess) {
+                continue;
+            }
+
+            // 单个文件失败（无权限、被占用、对端缺文件）不应中断整批。
+            allSuccess = false;
+            ++failedCount;
+            // 但链路已断时继续没有意义：剩余文件只会逐个等超时，这里提前收尾。
+            auto controlSession = doubleLinker_->GetControlSession();
+            auto* core = controlSession ? controlSession->getClientCore() : nullptr;
+            if (core == nullptr || !core->isConnected()) {
+                emit signalLog("控制连接已断开，剩余文件不再传输。");
                 break;
             }
+        }
+        if (!allSuccess) {
+            emit signalLog(QString("有 %1 个文件传输失败，其余已处理完毕。").arg(failedCount));
         }
         if (allSuccess) {
             emit signalTransComplete();
@@ -487,7 +501,9 @@ void RelayTask::onSuccessFresh(int id)
 {
     auto stopPoint = std::chrono::steady_clock::now();
     auto useTime = std::chrono::duration_cast<std::chrono::milliseconds>(stopPoint - startTime_);
-    auto speedSize = totalSize_ * 1.0 / useTime.count();
+    // 极短传输可能得到 0ms，避免除零
+    auto elapsedMs = static_cast<double>(useTime.count() > 0 ? useTime.count() : 1);
+    auto speedSize = static_cast<double>(totalSize_) / elapsedMs;
     auto speedStr = getSpeedStr(speedSize * 1000);
     auto useTimeStr = miniUtil::GetTimeInfo(useTime.count());
     QMetaObject::invokeMethod(this, [this, id, speedStr, useTimeStr]() {
@@ -904,8 +920,9 @@ void RelayTask::onPageSizeChanged()
 
 void RelayTask::onCurFileProgress(std::uint64_t transed, std::uint64_t total)
 {
-    auto cur = transed * 1.0 / total;
-    ui->curProgress->setValue(int(cur * 100));
+    // 空文件 total 为 0，直接按完成处理，避免 0/0 得到 nan 后转 int 未定义
+    const double cur = (total == 0) ? 1.0 : (static_cast<double>(transed) / static_cast<double>(total));
+    ui->curProgress->setValue(static_cast<int>(cur * 100));
     totalSize_ = total;
     curTransed_ = transed;
 }

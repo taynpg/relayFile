@@ -2,6 +2,7 @@
 
 #include <Protocol/Protocol.h>
 #include <QDateTime>
+#include <utility>
 
 #include "Utils/Common.h"
 
@@ -268,8 +269,10 @@ bool ServerCore::forwarData(FramePtr frame, const std::string& otherId)
     std::shared_ptr<ClientInfo> o = nullptr;
     {
         QReadLocker locker(&rwLock_);
-        if (clientMap_.contains(otherId)) {
-            o = clientMap_[otherId];
+        // 用 constFind 而非 operator[]：后者在非 const 容器上会 detach，读锁下不应发生
+        auto it = clientMap_.constFind(otherId);
+        if (it != clientMap_.constEnd()) {
+            o = it.value();
         }
     }
     if (!o) {
@@ -283,8 +286,12 @@ bool ServerCore::forwarFileData(FramePtr frame, const std::string& otherId)
 {
     std::shared_ptr<ClientInfo> o = nullptr;
     {
+        // 读锁下只能用 find/constFind：operator[] 在 key 不存在时会插入，属于写操作
         QReadLocker locker(&transLock_);
-        o = transMap_[otherId];
+        auto it = transMap_.constFind(otherId);
+        if (it != transMap_.constEnd()) {
+            o = it.value();
+        }
     }
     if (!o) {
         return false;
@@ -315,7 +322,8 @@ void ServerCore::GetClientList(Message& msg)
     msg.clientList.clear();
     {
         QReadLocker locker(&rwLock_);
-        for (auto& cli : clientMap_) {
+        // const 遍历，避免非 const 迭代器在读锁下隐式 detach
+        for (const auto& cli : std::as_const(clientMap_)) {
             msg.clientList.push_back({cli->id.toStdString(), cli->name.toStdString()});
         }
     }

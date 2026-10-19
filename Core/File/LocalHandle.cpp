@@ -251,10 +251,22 @@ bool ZipHandle::UnArchive(const QString& archivePath, const QString& extractPath
         if (relPath.isEmpty()) {
             continue;
         }
+        // 绝对路径条目（/etc/x、C:/x）一律拒绝，避免拼接到根目录内部产生怪路径
+        if (QDir::isAbsolutePath(relPath)) {
+            qWarning() << "Absolute entry path rejected:" << relPath;
+            return false;
+        }
 
-        const QString fullPath = QDir::cleanPath(extractPath + targetSep + relPath);
+        const QString rootPath = QDir::cleanPath(extractPath);
+        // QDir::cleanPath 统一输出 '/'，这里必须用 '/' 拼接，否则 Windows 上 targetSep
+        // 为 '\\' 会导致前缀永远不匹配、正常条目全被拒绝。
+        const QString fullPath = QDir::cleanPath(rootPath + "/" + relPath);
+        const QString rootPrefix = rootPath.endsWith('/') ? rootPath : (rootPath + '/');
 
-        if (!fullPath.startsWith(QDir::cleanPath(extractPath))) {
+        // 必须严格落在解压根目录内：只比对前缀会被同前缀的兄弟目录绕过
+        // （例如根目录 /out/data 与条目 ../data-evil/x 清理后为 /out/data-evil/x），
+        // 因此要求等于根目录，或以「根目录 + 分隔符」开头。
+        if (fullPath != rootPath && !fullPath.startsWith(rootPrefix)) {
             qWarning() << "Zip slip detected:" << relPath;
             return false;
         }

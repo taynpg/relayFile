@@ -30,7 +30,8 @@ MSYS2 / MinGW：
 
 ```bash
 export PATH=/c/msys64/ucrt64/bin:$PATH
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DRF_USE_MINGW=ON
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+      -DRF_USE_MINGW=ON -DCMAKE_PREFIX_PATH=C:/msys64/ucrt64
 cmake --build build
 ```
 

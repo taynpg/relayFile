@@ -12,6 +12,7 @@
 #include <QTextStream>
 #include <QVector>
 #include <cstdint>
+#include <cstring>
 #include <iostream>
 #include <vector>
 
@@ -187,6 +188,28 @@ int main(int argc, char* argv[])
         bool all = treeEqual(base + "/ascii", extractDir + "/ascii") &&
                    treeEqual(base + "/中文目录", extractDir + "/中文目录");
         check(all, "mixed roundtrip byte-identical");
+    }
+
+    // ===== 场景4：zip slip —— 条目逃逸出解压根目录必须被拒绝 =====
+    {
+        const QString slipZip = base + "/slip.zip";
+        mz_zip_archive w = {};
+        const bool built = mz_zip_writer_init_file(&w, slipZip.toUtf8().constData(), 0);
+        check(built, "init slip zip writer");
+        if (built) {
+            const char* payload = "escaped";
+            const bool added = mz_zip_writer_add_mem(&w, "../escaped.txt", payload,
+                                                     std::strlen(payload), MZ_BEST_COMPRESSION);
+            check(added, "write entry with ../ path");
+            mz_zip_writer_finalize_archive(&w);
+            mz_zip_writer_end(&w);
+        }
+
+        const QString extractDir = base + "/ex_slip";
+        const bool uok = LocalHandle::AskUnArchive(slipZip.toStdString(), extractDir.toStdString());
+        check(!uok, "zip slip archive rejected");
+        check(!QFileInfo::exists(base + "/escaped.txt"), "nothing written outside extract root");
+        check(!QFileInfo::exists(extractDir + "/escaped.txt"), "no escaped entry inside root");
     }
 
     std::cout << (gFail == 0 ? "ALL ZIP TESTS PASSED" : "ZIP TESTS FAILED") << std::endl;
