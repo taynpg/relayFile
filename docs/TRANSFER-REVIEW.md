@@ -3,13 +3,14 @@
 > 本文位于 `docs/`，文中所有源码路径与行号均**相对仓库根目录**。
 > 评审范围：`Core/Protocol`、`Core/Net`、`Core/File`、`Gui/Form/RelayTask.cpp`、`Console/TransTest.cpp`
 > 构建：MSYS2 UCRT64 + Qt6，`-DRF_USE_GUI=OFF`，Debug
-> 实测：200MB / 1GB 单文件经本机环回中继，SHA-256 与 `cmp` 均一致；单文件吞吐约 41MB/s（Debug 构建）
+> 实测：评审时 200MB / 1GB 单文件经本机环回中继，SHA-256 与 `cmp` 均一致，吞吐约 **41MB/s**（Debug）；
+> 三批改造后同机为 **77.9MB/s（200MB）/ 82.2MB/s（1GB）**，详见文末各批验证表。
 
 ## 结论
 
 整体分层是对的：控制连接与数据连接分离、帧格式有明确边界、滑动窗口 + 重传、分包/归档两条路径都跑得通，工程可读性也在平均水准之上。**问题不在"能不能传"，而在"传错了会不会知道"和"失败后会不会毁数据"。**
 
-当前最需要修的是四个"静默错误"：
+当时最需要修的是四个"静默错误"（均已修复，见下方状态总览）：
 
 1. 接收端**先回 ACK 再写盘**，写盘失败只打日志 → 发送方认为已送达，双方都报成功，文件已损坏。
 2. 接收端**直接写目标路径**（`WriteOnly` 即截断），中断/失败后目标文件是半截垃圾，原文件已被毁。
@@ -20,9 +21,50 @@
 
 ---
 
+## 改造状态总览
+
+> 图例：**✅ 已修复** = 已落地并通过编译 + 端到端验证；**⏳ 未处理** = 仍然存在，逐条原因见下方对应条目；**⚠️ 部分** = 只修了一部分。
+> 最近一次核对：2026-10-19，对照当前 HEAD 源码逐条 grep 确认，不是照抄改造记录。
+
+| 级别 | 条目 | 状态 | 落点 / 原因 |
+|---|---|---|---|
+| P0-1 | ACK 早于落盘 | ✅ 第一批 | `OneFileTrans::handleRecvChuck` 改为先写盘后 ACK |
+| P0-2 | 无 `.part` + rename | ✅ 第一批 | `.relaypart` + 长度校验 + 原子 rename |
+| P0-3 | 完成语义无确认 | ✅ 第一批 | `Request_Complete` → `Answer_Complete` 握手 |
+| P0-4 | 帧无 CRC/无上限 | ✅ 第二批 | 新帧格式 + headerCrc + `kMaxFrameSize` |
+| P0-5 | 前导垃圾不清除 | ✅ 第二批 | 只保留末尾 3 字节，逐字节重同步 |
+| P1-1 | 数据通路在 GUI 线程 | ✅ 第三批 | 新增 `FileSessionIO`，独立 IO 线程 |
+| P1-2 | 一帧一 ACK / 按帧窗口 | ✅ 第二批 | 字节窗口 4MB + 累积 ACK + SACK |
+| P1-3 | 串行执行、失败即中断整批 | ⚠️ 部分 | 元信息检查已改为"单文件缺失跳过"；**传输循环仍是失败即 `break`**（`RelayTask.cpp:426-429`），且仍为单任务串行 |
+| P1-4 | `RunTaskItem` 忙等无超时 | ✅ 第三批 | 条件变量 + 两级超时（30s / 6h） |
+| P1-5 | O(N) 串行 RTT | ✅ 第三批 | `AskFileMetaBatch` / `AskFileSamplesBatch` |
+| P1-6 | 每块 4~5 次拷贝 | ⏳ 未处理 | 实测非瓶颈；`miniBuffer::Append` 仍无 `reserve` |
+| P1-7 | 读锁下 `transMap_[key]` | ⏳ 未处理 | `ServerCore.cpp:286-287` 仍持 `QReadLocker` 调 `operator[]` |
+| P2-8 | `Message` 拷贝漏字段 | ✅ 第一批 | 四个特殊成员 `= default` |
+| P2-9 | `onCancelWaitMsg` 迭代中 erase | ✅ 第一批 | 先移出容器 + 锁外回调 + `done` 去重 |
+| P2-10 | `FileSession` 析构不等线程 | ✅ 第一批 | `Quit()` 幂等，`ClientCore` 回 worker 线程销毁 |
+| P2-11 | 客户端收帧无异常边界 | ✅ 第一批 | `onReadyRead` / `handleFrame` 全部 try/catch |
+| P2-12 | 零字节文件进度除零 | ⏳ 未处理 | `RelayTask.cpp:907` 仍是 `transed * 1.0 / total` |
+| P2-13 | 解包路径校验可绕过 | ⏳ 未处理 | `LocalHandle.cpp:257` 仍是无分隔符的 `startsWith` |
+| P2-14 | 心跳判活窗口偏松 | ⏳ 未处理 | `ServerCore.cpp:11` 巡检仍为 15000ms |
+| P2-15 | IPv6 客户端 ID 塌成 0.0.0.0 | ⏳ 未处理 | `ServerCore.cpp:50-53` 仍用 `toIPv4Address()` |
+| P2-16 | 帧类型按数值区间判定 | ⏳ 未处理 | `Protocol.h:138-167` 仍是 `>=` / `<` 比大小 |
+| P2-17 | `mark` 一名三用 | ✅ 第二批 | 拆成 `OneFrame::flags` / `Message::flags` |
+| P2-18 | 死代码与未用协议类型 | ⚠️ 部分 | `FileSession::getFileMeta`、`bRequest/vRequest` 已处理；**`Answer_Start/Ack/Chuck/Cancel` 四个死类型与 `CmdExecutor` 仍在** |
+| P2-19 | 头部尺寸注释与常量不符 | ✅ 第二批 | 新协议 `kFixedHeaderSize = 36`，注释与常量一致 |
+| P2-20 | native-endian + 定长字符串 | ✅ 第二批 | 显式小端 + 变长路由字段（u8 长度） |
+| 安全-1 | 明文帧绕过加密（降级） | ⏳ 未处理 | `CryptoHelper.cpp:79-81` 无加密位仍直接放行 |
+| 安全-2 | 服务器零认证、`from` 可伪造 | ⏳ 未处理 | 未做身份校验 |
+| 安全-3 | 口令直 Hash 当密钥 | ⏳ 未处理 | 无 salt / 迭代 / 密钥确认 |
+| 安全-4 | 控制帧全程明文 | ⏳ 未处理 | 服务器仍需解析部分控制帧 |
+
+**一句话现状**：会导致数据损坏的四条 P0 已全部关闭；剩下的是**一个"失败即中断整批"的行为问题**、**六条健壮性细节**（除零、路径校验、心跳、IPv6、类型判定、读锁写容器）和**整块安全边界**。
+
+---
+
 ## P0 — 会造成数据损坏 / 永久卡死
 
-### 1. ACK 早于落盘，写失败被吞掉
+### 1. ACK 早于落盘，写失败被吞掉  ✅ 已修复（第一批）
 `Core/Net/OneFileTrans.cpp:200-216`
 
 ```cpp
@@ -38,7 +80,7 @@ sendOrRecvTimeout_->start(defRecvTimeout);
 
 **改法**：写盘必须成功才 ACK；失败走 `Cancel` 让发送方立刻停。延迟问题用线程解决（见 P1-1），不要用 ACK 时序解决。
 
-### 2. 没有 `.part` + rename，失败即毁原文件
+### 2. 没有 `.part` + rename，失败即毁原文件  ✅ 已修复（第一批）
 `Core/Net/OneFileTrans.cpp:96-101`
 
 ```cpp
@@ -54,7 +96,7 @@ recvFile_.open(QIODevice::WriteOnly);          // 默认 Truncate
 - 失败/取消 → 删除 `.part`
 - 顺带获得断点续传的基础（`.part` 长度 + 文件指纹 = 续传偏移）
 
-### 3. 完成语义没有端到端确认
+### 3. 完成语义没有端到端确认  ✅ 已修复（第一批）
 `Core/Net/OneFileTrans.cpp:145-156`、`238-285`
 
 发送方在 `nextSend()` 里发完 `Request_Complete` 就 `state=Finished`、`emit signalFinished()`；`signalRequestSend` 的返回值也没人看（连接断了也照样"成功"）。接收方只有在收到 `Request_Complete` 时才收尾，收不到就 15s 超时判失败。
@@ -65,7 +107,7 @@ recvFile_.open(QIODevice::WriteOnly);          // 默认 Truncate
 
 **改法**：`Request_Complete` → 接收方校验 `transSize_ == totalSize_`（可选再比 SHA-256）→ 回 `Answer_Complete{ok, err}` → 发送方才置 Finished。Answer 丢失就重发 Complete（幂等）。
 
-### 4. 帧无校验、无长度上限 → 假帧头可永久卡死
+### 4. 帧无校验、无长度上限 → 假帧头可永久卡死  ✅ 已修复（第二批）
 `Core/Protocol/Protocol.cpp:41-113`
 
 - 只有 `FF FE` 帧头 + `FF FF` 帧尾做定界，**没有 CRC**。数据体里出现 `FF FE` 就会被当候选帧头扫；如果后续 `len` 恰好合理、对应位置又恰好是 `FF FF`，就误判成真帧 → 整条流永久错位，且无法检测。
@@ -81,7 +123,7 @@ body: bodyLen 字节 | bodyCrc(4, 可选，大块建议关掉)
 
 `bodyLen > kMaxBody` 直接判定协议错误并断开（不是跳过），比现在"猜哪里是下一帧"可靠一个量级。头部 CRC 让"部分收到/错位"能被明确识别。
 
-### 5. 前导垃圾不清除
+### 5. 前导垃圾不清除  ✅ 已修复（第二批）
 `Core/Protocol/Protocol.cpp:50-57`、`110-112`
 
 `offset` 是局部变量，扫完没找到帧就 `return nullptr`，一个字节都不消费。如果流里有一段永远匹配不上的垃圾，每次 `readyRead` 都从 0 重新扫，缓冲区只增不减（O(n²) + 内存泄漏式增长）。
@@ -92,7 +134,7 @@ body: bodyLen 字节 | bodyCrc(4, 可选，大块建议关掉)
 
 ## P1 — 架构与性能
 
-### 1. 整条数据通路都跑在 GUI 线程
+### 1. 整条数据通路都跑在 GUI 线程  ✅ 已修复（第三批）
 `Gui/relayFile.cpp:26-36` 在 GUI 线程创建 `FileSession`/`OneFileTrans`；`ClientCore` 才被 move 到 worker 线程。`signalDeliverFrame` 是跨线程 `QueuedConnection`，所以：
 
 ```
@@ -103,7 +145,7 @@ socket(worker) --排队--> GUI 线程: UnPack 前后处理 / 写盘 / 组 ACK --
 
 **改法**：把 `OneFileTrans` 整体挪进一个 IO 线程（或直接让 `FileSession` 在 worker 线程里处理），GUI 只接收进度/完成信号。文件写和 ACK 出现在同一个线程里，时序问题从根上消失，`handleRecvChuck` 就能老老实实"先写后 ACK"。
 
-### 2. 一帧一 ACK + 按帧计窗口
+### 2. 一帧一 ACK + 按帧计窗口  ✅ 已修复（第二批）
 `Core/Net/OneFileTrans.cpp:123`、`163-217`；`CoreDefine.hpp:15-16`
 
 256KB 一块、每块一个 ACK、窗口 32 帧。ACK 帧本身 126 字节不算大，但每块一次事件循环往返、一次 `RemoveOf`、一次 `CreateFrame`，开销是常数级叠加。窗口按"帧数"计，改块大小就改吞吐特性，不可预测。
@@ -114,7 +156,7 @@ socket(worker) --排队--> GUI 线程: UnPack 前后处理 / 写盘 / 组 ACK --
 - 重传用 SACK 位图，避免现在"只重传 ackIndex_ 那一块"的保守策略
 - 握手时协商块大小/窗口（大文件大块，小文件小块）
 
-### 3. 串行执行、失败即中断整批
+### 3. 串行执行、失败即中断整批  ⚠️ 部分修复
 `Gui/Form/RelayTask.cpp:412-425`
 
 `for (id : todo) { ... if (!ok) { allSuccess=false; break; } }` —— 一个文件失败，后面全部不传，且没有"跳过继续"。同时全进程只有一个传输在跑（`DoubleLinker` 的 `isRunTaskItem_`/`curTaskUUID_` 是单槽状态，两个传输窗口同时开会互相踩）。
@@ -123,7 +165,7 @@ socket(worker) --排队--> GUI 线程: UnPack 前后处理 / 写盘 / 组 ACK --
 
 **建议**：失败只标记该项并继续；批量握手（一次请求带一批文件）；或对小文件自动走归档路径（已有 `TarXzPacker`，直接复用）。
 
-### 4. `RunTaskItem` 忙等且无总超时
+### 4. `RunTaskItem` 忙等且无总超时  ✅ 已修复（第三批）
 `Core/Net/ClientHelper.cpp:131-145`
 
 ```cpp
@@ -134,19 +176,19 @@ while (isRunTaskItem_) { QThread::msleep(1); QCoreApplication::processEvents(); 
 
 **改法**：`OneFileTrans` 的完成/失败信号 + `QWaitCondition` 驱动；外层加整体超时（例如 30s 无进度即失败）。
 
-### 5. 存在性/采样检查是 O(N) 次串行 RTT
+### 5. 存在性/采样检查是 O(N) 次串行 RTT  ✅ 已修复（第三批）
 `Gui/Form/RelayTask.cpp:596-631`
 
 每个文件一次 `AskFileMeta`；目标已存在时，再两侧各一次 `AskFileSamples`（各 10×4KB）。1000 个文件 = 至少 2000 次往返，而且是串行的，每次都挂着 30s 超时上限。慢网络下这一步比传文件还久。
 
 **改法**：一次 `AskFileMetaBatch`（带 path 列表，回 `vector<FileMeta>`）；采样也批量；结果按批流水，不要一个文件一个来回。
 
-### 6. 每块 4~5 次拷贝
+### 6. 每块 4~5 次拷贝  ⏳ 未改（已评估为非瓶颈）
 链路：`QTcpSocket::readAll` → `miniBuffer::Append`（`back_inserter`，不预留）→ `Protocol::UnPack` 拷进 `frame->data` → 加密再拷一份 → `RemoveOf(0,n)`（`vector::erase`，memmove 整个剩余缓冲）→ `QFile::write`。
 
 1GB 实测没出现吞吐退化（41MB/s 稳定），所以**这不是当前瓶颈**，但纯属白烧内存带宽。改成"读偏移 + 环形缓冲 + `std::move` 取 body"，再顺手把 `Append` 的 `reserve` 补上，收益是免费拿的。
 
-### 7. 服务器转发时的读锁写容器
+### 7. 服务器转发时的读锁写容器  ⏳ 未修复
 `Core/Net/ServerCore.cpp:276-287`
 
 ```cpp
@@ -160,12 +202,12 @@ o = transMap_[otherId];      // operator[] 是非 const，key 不存在会插入
 
 ## P2 — 健壮性与细节
 
-### 8. `Message` 拷贝构造 / 赋值漏字段
+### 8. `Message` 拷贝构造 / 赋值漏字段  ✅ 已修复（第一批）
 `Core/Protocol/Message.cpp:3-37`：拷贝构造漏了 `transId`、`uuid`。
 
 现在没炸是因为 `FileSession::pushTask` 手动补了 `resp.uuid = msg.uuid`（`FileSession.cpp:50`）。任何人以后依赖拷贝都会拿到空 uuid，而且很难查。**这两个函数应该直接 `= default`**（`FileMeta` 的手写拷贝/移动同理）。
 
-### 9. `onCancelWaitMsg` 迭代中 erase
+### 9. `onCancelWaitMsg` 迭代中 erase  ✅ 已修复（第一批）
 `Core/Net/ControlSession.cpp:134-156`
 
 ```cpp
@@ -177,7 +219,7 @@ for (auto it = requestWaitFrame_.begin(); it != requestWaitFrame_.end(); it++) {
 
 而且是在**持锁状态下调用用户回调**（`promise->set_value`），可重入。改成 `it = requestWaitFrame_.erase(it)`，回调移到锁外，并先判重（`set_value` 二次调用会抛 `future_error`）。
 
-### 10. `FileSession` 析构不等线程
+### 10. `FileSession` 析构不等线程  ✅ 已修复（第一批）
 `Core/Net/FileSession.cpp:16-20`：直接 `delete clientCore_; delete clientWorker_;`，没有 `quit()/wait()`。socket 在 worker 线程创建却被主线程删除。
 
 实测每次退出都能复现：
@@ -189,15 +231,15 @@ QThread: Destroyed while thread '' is still running
 
 把 `Quit()` 放进析构，或用 `deleteLater` + `QThread::finished` 串联。
 
-### 11. 客户端收帧没有异常边界
+### 11. 客户端收帧没有异常边界  ✅ 已修复（第一批）
 `Core/Net/ClientCore.cpp:89-104` 没有 `try/catch`，而 `ServerCore::onRead` 有。`cereal` 反序列化遇到截断/畸形数据会抛，异常会穿透 Qt 事件循环（未定义行为 / `terminate`）。`deserializeStruct` 本身也没有长度/版本校验。
 
 服务端在 `ControlSession::handleFrame` 开头就无条件 `deserializeStruct(frame->data, *answerMsg)`，任何非 Message 的帧都会抛。
 
-### 12. 零字节文件进度除零
+### 12. 零字节文件进度除零  ⏳ 未修复
 `Gui/Form/RelayTask.cpp:847-853`：`transed * 1.0 / total`，`total == 0` 时得到 NaN，再 `int(NaN)` 是 UB。空文件走 `nextSend()` 时确实会 `emit signalProcess(0, 0)`。
 
-### 13. 解包路径校验可绕过
+### 13. 解包路径校验可绕过  ⏳ 未修复
 `Core/File/LocalHandle.cpp:257`
 
 ```cpp
@@ -206,24 +248,24 @@ if (!fullPath.startsWith(QDir::cleanPath(extractPath)))
 
 没有分隔符。`extractPath = C:\out` 时，`C:\out-evil\x` 也通过。补一个 `+ QDir::separator()` 或比较 `relativeFilePath` 不以 `..` 开头。
 
-### 14. 心跳判活窗口偏松
+### 14. 心跳判活窗口偏松  ⏳ 未修复
 `Core/Net/ServerCore.cpp:10-13, 121-149`：客户端 1.5s 一次心跳，服务端 15s 才巡检一次，判活阈值 5s → 实际最长 20s 才能发现掉线，期间文件帧会一直被转发进死连接。巡检周期改成 1~2s，或直接依赖 TCP keepalive + 应用层 3 次心跳。
 
-### 15. IPv6 客户端 ID 会塌成 `0.0.0.0`
+### 15. IPv6 客户端 ID 会塌成 `0.0.0.0`  ⏳ 未修复
 `Core/Net/ServerCore.cpp:50-53`：`peerAddress().toIPv4Address()` 对纯 IPv6 返回 0。服务端监听的是 `QHostAddress::Any`，双栈。用 `peerAddress().toString()` 拼 ID。
 
-### 16. 帧类型判定依赖枚举"数值区间"
+### 16. 帧类型判定依赖枚举"数值区间"  ⏳ 未修复
 `Core/Protocol/Protocol.h:86-117`、`Core/Net/ServerCore.cpp:217`（`type + 1` 就是 Answer）
 
 新增一个类型插错位置，`GIsChuckAckFrame` / `GIsFileMessageFrame` 就会误判，而且不会有编译错误。改成显式的 `type → channel` 映射表 + `static_assert` 唯一性。
 
-### 17. `mark` 一名三用
+### 17. `mark` 一名三用  ✅ 已修复（第二批）
 - `Frame::mark`：bit0 = 方向（0 发送 / 1 接收），bit8 = 加密（`Protocol.h:84`）
 - `Message::mark`：1 = 普通，2 = 归档；又被 `pushTask` 改成 0 当"要不要连进度信号"的开关（`FileSession.cpp:53-57`）
 
 `getMapKeyUUIDByMark` 用 `mark != 0` 判方向（`FileSession.cpp:37-44`），一旦 mark 带上加密位就会取错 key —— 现在没炸纯靠 `decryptFrame` 把那一位清掉了。建议拆成独立的 `flags` 字段，方向/加密/归档各自占位。
 
-### 18. 死代码与未用协议类型
+### 18. 死代码与未用协议类型  ⚠️ 部分清理
 - `Answer_Complete`、`Answer_Cancel`、`Answer_Chuck`、`Answer_Ack`、`Answer_Start`：定义未用
 - `FileSession::getFileMeta`：无调用者，且逻辑有 UB（条件写反 + 空 `vector` 取 `[0]`，`FileSession.cpp:232-245`）
 - `DoubleLinker::bRequest` / `vRequest` / `CmdExecutor`：全项目无调用
@@ -231,7 +273,7 @@ if (!fullPath.startsWith(QDir::cleanPath(extractPath)))
 
 建议：要么补齐（Answer_* 用于完成握手/NACK），要么删掉。两套服务器实现最好只保留一套，另一套用同一份 `Protocol` + 共享的"路由表"逻辑，否则很快就不一致。
 
-### 19. 宏/常量与实际不符
+### 19. 宏/常量与实际不符  ✅ 已修复（第二批）
 `Protocol.cpp:45`、`123`、`Protocol.h` 注释：`HEADER_SIZE` 实际是 **126** 字节（2+2+2+8+8+32+32+36+4），注释写 90。这类"魔数 + 手写偏移"应该集中成一个结构体：
 
 ```cpp
@@ -240,12 +282,14 @@ static_assert(sizeof(FrameHeader) == 126);
 // 用 offsetof 校验每个字段位置
 ```
 
-### 20. native-endian + 定长字符串
+### 20. native-endian + 定长字符串  ✅ 已修复（第二批）
 `Protocol::UnPack` 直接 `memcpy` 到 `int64_t`，大端机直接坏；`from/to` 固定 32 字节、`fuuid` 固定 36 字节，超长静默截断（`clientId` 现在是 `ip:port`，一旦换成 UUID 就会踩）。
 
 ---
 
 ## 安全（按当前定位可以说"不承诺"，但要写清楚边界）
+
+> ⏳ **本节四条均未处理**，属于当前定位下接受的风险，不是已修项。
 
 1. **加密不构成安全边界**。`decryptFrame` 对没有加密位的帧直接放行（`CryptoHelper.cpp:79-81`），也就是说任何人只要会讲这个协议，就能用明文帧绕过加密，把文件推到任意在线客户端的任意路径（`fullPath` 完全由发送方指定）。这是一个"降级攻击"的教科书形态。
 2. **服务器零认证**，`frame->from` 由客户端自己填，服务器只按 `frame->to` 转发，可任意伪造身份。
@@ -256,7 +300,7 @@ static_assert(sizeof(FrameHeader) == 126);
 
 ---
 
-## 建议的改造顺序
+## 建议的改造顺序（已按三批执行，逐项状态见上方总览表）
 
 **第一批（不改协议，几天内可做完，消除数据损坏）**
 
