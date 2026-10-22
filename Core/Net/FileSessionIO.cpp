@@ -1,8 +1,10 @@
 #include "FileSessionIO.h"
 
 #include <QDebug>
+#include <QEventLoop>
 #include <QFileInfo>
 #include <QThread>
+#include <QTimer>
 
 #include "CoreDefine.hpp"
 #include "File/FileDir.h"
@@ -38,29 +40,89 @@ bool FileSessionIO::ensureConnected()
         return true;
     }
 
-    if (serverIp_.isEmpty()) {
-        emit signalNeedFileConnect();
-    } else {
-        auto* cli = clientCore_;
-        const QString ip = serverIp_;
-        const qint16 port = serverPort_;
-        QMetaObject::invokeMethod(
-            cli, [cli, ip, port]() { cli->connectToServer(ip, port); }, Qt::QueuedConnection);
-    }
-
-    // 在 IO 线程里等：不阻塞 GUI，也不依赖主线程处理事件
-    bool askedId = false;
-    for (int i = 0; i < 500; ++i) {
-        if (ready()) {
-            return true;
+    if (waitingDepth_ == 0) {
+        if (serverIp_.isEmpty()) {
+            emit signalNeedFileConnect();
+        } else {
+            auto* cli = clientCore_;
+            const QString ip = serverIp_;
+            const qint16 port = serverPort_;
+            QMetaObject::invokeMethod(
+                cli, [cli, ip, port]() { cli->connectToServer(ip, port); }, Qt::QueuedConnection);
         }
+    }
+    ++waitingDepth_;
+
+    // 必须用事件循环等待：就绪条件（clientId 登记）要靠本线程处理队列里的 Answer_ID
+    // 帧来完成。以前用 QThread::msleep 自旋，会把 handleFrame 自己阻塞住——队列里的
+    // Answer_ID 永远得不到处理，这里必然空等 5 秒后失败，把等待它的请求帧（如
+    // Request_Send）丢掉，对端只能等 30s 超时。
+    // 事件循环允许嵌套：等待期间到来的其它帧会重入 handleFrame 再次进入本函数。
+    QEventLoop loop;
+    QTimer pollTimer;
+    pollTimer.setInterval(10);
+    bool askedId = false;
+    QObject::connect(&pollTimer, &QTimer::timeout, &loop, [this, &ready, &loop, &askedId]() {
+        if (ready()) {
+            loop.quit();
+            return;
+        }
+        // TCP 已连但还没登记 ID：主动索要（原逻辑保留）
         if (!askedId && clientCore_->isConnected()) {
             askOwnID();
             askedId = true;
         }
-        QThread::msleep(10);
-    }
+    });
+    QTimer timeoutTimer;
+    timeoutTimer.setSingleShot(true);
+    QObject::connect(&timeoutTimer, &QTimer::timeout, &loop, &QEventLoop::quit);
+    pollTimer.start();
+    timeoutTimer.start(5000);
+    loop.exec();
+
+    --waitingDepth_;
     return ready();
+}
+
+void FileSessionIO::replyNotReady(const FramePtr& frame)
+{
+    // 只对"请求-应答"类帧回失败应答，让对端立即失败并提示重试，
+    // 而不是在 RunTaskItem 里等满 30s。
+    FrameType answer;
+    bool fromReceiver;
+    switch (frame->type) {
+    case FrameType::kFileType_Request_Send:
+        answer = FrameType::kFileType_Answer_Send;
+        fromReceiver = true;   // Answer_Send 由接收方回
+        break;
+    case FrameType::kFileType_Request_Down:
+        answer = FrameType::kFileType_Answer_Down;
+        fromReceiver = false;  // Answer_Down 由发送方回
+        break;
+    default:
+        return;
+    }
+
+    Message req;
+    try {
+        deserializeStruct(frame->data, req);
+    } catch (const std::exception& e) {
+        qWarning() << "未就绪帧反序列化失败，无法回错误应答:" << e.what();
+        return;
+    }
+
+    Message resp(req);
+    std::swap(resp.from, resp.to);
+    resp.msgStateCode = MessageStateCode::kMessageStateCodeFailed;
+    resp.errMsg = "文件通道未就绪，请稍后重试";
+
+    auto rf = OneFrame::Create();
+    rf->to = resp.to.clientId;
+    rf->data = serializeStruct(resp);
+    rf->type = answer;
+    rf->setFromReceiver(fromReceiver);
+    rf->fuuid = req.uuid;
+    emit signalRequestSend(rf);
 }
 
 void FileSessionIO::emitStateChanged(const std::string& uuid, OneFileTrans::TransMode mode,
@@ -165,6 +227,8 @@ void FileSessionIO::handleFrame(FramePtr frame)
     if (frame->type != FrameType::kFileType_Answer_ID && !ensureConnected()) {
         qWarning() << "文件通道未就绪，丢弃帧, type=" << static_cast<int>(frame->type)
                    << "uuid=" << QString::fromStdString(frame->fuuid);
+        // 静默丢弃会让对端在 RunTaskItem 里等满 30s；请求类帧回一个失败应答让它立即失败
+        replyNotReady(frame);
         return;
     }
 

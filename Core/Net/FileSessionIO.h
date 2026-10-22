@@ -57,6 +57,8 @@ public slots:
 
 private:
     bool ensureConnected();
+    // 文件通道未就绪时对请求类帧回失败应答，避免对端傻等 30s 超时
+    void replyNotReady(const FramePtr& frame);
     void pushTask(const std::shared_ptr<OneFileTrans>& fileTrans, const Message& msg, const std::string& errMsg,
                   FrameType type, bool ret, bool needConnect);
     std::string getMapKeyUUIDByMode(const std::string& uuid, OneFileTrans::TransMode mode);
@@ -67,6 +69,8 @@ private:
     QMutex transferMapLock_;
     ClientCore* clientCore_{};
     bool quit_{false};
+    // ensureConnected 嵌套深度：等待期间事件循环可能重入 handleFrame 再次调用它
+    int waitingDepth_{0};
     QString serverIp_;
     qint16 serverPort_{};
     QMap<std::string, std::shared_ptr<OneFileTrans>> transferMap_;
